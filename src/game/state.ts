@@ -1,15 +1,12 @@
 import type { Card, CardSpec, IdFactory } from "./cards";
+import type { Deck } from "./deck";
 import type { HexCoord } from "./hex";
 import type { Tile } from "./terrain";
 import type { Enemy } from "./enemies";
-import type { SectionRecord } from "./map";
+import type { SectionRecord, MapCursor } from "./map";
 import type { Rng } from "./rng";
 
-export type Deck = {
-  draw: Card[];
-  hand: Card[];
-  discard: Card[];
-};
+export type { Deck };
 
 export type MapIndex = {
   hexToSection: Map<string, string>;   // hexKey → section id, live sections only
@@ -21,6 +18,7 @@ export type MapState = {
   index: MapIndex;
   player: HexCoord;
   previous: HexCoord;
+  cursor: MapCursor;                   // generation front, advanced as the player moves
 };
 
 export type Phase =
@@ -31,13 +29,18 @@ export type Phase =
   | { kind: "pending-remove" }
   | { kind: "pending-gain"; spec: CardSpec }
   | { kind: "shop"; stock: readonly Card[]; rerollCost: number }
-  | { kind: "smith"; cardId: string }
+  | { kind: "smith" }
   | { kind: "game-over"; reason: GameOverReason };
 
 export type GameOverReason =
   | { kind: 'assassin' }
   | { kind: 'sniper' }
   | { kind: 'caught' };
+
+/** Per-turn bookkeeping, reset at the start of every turn. */
+export type TurnState = {
+  cardsPlayedThisTurn: number;
+};
 
 export type GameState = {
   turn: number;
@@ -49,4 +52,5 @@ export type GameState = {
   phase: Phase;
   rng: Rng;
   ids: IdFactory;
+  turnState: TurnState;
 };

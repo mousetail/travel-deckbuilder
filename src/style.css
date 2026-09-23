@@ -22,3 +22,184 @@ body {
     pointer-events: none; /* re-enable on interactive children */
   }
 }
+
+.hex {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 55.4px; /* sqrt(3) * HEX_SIZE for HEX_SIZE=32 */
+  height: 64px; /* 2 * HEX_SIZE */
+  background-size: 32px 32px; /* tile the 32×32 texture */
+  image-rendering: pixelated;
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+
+  &.terrain-forest {
+    background-blend-mode: multiply;
+    background-color: #2f7d2f;
+  }
+
+  &.terrain-impassible {
+    filter: brightness(0.5);
+  }
+
+  &.reachable::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: rgba(255, 255, 255, 0.35);
+  }
+
+  /* The not-yet-entered sliver of the next section. The entry edge is where the
+     player steps next, so it is dimmed less than the row behind it. */
+  &.fog-near {
+    opacity: 0.6;
+  }
+
+  &.fog-far {
+    opacity: 0.3;
+  }
+}
+
+/* Feature overlay, drawn over the terrain and above the reachable tint. */
+.hex-feature {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 55%; /* ≈30px at HEX_SIZE=32, inside the hex's shoulders */
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+
+.hex-feature-coin {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+
+  &::before {
+    content: "";
+    width: 14px;
+    height: 14px;
+    background: #ffd700;
+    border: 2px solid #000;
+  }
+}
+
+.player-marker {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 22px;
+  height: 22px;
+  background: #fff;
+  border: 3px solid #000;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.hud-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: grid;
+  grid-auto-flow: column;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  pointer-events: auto;
+  color: #fff;
+  font: 14px monospace;
+}
+
+.hud-button {
+  padding: 6px 12px;
+  background: #fff;
+  color: #000;
+  border: 2px solid #000;
+  font: 14px monospace;
+  cursor: pointer;
+}
+
+.hand-layer {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: grid;
+  grid-auto-flow: column;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px;
+  pointer-events: auto;
+}
+
+.feature-layer {
+  display: none;
+
+  &.active {
+    display: grid;
+    position: absolute;
+    inset: 0;
+    place-items: center;
+    background: rgba(0, 0, 0, 0.6);
+    pointer-events: auto;
+  }
+}
+
+.feature-panel {
+  display: grid;
+  gap: 8px;
+  min-width: 360px;
+  max-height: 80vh;
+  overflow: auto;
+  padding: 16px;
+  background: #fff;
+  color: #000;
+  border: 3px solid #000;
+  font: 14px monospace;
+}
+
+.feature-title {
+  font-weight: bold;
+}
+
+.feature-row {
+  display: grid;
+  grid-auto-flow: column;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border: 2px solid #000;
+}
+
+.card {
+  display: grid;
+  align-content: space-between;
+  width: 80px;
+  height: 112px;
+  padding: 8px;
+  background: #fff;
+  color: #000;
+  border: 2px solid #000;
+  font: 12px monospace;
+  cursor: pointer;
+
+  &.selected {
+    background: #ffd;
+  }
+
+  & .card-modes {
+    color: #333;
+  }
+
+  & .card-id {
+    color: #666;
+  }
+}
