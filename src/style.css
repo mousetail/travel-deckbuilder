@@ -101,6 +101,59 @@ body {
   pointer-events: none;
 }
 
+.enemy {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+.enemy-assassin {
+  width: 20px;
+  height: 20px;
+  background: #c00;
+  border: 3px solid #000;
+  transform-origin: center;
+}
+
+.enemy-sniper {
+  width: 24px;
+  height: 24px;
+  background: #000;
+  border: 3px solid #fff;
+}
+
+.enemy.target {
+  outline: 3px solid #ffd700;
+  outline-offset: 2px;
+}
+
+/* Outline of the hexes an enemy could strike at the end of this turn. */
+.danger-edge {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 32px; /* HEX_SIZE */
+  height: 3px;
+  background: #f00;
+  pointer-events: none;
+}
+
+/* Turns until an assassin spawns on this tile. */
+.spawn-badge {
+  position: absolute;
+  top: 0;
+  left: 0;
+  min-width: 18px;
+  padding: 1px 4px;
+  background: #c00;
+  color: #fff;
+  border: 2px solid #000;
+  font: 11px monospace;
+  text-align: center;
+  pointer-events: none;
+}
+
 .hud-bar {
   position: absolute;
   top: 0;
@@ -115,6 +168,10 @@ body {
   pointer-events: auto;
   color: #fff;
   font: 14px monospace;
+}
+
+.hud-hint {
+  color: #ffd700;
 }
 
 .hud-button {
@@ -169,6 +226,10 @@ body {
   font-weight: bold;
 }
 
+.feature-text {
+  padding: 8px 0;
+}
+
 .feature-row {
   display: grid;
   grid-auto-flow: column;
@@ -181,9 +242,10 @@ body {
 
 .card {
   display: grid;
-  align-content: space-between;
-  width: 80px;
-  height: 112px;
+  align-content: start;
+  gap: 4px;
+  width: 96px;
+  min-height: 112px;
   padding: 8px;
   background: #fff;
   color: #000;
@@ -195,11 +257,31 @@ body {
     background: #ffd;
   }
 
-  & .card-modes {
-    color: #333;
+  & .card-name {
+    font-weight: bold;
   }
 
   & .card-id {
     color: #666;
   }
+}
+
+.card-mode {
+  padding: 4px;
+  background: #fff;
+  color: #000;
+  border: 2px solid #000;
+  font: 11px monospace;
+  cursor: pointer;
+
+  &:disabled {
+    color: #999;
+    border-color: #999;
+    cursor: default;
+  }
+}
+
+.card.discarding {
+  background: #fee;
+  border-color: #c00;
 }

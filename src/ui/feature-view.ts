@@ -1,11 +1,11 @@
 import type { Card, CardSpec } from "../game/cards";
 import { allCards } from "../game/deck";
 import type { FeatureAction } from "../game/economy";
-import type { GameState } from "../game/state";
+import type { GameOverReason, GameState } from "../game/state";
 import { describeModes } from "./card-text";
 import { setChildren } from "./dom";
 
-/** Modal UI for the shop, smith, removal and gain phases. */
+/** Modal UI for the shop, smith, removal, gain and game-over phases. */
 export class FeatureView {
   private readonly layer: HTMLElement;
   private readonly onAction: (action: FeatureAction) => void;
@@ -43,13 +43,21 @@ export class FeatureView {
         }));
       case "pending-gain":
         return this.giftPanel(phase.spec);
+      case "game-over":
+        return this.gameOverPanel(phase.reason);
       case "playing":
       case "pending-move":
       case "pending-attack":
       case "pending-discard":
-      case "game-over":
         return null;
     }
+  }
+
+  private gameOverPanel(reason: GameOverReason): HTMLElement {
+    const message = document.createElement("div");
+    message.classList.add("feature-text");
+    message.textContent = gameOverText(reason);
+    return this.panelElement([this.title("Game over"), message]);
   }
 
   private shopPanel(
@@ -142,5 +150,16 @@ export class FeatureView {
     panel.classList.add("feature-panel");
     setChildren(panel, nodes);
     return panel;
+  }
+}
+
+function gameOverText(reason: GameOverReason): string {
+  switch (reason.kind) {
+    case "assassin":
+      return "An assassin caught you. Reload the page to try again.";
+    case "sniper":
+      return "A sniper shot you down. Reload the page to try again.";
+    case "caught":
+      return "You were caught. Reload the page to try again.";
   }
 }

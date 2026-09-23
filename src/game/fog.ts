@@ -209,16 +209,18 @@ export function ensureAhead(state: GameState): GameState {
   let tiles = state.map.tiles;
   let records = state.map.index.sections;
   let cursor = state.map.cursor;
+  let enemies = state.enemies;
   let changed = false;
 
   while (records.length < state.playerSectionOrder + AHEAD) {
-    const advanced = advanceMap(tiles, records, cursor, state.ids);
+    const advanced = advanceMap(tiles, records, cursor, state.ids, state.turn);
     if (advanced === null) {
       break;
     }
     tiles = advanced.tiles;
     records = advanced.records;
     cursor = advanced.cursor;
+    enemies = [...enemies, ...advanced.snipers];
     changed = true;
   }
 
@@ -227,8 +229,24 @@ export function ensureAhead(state: GameState): GameState {
   }
   return {
     ...state,
+    enemies,
     map: { ...state.map, tiles, cursor, index: buildMapIndex(records, tiles) },
   };
+}
+
+/**
+ * The far end of the newest live section: where assassins head to cut the
+ * player off. Falls back to the player's own hex if nothing is live.
+ */
+export function leadingEdge(state: GameState): HexCoord {
+  const sections = state.map.index.sections;
+  for (let i = sections.length - 1; i >= 0; i -= 1) {
+    const section = sections[i];
+    if (isLive(state.map.index, section)) {
+      return section.origin;
+    }
+  }
+  return state.map.player;
 }
 
 /**

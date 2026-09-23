@@ -11,7 +11,7 @@ import type { GameState } from "./game/state";
 const root = requireElementById("app", HTMLDivElement);
 
 const ids = counterIds("id");
-const generated = generateMap(1, 3, ids);
+const generated = generateMap(1, 3, 1, ids);
 
 const state: GameState = {
   turn: 1,
@@ -25,7 +25,7 @@ const state: GameState = {
     cursor: generated.cursor,
   },
   playerSectionOrder: 0,
-  enemies: [],
+  enemies: generated.snipers,
   phase: { kind: "playing" },
   rng: generated.cursor.rng,
   ids,

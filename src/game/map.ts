@@ -5,6 +5,7 @@ import { canEnter } from "./terrain";
 import type { Terrain, Tile, TileFeature } from "./terrain";
 import type { IdFactory } from "./cards";
 import { SHOP_CATALOGUE } from "./cards";
+import type { Sniper } from "./enemies";
 import type { Rng } from "./rng";
 import { nextRng, pick, shuffle } from "./rng";
 import { SHOP_STOCK_SIZE, rollShopStock } from "./shop";
@@ -35,7 +36,7 @@ export type SectionTemplate = {
 
 const TERRAIN_BY_CHAR: Record<string, Terrain> = {
   ".": "grass", f: "forest", w: "water", m: "mountain", d: "dirt", "#": "impassible",
-  S: "grass", T: "grass", R: "grass", G: "grass", c: "grass",
+  S: "grass", T: "grass", R: "grass", G: "grass", c: "grass", x: "mountain",
 };
 
 const FEATURE_BY_CHAR: Record<string, TileFeature> = {
@@ -46,7 +47,14 @@ const FEATURE_BY_CHAR: Record<string, TileFeature> = {
   R: { kind: "remove-card" },
   G: { kind: "gain-card" },
   c: { kind: "coin", value: 3 },
+  x: { kind: "none" },
 };
+
+/** Template char marking a fixed sniper post. */
+const SNIPER_CHAR = "x";
+const SNIPER_RADIUS = 2;
+/** Snipers only appear once the player is this deep, per the design. */
+const SNIPER_MIN_DISTANCE = 5;
 
 export function validateTemplate(template: SectionTemplate): void {
   const expected = hexesInHexagon(template.radius);
@@ -65,13 +73,17 @@ export function validateTemplate(template: SectionTemplate): void {
   });
 }
 
+/**
+ * Stamp `template` into `tiles` and return the world coords of its sniper posts.
+ */
 export function stampSection(
   tiles: Map<string, Tile>,
   template: SectionTemplate,
   origin: HexCoord,
   rotationSteps: number,
   spawnTurnBase: number,
-): void {
+): HexCoord[] {
+  const snipers: HexCoord[] = [];
   template.rows.forEach((row, index) => {
     const r = index - template.radius;
     for (let column = 0; column < row.length; column += 1) {
@@ -86,8 +98,12 @@ export function stampSection(
         feature: FEATURE_BY_CHAR[char],
         spawnTurn: delay < 0 ? -1 : spawnTurnBase + delay,
       });
+      if (char === SNIPER_CHAR) {
+        snipers.push(world);
+      }
     }
   });
+  return snipers;
 }
 
 /** Column index → axial q for a shifted hexagon row. */
@@ -97,22 +113,27 @@ function localCoord(radius: number, r: number, column: number): HexCoord {
 }
 
 /**
- * Turns after the section's base at which an assassin spawns here; -1 means
- * never. Harder terrain spawns sooner, which is the bridge to chapter 07.
+ * Turns after a tile enters the map at which an assassin spawns on it; -1 means
+ * never. Harder ground spawns sooner, so the danger follows the terrain.
  */
 function spawnDelayFor(terrain: Terrain): number {
   switch (terrain) {
     case "mountain":
-      return 2;
+      return 5;
     case "water":
-      return 4;
+      return 8;
     case "forest":
-      return 6;
+      return 11;
     case "grass":
     case "dirt":
     case "impassible":
       return -1;
   }
+}
+
+/** How many tiles in a section arm an assassin timer; ramps with depth. */
+function spawnCountFor(distance: number): number {
+  return 1 + Math.floor(distance / 5);
 }
 
 const ALL_EDGES: readonly number[] = [0, 1, 2, 3, 4, 5];
@@ -178,6 +199,16 @@ const SECTION_TEMPLATES: readonly SectionTemplate[] = [
     entryEdges: ALL_EDGES,
     exitEdges: ALL_EDGES,
   },
+  {
+    id: "watchtower",
+    difficulty: 2,
+    radius: 3,
+    // A sniper holds the centre; the grass rim is the safe way past. Nothing
+    // else sits here, so the player is never forced into the kill zone.
+    rows: ["....", ".mmm.", ".mmmm.", ".mmxmm.", ".mmmm.", ".mmm.", "...."],
+    entryEdges: ALL_EDGES,
+    exitEdges: ALL_EDGES,
+  },
 ];
 
 for (const template of SECTION_TEMPLATES) {
@@ -210,12 +241,14 @@ export type GeneratedMap = {
   records: SectionRecord[];
   player: HexCoord;
   cursor: MapCursor;
+  snipers: Sniper[];
 };
 
 export type AdvanceResult = {
   tiles: Map<string, Tile>;
   records: SectionRecord[];
   cursor: MapCursor;
+  snipers: Sniper[];
 };
 
 const MAX_ATTEMPTS = 40;
@@ -268,17 +301,6 @@ function edgeHex(origin: HexCoord, side: number, radius: number): HexCoord {
   return { q: origin.q + local.q, r: origin.r + local.r };
 }
 
-function buildSectionTiles(
-  template: SectionTemplate,
-  origin: HexCoord,
-  rotation: number,
-  spawnTurnBase: number,
-): Map<string, Tile> {
-  const sectionTiles = new Map<string, Tile>();
-  stampSection(sectionTiles, template, origin, rotation, spawnTurnBase);
-  return sectionTiles;
-}
-
 /** Can the starting deck (grass + forest, plus dirt) walk entry → exit inside this section? */
 function connects(
   sectionTiles: ReadonlyMap<string, Tile>,
@@ -301,7 +323,28 @@ type Placement = {
   lastTurn: number;
   rng: Rng;
   queue: readonly string[];
+  snipers: Sniper[];
 };
+
+/** Keep only `count` of a section's armed tiles, so assassins trickle in. */
+function capSpawns(
+  sectionTiles: Map<string, Tile>,
+  count: number,
+  rng: Rng,
+): Rng {
+  const armed = [...sectionTiles.entries()].filter(([, tile]) => tile.spawnTurn >= 0);
+  if (armed.length <= count) {
+    return rng;
+  }
+  const rolled = shuffle(armed, rng);
+  const keep = new Set(rolled.items.slice(0, count).map(([key]) => key));
+  for (const [key, tile] of sectionTiles) {
+    if (tile.spawnTurn >= 0 && !keep.has(key)) {
+      sectionTiles.set(key, { ...tile, spawnTurn: -1 });
+    }
+  }
+  return rolled.rng;
+}
 
 /**
  * Draw the next template from the shuffled bag, refilling it when no id left in
@@ -343,6 +386,7 @@ function placeSection(
   rng: Rng,
   ids: IdFactory,
   queue: readonly string[],
+  spawnTurnBase: number,
 ): Placement | null {
   const band = difficultyBand(distance);
   const pool = SECTION_TEMPLATES.filter((t) => Math.abs(t.difficulty - band) <= 1);
@@ -380,7 +424,14 @@ function placeSection(
     }
 
     const origin = frontier.origin;
-    const sectionTiles = buildSectionTiles(template, origin, rotation, distance * 3);
+    const sectionTiles = new Map<string, Tile>();
+    const sniperHexes = stampSection(
+      sectionTiles,
+      template,
+      origin,
+      rotation,
+      spawnTurnBase,
+    );
 
     let overlaps = false;
     for (const key of sectionTiles.keys()) {
@@ -398,6 +449,8 @@ function placeSection(
     if (!connects(sectionTiles, entryHex, exitHex)) {
       continue;
     }
+
+    current = capSpawns(sectionTiles, spawnCountFor(distance), current);
 
     for (const [key, tile] of sectionTiles) {
       if (tile.feature.kind === "shop") {
@@ -424,6 +477,15 @@ function placeSection(
 
     const offset = sideOffset(worldExit, template.radius);
     const nextOrigin: HexCoord = { q: origin.q + offset.q, r: origin.r + offset.r };
+    const snipers: Sniper[] =
+      distance >= SNIPER_MIN_DISTANCE
+        ? sniperHexes.map((position) => ({
+            kind: "sniper",
+            id: ids(),
+            position,
+            radius: SNIPER_RADIUS,
+          }))
+        : [];
 
     return {
       record,
@@ -431,6 +493,7 @@ function placeSection(
       lastTurn: -lastTurn,
       rng: current,
       queue: bag,
+      snipers,
     };
   }
 
@@ -457,6 +520,7 @@ export function advanceMap(
   records: readonly SectionRecord[],
   cursor: MapCursor,
   ids: IdFactory,
+  spawnTurnBase: number,
 ): AdvanceResult | null {
   const nextTiles = new Map(tiles);
   const placed = placeSection(
@@ -468,6 +532,7 @@ export function advanceMap(
     cursor.rng,
     ids,
     cursor.queue,
+    spawnTurnBase,
   );
   if (placed === null) {
     return null;
@@ -482,12 +547,19 @@ export function advanceMap(
       rng: placed.rng,
       queue: placed.queue,
     },
+    snipers: placed.snipers,
   };
 }
 
-export function generateMap(seed: number, sectionCount: number, ids: IdFactory): GeneratedMap {
+export function generateMap(
+  seed: number,
+  sectionCount: number,
+  startTurn: number,
+  ids: IdFactory,
+): GeneratedMap {
   let tiles = new Map<string, Tile>();
   let records: SectionRecord[] = [];
+  let snipers: Sniper[] = [];
   let cursor: MapCursor = {
     frontier: { origin: { q: 0, r: 0 }, entryEdge: 3 },
     distance: 0,
@@ -497,13 +569,14 @@ export function generateMap(seed: number, sectionCount: number, ids: IdFactory):
   };
 
   for (let i = 0; i < sectionCount; i += 1) {
-    const advanced = advanceMap(tiles, records, cursor, ids);
+    const advanced = advanceMap(tiles, records, cursor, ids, startTurn);
     if (advanced === null) {
       break;
     }
     tiles = advanced.tiles;
     records = advanced.records;
     cursor = advanced.cursor;
+    snipers = [...snipers, ...advanced.snipers];
   }
 
   let player: HexCoord = { q: 0, r: 0 };
@@ -512,7 +585,7 @@ export function generateMap(seed: number, sectionCount: number, ids: IdFactory):
     player = edgeHex(first.origin, first.entryEdge, radiusOf(first));
   }
 
-  return { tiles, records, player, cursor };
+  return { tiles, records, player, cursor, snipers };
 }
 
 /**

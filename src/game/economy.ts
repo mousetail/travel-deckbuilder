@@ -1,5 +1,6 @@
 import type { Card, CardMode } from "./cards";
 import { SHOP_CATALOGUE, instantiate } from "./cards";
+import { gainCurrency, spendCurrency } from "./currency";
 import type { Deck } from "./deck";
 import { addPurchase } from "./deck";
 import { hexKey } from "./hex";
@@ -9,19 +10,7 @@ import type { GameState } from "./state";
 import type { TileFeature } from "./terrain";
 import { endTurn } from "./turn";
 
-export function gainCurrency(state: GameState, amount: number): GameState {
-  if (amount < 0) {
-    throw new Error("negative currency gain");
-  }
-  return { ...state, currency: state.currency + amount };
-}
-
-export function spendCurrency(state: GameState, amount: number): GameState {
-  if (amount > state.currency) {
-    throw new Error("cannot afford purchase");
-  }
-  return { ...state, currency: state.currency - amount };
-}
+export { gainCurrency, spendCurrency };
 
 export type EndTurnAction =
   | { kind: "end-turn" }

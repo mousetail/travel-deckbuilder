@@ -5,12 +5,21 @@ import { FeatureView } from "./feature-view";
 import { setChildren } from "./dom";
 import { hexKey } from "../game/hex";
 import type { HexCoord } from "../game/hex";
-import type { Card } from "../game/cards";
+import type { Card, CardMode } from "../game/cards";
 import type { GameState } from "../game/state";
 import { visibleMap } from "../game/fog";
+import { dangerZone, enemiesInRange } from "../game/enemies";
 import { applyFeatureAction, useFeature } from "../game/economy";
 import type { FeatureAction } from "../game/economy";
-import { beginPlay, cancelPending, discardCard, resolveMoveTo } from "../game/turn";
+import {
+  beginPlay,
+  cancelPending,
+  discardCard,
+  discardForChoice,
+  modeIsAvailable,
+  resolveAttack,
+  resolveMoveTo,
+} from "../game/turn";
 
 export class App {
   private readonly root: HTMLElement;
@@ -53,10 +62,15 @@ export class App {
     );
     this.handView = new HandView(
       handLayer,
-      (card) => this.handlePlay(card),
+      (card, modeIndex) => this.handlePlay(card, modeIndex),
       (card) => this.handleDiscard(card),
+      (card, modeIndex) => this.modeAvailable(card, modeIndex),
     );
-    this.hud = new Hud(hudBar, () => this.handleAction());
+    this.hud = new Hud(
+      hudBar,
+      () => this.handleAction(),
+      () => this.handleCancel(),
+    );
     this.featureView = new FeatureView(featureLayer, (action) => this.handleFeatureAction(action));
   }
 
@@ -67,8 +81,21 @@ export class App {
 
   private render(): void {
     const visible = visibleMap(this.state);
-    this.mapView.render(visible.tiles, visible.fog, this.state.map.player, this.reachableKeys());
-    this.handView.render(this.state.deck.hand, this.selectedCardId());
+    this.mapView.render({
+      tiles: visible.tiles,
+      fog: visible.fog,
+      player: this.state.map.player,
+      reachable: this.reachableKeys(),
+      enemies: this.state.enemies,
+      targets: this.targets(),
+      danger: dangerZone(this.state),
+      turn: this.state.turn,
+    });
+    this.handView.render(
+      this.state.deck.hand,
+      this.selectedCardId(),
+      this.state.phase.kind === "pending-discard",
+    );
     this.hud.render(this.state);
     this.featureView.render(this.state);
   }
@@ -80,6 +107,17 @@ export class App {
     return new Set(this.state.phase.reachable.map(hexKey));
   }
 
+  /** Enemies the player may currently attack. */
+  private targets(): ReadonlySet<string> {
+    const phase = this.state.phase;
+    if (phase.kind !== "pending-attack") {
+      return new Set();
+    }
+    return new Set(
+      enemiesInRange(this.state.enemies, this.state.map.player, phase.range).map((e) => e.id),
+    );
+  }
+
   private selectedCardId(): string | null {
     if (this.state.phase.kind !== "pending-move") {
       return null;
@@ -87,18 +125,40 @@ export class App {
     return this.state.phase.card.id;
   }
 
-  private handlePlay(card: Card): void {
-    this.state = beginPlay(this.state, card);
+  private modeAvailable(card: Card, modeIndex: number): boolean {
+    if (this.state.phase.kind !== "playing") {
+      return false;
+    }
+    const mode: CardMode | undefined = card.modes[modeIndex];
+    return mode !== undefined && modeIsAvailable(this.state, mode);
+  }
+
+  private handlePlay(card: Card, modeIndex: number): void {
+    this.state = beginPlay(this.state, card, modeIndex);
     this.render();
   }
 
   private handleDiscard(card: Card): void {
-    this.state = discardCard(this.state, card);
+    this.state =
+      this.state.phase.kind === "pending-discard"
+        ? discardForChoice(this.state, card)
+        : discardCard(this.state, card);
     this.render();
   }
 
   private handleHexClick(coord: HexCoord): void {
-    if (this.state.phase.kind !== "pending-move") {
+    const phase = this.state.phase;
+    if (phase.kind === "pending-attack") {
+      const target = this.state.enemies.find(
+        (enemy) => this.targets().has(enemy.id) && hexKey(enemy.position) === hexKey(coord),
+      );
+      if (target !== undefined) {
+        this.state = resolveAttack(this.state, target.id);
+        this.render();
+      }
+      return;
+    }
+    if (phase.kind !== "pending-move") {
       return;
     }
     if (!this.reachableKeys().has(hexKey(coord))) {

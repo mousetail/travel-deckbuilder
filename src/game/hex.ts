@@ -162,3 +162,104 @@ function reconstructPath(
   }
   return path.reverse();
 }
+
+/**
+ * Every hex reachable from `start` for a total cost of at most `budget`
+ * (including `start` itself). Used to show where an enemy can strike.
+ */
+export function hexesWithinCost(
+  start: HexCoord,
+  budget: number,
+  costAt: CostLookup,
+): HexCoord[] {
+  const best = new Map<string, number>();
+  best.set(hexKey(start), 0);
+  const reached = new Map<string, HexCoord>();
+  reached.set(hexKey(start), start);
+  const open: HexCoord[] = [start];
+
+  while (open.length > 0) {
+    let cheapest = 0;
+    for (let i = 1; i < open.length; i += 1) {
+      const a = best.get(hexKey(open[i])) ?? Infinity;
+      const b = best.get(hexKey(open[cheapest])) ?? Infinity;
+      if (a < b) {
+        cheapest = i;
+      }
+    }
+    const [current] = open.splice(cheapest, 1);
+    if (current === undefined) {
+      break;
+    }
+    const currentCost = best.get(hexKey(current)) ?? Infinity;
+    for (const next of neighbours(current)) {
+      const step = costAt(next);
+      if (!Number.isFinite(step)) {
+        continue;
+      }
+      const candidate = currentCost + step;
+      if (candidate > budget) {
+        continue;
+      }
+      if (candidate < (best.get(hexKey(next)) ?? Infinity)) {
+        best.set(hexKey(next), candidate);
+        reached.set(hexKey(next), next);
+        open.push(next);
+      }
+    }
+  }
+  return [...reached.values()];
+}
+
+export type CostLookup = (coord: HexCoord) => number;
+
+export type CostPath = { path: HexCoord[]; cost: number };
+
+/**
+ * Dijkstra over a per-step cost function, for movers that pay different costs
+ * for different terrain (chapter 07's assassins). `costAt` returning a
+ * non-finite value means the hex cannot be entered. Returns null if `goal` is
+ * unreachable.
+ */
+export function findPathByCost(
+  start: HexCoord,
+  goal: HexCoord,
+  costAt: CostLookup,
+): CostPath | null {
+  const best = new Map<string, number>();
+  best.set(hexKey(start), 0);
+  const cameFrom = new Map<string, HexCoord>();
+  const open: HexCoord[] = [start];
+
+  while (open.length > 0) {
+    let cheapest = 0;
+    for (let i = 1; i < open.length; i += 1) {
+      const a = best.get(hexKey(open[i])) ?? Infinity;
+      const b = best.get(hexKey(open[cheapest])) ?? Infinity;
+      if (a < b) {
+        cheapest = i;
+      }
+    }
+    const [current] = open.splice(cheapest, 1);
+    if (current === undefined) {
+      break;
+    }
+    const currentCost = best.get(hexKey(current)) ?? Infinity;
+    if (equalsHex(current, goal)) {
+      return { path: reconstructPath(cameFrom, start, goal), cost: currentCost };
+    }
+    for (const next of neighbours(current)) {
+      const step = costAt(next);
+      if (!Number.isFinite(step)) {
+        continue;
+      }
+      const candidate = currentCost + step;
+      if (candidate < (best.get(hexKey(next)) ?? Infinity)) {
+        best.set(hexKey(next), candidate);
+        cameFrom.set(hexKey(next), current);
+        open.push(next);
+      }
+    }
+  }
+  return null;
+}
