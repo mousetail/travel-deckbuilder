@@ -1,7 +1,9 @@
 import type { GameState } from "../game/state";
+import type { TileFeature } from "../game/terrain";
 import { endTurnAction, playerFeature } from "../game/economy";
 import { setChildren } from "./dom";
 
+/** The top bar (run stats and a contextual hint). */
 export class Hud {
   private readonly layer: HTMLElement;
   private readonly onAction: () => void;
@@ -18,27 +20,56 @@ export class Hud {
     stats.classList.add("hud-stats");
     stats.textContent =
       `Turn ${state.turn} · ${state.currency} currency · ` +
-      `draw ${state.deck.draw.length} · discard ${state.deck.discard.length} · ` +
-      `enemies ${state.enemies.length}`;
+      `depth ${state.playerSectionOrder} · enemies ${state.enemies.length}`;
 
     const hint = document.createElement("div");
     hint.classList.add("hud-hint");
     hint.textContent = hintFor(state);
 
+    setChildren(this.layer, [stats, hint]);
+  }
+
+  /** The end-turn / use-feature button, which lives in the bottom bar. */
+  renderAction(slot: HTMLElement, state: GameState, busy: boolean): void {
     const button = document.createElement("button");
     button.classList.add("hud-button");
+
     const phase = state.phase;
     if (phase.kind === "pending-move" || phase.kind === "pending-attack") {
       button.textContent = "Cancel";
+      button.disabled = busy;
       button.addEventListener("click", () => this.onCancel());
-    } else {
-      const action = endTurnAction(playerFeature(state));
-      button.textContent = action.kind === "end-turn" ? "End turn" : "Use feature";
-      button.disabled = phase.kind !== "playing";
-      button.addEventListener("click", () => this.onAction());
+      setChildren(slot, [button]);
+      return;
     }
 
-    setChildren(this.layer, [stats, hint, button]);
+    const action = endTurnAction(playerFeature(state));
+    if (action.kind === "use-feature") {
+      button.classList.add("use-feature");
+      button.textContent = featureLabel(action.feature);
+    } else {
+      button.textContent = "End turn";
+    }
+    button.disabled = busy || phase.kind !== "playing";
+    button.addEventListener("click", () => this.onAction());
+    setChildren(slot, [button]);
+  }
+}
+
+function featureLabel(feature: TileFeature): string {
+  switch (feature.kind) {
+    case "shop":
+      return "Shop";
+    case "smith":
+      return "Smith";
+    case "remove-card":
+      return "Remove a card";
+    case "gain-card":
+      return "Take a card";
+    case "coin":
+      return "Collect";
+    case "none":
+      return "End turn";
   }
 }
 

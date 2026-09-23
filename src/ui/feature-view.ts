@@ -17,13 +17,7 @@ export class FeatureView {
 
   render(state: GameState): void {
     const panel = this.panel(state);
-    if (panel === null) {
-      this.layer.classList.remove("active");
-      setChildren(this.layer, []);
-      return;
-    }
-    this.layer.classList.add("active");
-    setChildren(this.layer, [panel]);
+    setChildren(this.layer, panel === null ? [] : [panel]);
   }
 
   private panel(state: GameState): HTMLElement | null {
@@ -118,7 +112,7 @@ export class FeatureView {
 
   private title(text: string): HTMLElement {
     const element = document.createElement("div");
-    element.classList.add("feature-title");
+    element.classList.add("overlay-title");
     element.textContent = text;
     return element;
   }
@@ -147,7 +141,7 @@ export class FeatureView {
 
   private panelElement(nodes: readonly Node[]): HTMLElement {
     const panel = document.createElement("div");
-    panel.classList.add("feature-panel");
+    panel.classList.add("overlay");
     setChildren(panel, nodes);
     return panel;
   }

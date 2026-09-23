@@ -1,6 +1,46 @@
+:root {
+  --ui-fg: #000;
+  --ui-bg: #fff;
+  --ui-border: 3px;
+}
+
 html,
 body {
   margin: 0;
+  background: #000;
+  color: var(--ui-fg);
+  font: 14px monospace;
+}
+
+img.pixel,
+.hex,
+.hex-feature,
+.spawn-badge {
+  image-rendering: pixelated;
+}
+
+button {
+  font: inherit;
+  color: var(--ui-fg);
+  background: var(--ui-bg);
+  border: var(--ui-border) solid var(--ui-fg);
+  border-radius: 0;
+  padding: 6px 12px;
+  cursor: pointer;
+
+  &:hover {
+    background: #ddd;
+  }
+
+  &:disabled {
+    color: #999;
+    border-color: #999;
+    cursor: default;
+  }
+
+  &:disabled:hover {
+    background: var(--ui-bg);
+  }
 }
 
 .app {
@@ -16,11 +56,183 @@ body {
     position: relative;
   }
 
+  /* Full screen is the map; the HUD hovers above it and never blocks clicks.
+     Only the interactive bits opt back in, so empty HUD space passes through
+     to the map below. */
   & .hud-layer {
     grid-area: 1 / 1;
     position: relative;
-    pointer-events: none; /* re-enable on interactive children */
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    padding: 12px;
+    pointer-events: none;
+
+    & button,
+    & .card:not(.card-view-only),
+    & .overlay {
+      pointer-events: auto;
+    }
   }
+}
+
+.hud-top {
+  display: grid;
+  grid-auto-flow: column;
+  justify-content: space-between;
+  align-items: start;
+  gap: 8px;
+  color: #fff;
+}
+
+.hud-hint {
+  color: #ffd700;
+}
+
+.hud-middle {
+  display: grid;
+  place-items: center;
+}
+
+.hud-bottom {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: end;
+  gap: 12px;
+}
+
+.pile-slot,
+.hud-action {
+  display: grid;
+  place-items: end;
+}
+
+/* --- the hand fan ------------------------------------------------------- */
+
+.hand {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 0;
+
+  & .card {
+    margin-inline: -22px;
+    transform-origin: 50% 170%;
+    transform: rotate(calc((var(--i) - (var(--n) - 1) / 2) * 7deg));
+
+    &:hover {
+      z-index: 1;
+      transform: translateY(-16px) rotate(calc((var(--i) - (var(--n) - 1) / 2) * 7deg));
+    }
+  }
+}
+
+/* --- cards -------------------------------------------------------------- */
+
+.card {
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  gap: 2px;
+  width: 96px;
+  height: 150px;
+  padding: 6px;
+  background: var(--ui-bg);
+  color: var(--ui-fg);
+  border: var(--ui-border) solid var(--ui-fg);
+  border-radius: 0;
+  font: 12px monospace;
+  text-align: left;
+  cursor: pointer;
+
+  &.selected {
+    background: #ffd;
+  }
+
+  &.discarding {
+    background: #fee;
+    border-color: #c00;
+  }
+
+  /* Viewer cards must not become clickable via the inherited `auto` of the
+     overlay they sit in. */
+  &.card-view-only {
+    opacity: 0.6;
+    pointer-events: none;
+    cursor: default;
+  }
+
+  & .card-symbol {
+    font-size: 18px;
+    font-weight: bold;
+  }
+
+  & .card-name {
+    font-weight: bold;
+  }
+
+  & .card-art {
+    background: #eee;
+    border-top: 2px solid var(--ui-fg);
+  }
+}
+
+.card-mode {
+  padding: 2px 4px;
+  font: 11px monospace;
+}
+
+/* --- piles and overlays ------------------------------------------------- */
+
+.overlay {
+  display: grid;
+  gap: 8px;
+  max-width: 90vw;
+  max-height: 60vh;
+  overflow: auto;
+  padding: 16px;
+  background: var(--ui-bg);
+  color: var(--ui-fg);
+  border: var(--ui-border) solid var(--ui-fg);
+}
+
+.overlay-title {
+  font-weight: bold;
+}
+
+.overlay-cards {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+
+  & .card {
+    margin-inline: 0;
+    transform: none;
+  }
+}
+
+.feature-row {
+  display: grid;
+  grid-auto-flow: column;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border: 2px solid var(--ui-fg);
+}
+
+.feature-text {
+  padding: 8px 0;
+}
+
+/* --- the map ------------------------------------------------------------ */
+
+/* Every map node sits in this layer at world-pixel coordinates, so the camera
+   is one transform here rather than a rewrite of each node. */
+.world {
+  position: absolute;
+  top: 0;
+  left: 0;
+  will-change: transform;
 }
 
 .hex {
@@ -30,7 +242,6 @@ body {
   width: 55.4px; /* sqrt(3) * HEX_SIZE for HEX_SIZE=32 */
   height: 64px; /* 2 * HEX_SIZE */
   background-size: 32px 32px; /* tile the 32×32 texture */
-  image-rendering: pixelated;
   clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
 
   &.terrain-forest {
@@ -68,7 +279,6 @@ body {
   background-repeat: no-repeat;
   background-position: center;
   background-size: 55%; /* ≈30px at HEX_SIZE=32, inside the hex's shoulders */
-  image-rendering: pixelated;
   pointer-events: none;
 }
 
@@ -97,7 +307,6 @@ body {
   height: 22px;
   background: #fff;
   border: 3px solid #000;
-  border-radius: 50%;
   pointer-events: none;
 }
 
@@ -113,7 +322,6 @@ body {
   height: 20px;
   background: #c00;
   border: 3px solid #000;
-  transform-origin: center;
 }
 
 .enemy-sniper {
@@ -126,6 +334,12 @@ body {
 .enemy.target {
   outline: 3px solid #ffd700;
   outline-offset: 2px;
+}
+
+/* The actor currently walking its path, lifted above the rest of the map. */
+.player-marker.moving,
+.enemy.moving {
+  z-index: 3;
 }
 
 /* Outline of the hexes an enemy could strike at the end of this turn. */
@@ -152,136 +366,4 @@ body {
   font: 11px monospace;
   text-align: center;
   pointer-events: none;
-}
-
-.hud-bar {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  display: grid;
-  grid-auto-flow: column;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  pointer-events: auto;
-  color: #fff;
-  font: 14px monospace;
-}
-
-.hud-hint {
-  color: #ffd700;
-}
-
-.hud-button {
-  padding: 6px 12px;
-  background: #fff;
-  color: #000;
-  border: 2px solid #000;
-  font: 14px monospace;
-  cursor: pointer;
-}
-
-.hand-layer {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  display: grid;
-  grid-auto-flow: column;
-  justify-content: center;
-  gap: 8px;
-  padding: 16px;
-  pointer-events: auto;
-}
-
-.feature-layer {
-  display: none;
-
-  &.active {
-    display: grid;
-    position: absolute;
-    inset: 0;
-    place-items: center;
-    background: rgba(0, 0, 0, 0.6);
-    pointer-events: auto;
-  }
-}
-
-.feature-panel {
-  display: grid;
-  gap: 8px;
-  min-width: 360px;
-  max-height: 80vh;
-  overflow: auto;
-  padding: 16px;
-  background: #fff;
-  color: #000;
-  border: 3px solid #000;
-  font: 14px monospace;
-}
-
-.feature-title {
-  font-weight: bold;
-}
-
-.feature-text {
-  padding: 8px 0;
-}
-
-.feature-row {
-  display: grid;
-  grid-auto-flow: column;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-  padding: 8px;
-  border: 2px solid #000;
-}
-
-.card {
-  display: grid;
-  align-content: start;
-  gap: 4px;
-  width: 96px;
-  min-height: 112px;
-  padding: 8px;
-  background: #fff;
-  color: #000;
-  border: 2px solid #000;
-  font: 12px monospace;
-  cursor: pointer;
-
-  &.selected {
-    background: #ffd;
-  }
-
-  & .card-name {
-    font-weight: bold;
-  }
-
-  & .card-id {
-    color: #666;
-  }
-}
-
-.card-mode {
-  padding: 4px;
-  background: #fff;
-  color: #000;
-  border: 2px solid #000;
-  font: 11px monospace;
-  cursor: pointer;
-
-  &:disabled {
-    color: #999;
-    border-color: #999;
-    cursor: default;
-  }
-}
-
-.card.discarding {
-  background: #fee;
-  border-color: #c00;
 }

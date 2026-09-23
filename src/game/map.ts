@@ -1,6 +1,6 @@
 import { findPath, hexDistance, hexKey, parseHexKey } from "./hex";
 import type { HexCoord } from "./hex";
-import { hexesInHexagon, rotateTimes } from "./hexagon";
+import { hexesInHexagon, hexSide, hexSideCentre, rotateTimes } from "./hexagon";
 import { canEnter } from "./terrain";
 import type { Terrain, Tile, TileFeature } from "./terrain";
 import type { IdFactory } from "./cards";
@@ -281,23 +281,9 @@ function sideOffset(side: number, radius: number): HexCoord {
   return offsets[side];
 }
 
-/** A hex on `side` of a section centred at the origin. */
-function sideHex(side: number, radius: number): HexCoord {
-  const half = Math.floor(radius / 2);
-  const hexes: readonly HexCoord[] = [
-    { q: radius, r: -half },
-    { q: radius - half, r: half },
-    { q: -half, r: radius },
-    { q: -radius, r: half },
-    { q: -radius + half, r: -half },
-    { q: half, r: -radius },
-  ];
-  return hexes[side];
-}
-
 /** The hex on `side` of a section centred at `origin`. */
 function edgeHex(origin: HexCoord, side: number, radius: number): HexCoord {
-  const local = sideHex(side, radius);
+  const local = hexSideCentre(side, radius);
   return { q: origin.q + local.q, r: origin.r + local.r };
 }
 
@@ -581,11 +567,26 @@ export function generateMap(
 
   let player: HexCoord = { q: 0, r: 0 };
   if (records.length > 0) {
-    const first = records[0];
-    player = edgeHex(first.origin, first.entryEdge, radiusOf(first));
+    player = startingHex(tiles, records[0]);
   }
 
   return { tiles, records, player, cursor, snipers };
+}
+
+/**
+ * The player enters through the first section's entry edge. Prefer an edge hex
+ * with no feature, so the opening turn is not forced onto a shop or a coin.
+ */
+function startingHex(tiles: ReadonlyMap<string, Tile>, section: SectionRecord): HexCoord {
+  const radius = radiusOf(section);
+  for (const local of hexSide(section.entryEdge, radius)) {
+    const coord: HexCoord = { q: section.origin.q + local.q, r: section.origin.r + local.r };
+    const tile = tiles.get(hexKey(coord));
+    if (tile !== undefined && tile.feature.kind === "none") {
+      return coord;
+    }
+  }
+  return section.origin;
 }
 
 /**

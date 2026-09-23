@@ -4,6 +4,7 @@ import { TERRAIN_TEXTURE, featureVisual } from "../game/terrain";
 import type { Tile } from "../game/terrain";
 import type { Enemy } from "../game/enemies";
 import type { FogLevel } from "../game/fog";
+import type { Mover } from "../game/transition";
 import { setChildren } from "./dom";
 
 export type MapViewState = {
@@ -19,6 +20,8 @@ export type MapViewState = {
   turn: number;
 };
 
+export type Point = { x: number; y: number };
+
 const SQRT3 = Math.sqrt(3);
 
 /** Midpoint of each hex side, relative to the hex centre. */
@@ -31,11 +34,20 @@ const SIDE_MIDPOINT: readonly { x: number; y: number }[] = [
   { x: (-SQRT3 / 4) * HEX_SIZE, y: (-3 / 4) * HEX_SIZE },
 ];
 
+/**
+ * Draws the visible window. Every node lives in a single `world` layer at
+ * world-pixel coordinates, so moving the camera is one transform on that layer
+ * rather than a rewrite of every node — which is what lets the camera pan
+ * smoothly while an actor walks.
+ */
 export class MapView {
   private readonly layer: HTMLElement;
+  private readonly world: HTMLElement;
   private readonly onHexClick: (coord: HexCoord) => void;
   private readonly onCancel: () => void;
-  private camera: { x: number; y: number } = { x: 0, y: 0 };
+  private camera: Point = { x: 0, y: 0 };
+  private playerNode: HTMLElement | null = null;
+  private readonly enemyNodes = new Map<string, HTMLElement>();
 
   constructor(
     layer: HTMLElement,
@@ -45,6 +57,10 @@ export class MapView {
     this.layer = layer;
     this.onHexClick = onHexClick;
     this.onCancel = onCancel;
+
+    this.world = document.createElement("div");
+    this.world.classList.add("world");
+    setChildren(layer, [this.world]);
 
     layer.addEventListener("click", (event) => {
       const rect = layer.getBoundingClientRect();
@@ -60,14 +76,6 @@ export class MapView {
   }
 
   render(view: MapViewState): void {
-    // Camera: centre on the player. With only three sections live at once the
-    // visible window always fits around them.
-    const playerPixel = hexToPixel(view.player);
-    this.camera = {
-      x: playerPixel.x - this.layer.clientWidth / 2,
-      y: playerPixel.y - this.layer.clientHeight / 2,
-    };
-
     const nodes: Node[] = [];
     for (const [key, tile] of view.tiles) {
       nodes.push(this.hexElement(key, tile, view.reachable.has(key), view.fog.get(key)));
@@ -81,11 +89,50 @@ export class MapView {
         nodes.push(badge);
       }
     }
+
+    this.enemyNodes.clear();
     for (const enemy of view.enemies) {
-      nodes.push(this.enemyElement(enemy, view.targets.has(enemy.id)));
+      const node = this.enemyElement(enemy, view.targets.has(enemy.id));
+      this.enemyNodes.set(enemy.id, node);
+      nodes.push(node);
     }
-    nodes.push(this.markerElement(view.player));
-    setChildren(this.layer, nodes);
+    this.playerNode = this.markerElement(view.player);
+    nodes.push(this.playerNode);
+
+    setChildren(this.world, nodes);
+  }
+
+  /** World pixel at the top-left of the viewport; the camera's position. */
+  setCamera(topLeft: Point): void {
+    this.camera = topLeft;
+    this.world.style.transform = `translate(${-topLeft.x}px, ${-topLeft.y}px)`;
+  }
+
+  viewportSize(): { width: number; height: number } {
+    return { width: this.layer.clientWidth, height: this.layer.clientHeight };
+  }
+
+  /** Move an actor's marker to a world pixel, mid-animation. */
+  placeActor(mover: Mover, pixel: Point): void {
+    const node = this.actorNode(mover);
+    if (node !== null) {
+      this.place(node, pixel);
+    }
+  }
+
+  /** Lift the actor being animated above the rest of the map. */
+  setMoving(mover: Mover, moving: boolean): void {
+    const node = this.actorNode(mover);
+    if (node !== null) {
+      node.classList.toggle("moving", moving);
+    }
+  }
+
+  private actorNode(mover: Mover): HTMLElement | null {
+    if (mover.kind === "player") {
+      return this.playerNode;
+    }
+    return this.enemyNodes.get(mover.id) ?? null;
   }
 
   private hexElement(
@@ -150,13 +197,13 @@ export class MapView {
     return nodes;
   }
 
-  private dangerEdgeElement(center: { x: number; y: number }, side: number): HTMLElement {
+  private dangerEdgeElement(center: Point, side: number): HTMLElement {
     const element = document.createElement("div");
     element.classList.add("danger-edge");
     const mid = SIDE_MIDPOINT[side];
     const angle = 30 + 60 * side;
     element.style.transform =
-      `translate(${center.x - this.camera.x + mid.x}px, ${center.y - this.camera.y + mid.y}px) ` +
+      `translate(${center.x + mid.x}px, ${center.y + mid.y}px) ` +
       `translate(-50%, -50%) rotate(${angle}deg)`;
     return element;
   }
@@ -192,8 +239,7 @@ export class MapView {
     return element;
   }
 
-  private place(element: HTMLElement, pixel: { x: number; y: number }): void {
-    element.style.transform =
-      `translate(${pixel.x - this.camera.x}px, ${pixel.y - this.camera.y}px) translate(-50%, -50%)`;
+  private place(element: HTMLElement, pixel: Point): void {
+    element.style.transform = `translate(${pixel.x}px, ${pixel.y}px) translate(-50%, -50%)`;
   }
 }

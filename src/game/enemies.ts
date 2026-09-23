@@ -3,6 +3,8 @@ import { findPathByCost, hexDistance, hexKey, hexesInRange, hexesWithinCost, par
 import type { CostLookup, HexCoord } from "./hex";
 import type { GameState } from "./state";
 import type { Terrain, Tile } from "./terrain";
+import { moving } from "./transition";
+import type { MovePath, Transition } from "./transition";
 
 export type Assassin = {
   kind: "assassin";
@@ -40,18 +42,22 @@ export function assassinMovementFor(turn: number): number {
   return 2 + Math.floor(turn / 6);
 }
 
-/** Spend `budget` movement points walking as far along `path` as possible. */
+/**
+ * Spend `budget` movement points walking as far along `path` as possible. The
+ * returned `path` is the prefix actually walked, so the UI can animate it.
+ */
 export function advanceAlongPath(
   path: readonly HexCoord[],
   budget: number,
   costAt: CostLookup,
-): { position: HexCoord; spent: number } {
+): { position: HexCoord; spent: number; path: HexCoord[] } {
   const start = path[0];
   if (start === undefined) {
     throw new Error("empty path");
   }
   let position = start;
   let spent = 0;
+  let reached = 0;
   for (let i = 1; i < path.length; i += 1) {
     const step = costAt(path[i]);
     if (spent + step > budget) {
@@ -59,11 +65,17 @@ export function advanceAlongPath(
     }
     spent += step;
     position = path[i];
+    reached = i;
   }
-  return { position, spent };
+  return { position, spent, path: path.slice(0, reached + 1) };
 }
 
-export type AssassinTurn = { assassin: Assassin; killedPlayer: boolean };
+export type AssassinTurn = {
+  assassin: Assassin;
+  killedPlayer: boolean;
+  /** The hexes the assassin walked, start and end included. */
+  path: readonly HexCoord[];
+};
 
 /**
  * One assassin's move. If it can reach the player this turn the player dies;
@@ -77,15 +89,23 @@ export function takeAssassinTurn(
 ): AssassinTurn {
   const toPlayer = findPathByCost(assassin.position, player, costAt);
   if (toPlayer !== null && toPlayer.cost <= assassin.movement) {
-    return { assassin: { ...assassin, position: player }, killedPlayer: true };
+    return {
+      assassin: { ...assassin, position: player },
+      killedPlayer: true,
+      path: toPlayer.path,
+    };
   }
 
   const toEdge = findPathByCost(assassin.position, leadingEdge, costAt);
   if (toEdge === null) {
-    return { assassin, killedPlayer: false };
+    return { assassin, killedPlayer: false, path: [assassin.position] };
   }
   const advanced = advanceAlongPath(toEdge.path, assassin.movement, costAt);
-  return { assassin: { ...assassin, position: advanced.position }, killedPlayer: false };
+  return {
+    assassin: { ...assassin, position: advanced.position },
+    killedPlayer: false,
+    path: advanced.path,
+  };
 }
 
 /** Spawn an assassin on every live tile whose timer has come up. */
@@ -166,20 +186,25 @@ export function dangerZone(state: GameState): Set<string> {
 }
 
 /**
- * The end-of-turn enemy step: spawn, snipe, then move every assassin. Returns a
- * state whose phase may be `game-over`; it never throws.
+ * The end-of-turn enemy step: spawn, snipe, then move every assassin, one at a
+ * time. Returns the new state together with the paths walked, in order, so the
+ * UI can show each assassin move in turn. It never throws.
  */
-export function resolveEnemyPhase(state: GameState, leadingEdge: HexCoord): GameState {
+export function resolveEnemyPhase(state: GameState, leadingEdge: HexCoord): Transition {
   const costAt = terrainCostAt(state.map.tiles);
 
   const spawned = spawnAssassins(state.map.tiles, state.turn, assassinMovementFor, state.ids);
   const alreadyHere = state.enemies;
   let enemies: Enemy[] = [...alreadyHere, ...spawned];
+  const moves: MovePath[] = [];
 
   // Snipers fire first: ending your turn in their radius is fatal.
   for (const enemy of enemies) {
     if (enemy.kind === "sniper" && sniperKills(enemy, state.map.player)) {
-      return { ...state, phase: { kind: "game-over", reason: { kind: "sniper" } } };
+      return moving(
+        { ...state, enemies, phase: { kind: "game-over", reason: { kind: "sniper" } } },
+        moves,
+      );
     }
   }
 
@@ -191,11 +216,17 @@ export function resolveEnemyPhase(state: GameState, leadingEdge: HexCoord): Game
       continue;
     }
     const turn = takeAssassinTurn(enemy, state.map.player, leadingEdge, costAt);
-    if (turn.killedPlayer) {
-      return { ...state, phase: { kind: "game-over", reason: { kind: "assassin" } } };
+    if (turn.path.length > 1) {
+      moves.push({ mover: { kind: "enemy", id: enemy.id }, path: turn.path });
     }
     enemies = enemies.map((e) => (e.id === turn.assassin.id ? turn.assassin : e));
+    if (turn.killedPlayer) {
+      return moving(
+        { ...state, enemies, phase: { kind: "game-over", reason: { kind: "assassin" } } },
+        moves,
+      );
+    }
   }
 
-  return { ...state, enemies };
+  return moving({ ...state, enemies }, moves);
 }

@@ -1,8 +1,9 @@
 import type { Card, CardMode } from "../game/cards";
+import { cardFace } from "./card-view";
 import { describeMode } from "./card-text";
 import { setChildren } from "./dom";
 
-/** Placeholder hand renderer: plain blocks with one button per card mode. */
+/** The fanned hand: one card per held card, with a button per playable mode. */
 export class HandView {
   private readonly layer: HTMLElement;
   private readonly onPlay: (card: Card, modeIndex: number) => void;
@@ -22,37 +23,35 @@ export class HandView {
   }
 
   render(cards: readonly Card[], selectedId: string | null, discarding: boolean): void {
-    const nodes = cards.map((card) => this.cardElement(card, card.id === selectedId, discarding));
+    const nodes = cards.map((card, index) =>
+      this.cardElement(card, index, cards.length, selectedId, discarding),
+    );
     setChildren(this.layer, nodes);
   }
 
-  private cardElement(card: Card, selected: boolean, discarding: boolean): HTMLElement {
-    const element = document.createElement("div");
-    element.classList.add("card");
-    if (selected) {
+  private cardElement(
+    card: Card,
+    index: number,
+    count: number,
+    selectedId: string | null,
+    discarding: boolean,
+  ): HTMLElement {
+    const footer: Node[] = discarding
+      ? []
+      : card.modes.map((mode, modeIndex) => this.modeButton(card, mode, modeIndex));
+
+    const element = cardFace(card, { index, count, viewOnly: false }, footer);
+    if (card.id === selectedId) {
       element.classList.add("selected");
     }
-    element.dataset["cardId"] = card.id;
-
-    const name = document.createElement("span");
-    name.classList.add("card-name");
-    name.textContent = card.name;
-
-    const id = document.createElement("span");
-    id.classList.add("card-id");
-    id.textContent = card.id;
 
     // While choosing discards the whole card is the button, not its modes.
     if (discarding) {
       element.classList.add("discarding");
-      setChildren(element, [name, id]);
       element.addEventListener("click", () => this.onDiscard(card));
       return element;
     }
 
-    const modes = card.modes.map((mode, index) => this.modeButton(card, mode, index));
-
-    setChildren(element, [name, ...modes, id]);
     element.addEventListener("contextmenu", (event) => {
       event.preventDefault();
       this.onDiscard(card);

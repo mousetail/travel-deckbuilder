@@ -1,5 +1,6 @@
 import { hexDistance, hexKey } from "./hex";
 import type { HexCoord } from "./hex";
+import { hexSide } from "./hexagon";
 import { advanceMap, buildMapIndex } from "./map";
 import type { SectionRecord } from "./map";
 import type { Enemy } from "./enemies";
@@ -36,35 +37,13 @@ function radiusOf(record: SectionRecord): number {
 }
 
 /**
- * The hexes along side `side` of a hexagon of `radius`, relative to its centre.
- * Sides are numbered 0..5 clockwise, starting at the east-north-east edge.
- */
-const SIDE_HEX: readonly ((radius: number, i: number) => HexCoord)[] = [
-  (radius, i) => ({ q: radius, r: -i }),
-  (radius, i) => ({ q: radius - i, r: i }),
-  (radius, i) => ({ q: -i, r: radius }),
-  (radius, i) => ({ q: -radius, r: i }),
-  (radius, i) => ({ q: -radius + i, r: -i }),
-  (radius, i) => ({ q: i, r: -radius }),
-];
-
-function sideHexes(side: number, radius: number): HexCoord[] {
-  const make = SIDE_HEX[side];
-  const results: HexCoord[] = [];
-  for (let i = 0; i <= radius; i += 1) {
-    results.push(make(radius, i));
-  }
-  return results;
-}
-
-/**
  * The two rows of `record` nearest its entry edge — the sliver revealed while
  * the player is still in the previous section. The entry edge itself is `near`
  * (the player steps onto it next); the row behind it is `far`.
  */
 export function forwardRows(record: SectionRecord): FogHex[] {
   const radius = radiusOf(record);
-  const edge = sideHexes(record.entryEdge, radius).map((local) => ({
+  const edge = hexSide(record.entryEdge, radius).map((local) => ({
     q: record.origin.q + local.q,
     r: record.origin.r + local.r,
   }));

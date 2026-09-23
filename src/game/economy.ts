@@ -8,6 +8,8 @@ import type { HexCoord } from "./hex";
 import { SHOP_STOCK_SIZE, rollGift, rollShopStock } from "./shop";
 import type { GameState } from "./state";
 import type { TileFeature } from "./terrain";
+import { still } from "./transition";
+import type { Transition } from "./transition";
 import { endTurn } from "./turn";
 
 export { gainCurrency, spendCurrency };
@@ -58,7 +60,7 @@ function withShopStock(state: GameState, stock: readonly Card[]): GameState {
 }
 
 /** Using a feature ends the turn, so every modal phase funnels through here. */
-function finishFeature(state: GameState): GameState {
+function finishFeature(state: GameState): Transition {
   return endTurn({ ...state, phase: { kind: "playing" } });
 }
 
@@ -67,9 +69,9 @@ function finishFeature(state: GameState): GameState {
  * A coin pays out and ends the turn; shops, smiths, removal and gains open a
  * modal phase whose own action ends the turn.
  */
-export function useFeature(state: GameState): GameState {
+export function useFeature(state: GameState): Transition {
   if (state.phase.kind !== "playing") {
-    return state;
+    return still(state);
   }
   const feature = playerFeature(state);
   switch (feature.kind) {
@@ -78,17 +80,17 @@ export function useFeature(state: GameState): GameState {
     case "coin":
       return endTurn(collectCoin(state, state.map.player));
     case "shop":
-      return {
+      return still({
         ...state,
         phase: { kind: "shop", stock: feature.stock, rerollCost: feature.rerollCost },
-      };
+      });
     case "smith":
-      return { ...state, phase: { kind: "smith" } };
+      return still({ ...state, phase: { kind: "smith" } });
     case "remove-card":
-      return { ...state, phase: { kind: "pending-remove" } };
+      return still({ ...state, phase: { kind: "pending-remove" } });
     case "gain-card": {
       const rolled = rollGift(SHOP_CATALOGUE, state.rng);
-      return { ...state, rng: rolled.rng, phase: { kind: "pending-gain", spec: rolled.spec } };
+      return still({ ...state, rng: rolled.rng, phase: { kind: "pending-gain", spec: rolled.spec } });
     }
   }
 }
@@ -168,12 +170,12 @@ export type FeatureAction =
   | { kind: "remove"; cardId: string }
   | { kind: "take-gift" };
 
-export function applyFeatureAction(state: GameState, action: FeatureAction): GameState {
+export function applyFeatureAction(state: GameState, action: FeatureAction): Transition {
   switch (action.kind) {
     case "buy":
-      return buyCard(state, action.card);
+      return still(buyCard(state, action.card));
     case "reroll":
-      return rerollShop(state);
+      return still(rerollShop(state));
     case "leave":
       return leaveFeature(state);
     case "upgrade":
@@ -189,7 +191,7 @@ export function applyFeatureAction(state: GameState, action: FeatureAction): Gam
  * Back out of a modal phase. The feature stays on the tile (shops and smiths are
  * reusable, and a left gift re-rolls next visit), but the turn still ends.
  */
-export function leaveFeature(state: GameState): GameState {
+export function leaveFeature(state: GameState): Transition {
   switch (state.phase.kind) {
     case "shop":
     case "smith":
@@ -201,27 +203,27 @@ export function leaveFeature(state: GameState): GameState {
     case "pending-attack":
     case "pending-discard":
     case "game-over":
-      return state;
+      return still(state);
   }
 }
 
-export function chooseSmithCard(state: GameState, cardId: string): GameState {
+export function chooseSmithCard(state: GameState, cardId: string): Transition {
   if (state.phase.kind !== "smith") {
-    return state;
+    return still(state);
   }
   return finishFeature({ ...state, deck: upgradeCardInDeck(state.deck, cardId) });
 }
 
-export function chooseRemoveCard(state: GameState, cardId: string): GameState {
+export function chooseRemoveCard(state: GameState, cardId: string): Transition {
   if (state.phase.kind !== "pending-remove") {
-    return state;
+    return still(state);
   }
   return finishFeature({ ...state, deck: removeCardFromDeck(state.deck, cardId) });
 }
 
-export function takeGift(state: GameState): GameState {
+export function takeGift(state: GameState): Transition {
   if (state.phase.kind !== "pending-gain") {
-    return state;
+    return still(state);
   }
   const card = instantiate(state.phase.spec, state.ids());
   const withCard = { ...state, deck: addPurchase(state.deck, card) };
