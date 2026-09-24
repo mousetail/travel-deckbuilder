@@ -43,6 +43,12 @@ export function assassinMovementFor(turn: number): number {
 }
 
 /**
+ * Assassins never rest on or within this many hexes of a peer. They may walk
+ * straight through each other, but must not end a move crowded together.
+ */
+export const ASSASSIN_SPACING = 2;
+
+/**
  * Spend `budget` movement points walking as far along `path` as possible. The
  * returned `path` is the prefix actually walked, so the UI can animate it.
  */
@@ -70,6 +76,48 @@ export function advanceAlongPath(
   return { position, spent, path: path.slice(0, reached + 1) };
 }
 
+/**
+ * Trim a path so it never steps further than `maxDistance` from the player — the
+ * furthest tile the player can see. An assassin already beyond that line cannot
+ * advance, so it never slips further into the dark.
+ */
+function clampToReach(
+  path: readonly HexCoord[],
+  player: HexCoord,
+  maxDistance: number,
+): HexCoord[] {
+  const start = path[0];
+  if (start === undefined) {
+    throw new Error("empty path");
+  }
+  const kept = [start];
+  for (let i = 1; i < path.length; i += 1) {
+    if (hexDistance(path[i], player) > maxDistance) {
+      break;
+    }
+    kept.push(path[i]);
+  }
+  return kept;
+}
+
+/**
+ * Shorten a walked path until the assassin no longer ends within
+ * `ASSASSIN_SPACING` hexes of a peer. Only the resting spot matters, so a walk
+ * that crosses a crowd is fine; if no step escapes it, the assassin stays put.
+ */
+function retreatFromPeers(
+  path: readonly HexCoord[],
+  peers: readonly HexCoord[],
+): HexCoord[] {
+  for (let i = path.length - 1; i >= 0; i -= 1) {
+    const spot = path[i];
+    if (spot !== undefined && peers.every((peer) => hexDistance(spot, peer) > ASSASSIN_SPACING)) {
+      return path.slice(0, i + 1);
+    }
+  }
+  return path.slice(0, 1);
+}
+
 export type AssassinTurn = {
   assassin: Assassin;
   killedPlayer: boolean;
@@ -79,13 +127,17 @@ export type AssassinTurn = {
 
 /**
  * One assassin's move. If it can reach the player this turn the player dies;
- * otherwise it heads for the leading edge to cut the player off.
+ * otherwise it heads for the leading edge to cut the player off. Either way it
+ * stays within `maxDistance` of the player — the furthest tile the player can
+ * see — and never ends its move within `ASSASSIN_SPACING` of a peer.
  */
 export function takeAssassinTurn(
   assassin: Assassin,
   player: HexCoord,
   leadingEdge: HexCoord,
   costAt: CostLookup,
+  maxDistance: number,
+  peers: readonly HexCoord[],
 ): AssassinTurn {
   const toPlayer = findPathByCost(assassin.position, player, costAt);
   if (toPlayer !== null && toPlayer.cost <= assassin.movement) {
@@ -100,11 +152,13 @@ export function takeAssassinTurn(
   if (toEdge === null) {
     return { assassin, killedPlayer: false, path: [assassin.position] };
   }
-  const advanced = advanceAlongPath(toEdge.path, assassin.movement, costAt);
+  const inSight = clampToReach(toEdge.path, player, maxDistance);
+  const advanced = advanceAlongPath(inSight, assassin.movement, costAt);
+  const path = retreatFromPeers(advanced.path, peers);
   return {
-    assassin: { ...assassin, position: advanced.position },
+    assassin: { ...assassin, position: path[path.length - 1] ?? assassin.position },
     killedPlayer: false,
-    path: advanced.path,
+    path,
   };
 }
 
@@ -190,7 +244,11 @@ export function dangerZone(state: GameState): Set<string> {
  * time. Returns the new state together with the paths walked, in order, so the
  * UI can show each assassin move in turn. It never throws.
  */
-export function resolveEnemyPhase(state: GameState, leadingEdge: HexCoord): Transition {
+export function resolveEnemyPhase(
+  state: GameState,
+  leadingEdge: HexCoord,
+  maxDistance: number,
+): Transition {
   const costAt = terrainCostAt(state.map.tiles);
 
   const spawned = spawnAssassins(state.map.tiles, state.turn, assassinMovementFor, state.ids);
@@ -215,7 +273,10 @@ export function resolveEnemyPhase(state: GameState, leadingEdge: HexCoord): Tran
     if (enemy.kind !== "assassin") {
       continue;
     }
-    const turn = takeAssassinTurn(enemy, state.map.player, leadingEdge, costAt);
+    const peers = enemies
+      .filter((e): e is Assassin => e.kind === "assassin" && e.id !== enemy.id)
+      .map((e) => e.position);
+    const turn = takeAssassinTurn(enemy, state.map.player, leadingEdge, costAt, maxDistance, peers);
     if (turn.path.length > 1) {
       moves.push({ mover: { kind: "enemy", id: enemy.id }, path: turn.path });
     }

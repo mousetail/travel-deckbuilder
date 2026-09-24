@@ -10,6 +10,7 @@ import type { Rng } from "./rng";
 import { nextRng, pick, shuffle } from "./rng";
 import { SHOP_STOCK_SIZE, rollShopStock } from "./shop";
 import type { MapIndex } from "./state";
+import tiles from './tiles.json'
 
 export type SectionRecord = {
   id: string;
@@ -28,20 +29,37 @@ export type SectionTemplate = {
   id: string;
   difficulty: number;
   radius: number;
-  rows: readonly string[];       // rows[r + radius], lengths = hexagon row lengths
+  /** Terrain layer: rows[r + radius], lengths = hexagon row lengths. */
+  terrain: readonly string[];
+  /** Overlay layer (features and snipers), same shape as `terrain`. */
+  overlays: readonly string[];
+  /** Authored assassin spawn points, in local hex coords. */
+  spawns: readonly SpawnPoint[];
   /** Edge indices (0..5) the player may enter from / leave through. */
   entryEdges: readonly number[];
   exitEdges: readonly number[];
 };
 
-const TERRAIN_BY_CHAR: Record<string, Terrain> = {
-  ".": "grass", f: "forest", w: "water", m: "mountain", d: "dirt", "#": "impassible",
-  S: "grass", T: "grass", R: "grass", G: "grass", c: "grass", x: "mountain",
+/**
+ * An assassin spawn point authored on a template. `q`/`r` are template-local hex
+ * coords, rotated into the world when the section is stamped; `delay` is the
+ * number of turns after the player enters the section that an assassin appears
+ * here (chapter 07).
+ */
+export type SpawnPoint = {
+  q: number;
+  r: number;
+  delay: number;
 };
 
-const FEATURE_BY_CHAR: Record<string, TileFeature> = {
-  ".": { kind: "none" }, f: { kind: "none" }, w: { kind: "none" },
-  m: { kind: "none" }, d: { kind: "none" }, "#": { kind: "none" },
+/** Terrain layer: one char per hex. */
+export const TERRAIN_BY_CHAR: Record<string, Terrain> = {
+  ".": "grass", f: "forest", w: "water", m: "mountain", d: "dirt", "#": "impassible",
+};
+
+/** Overlay layer: what sits on top of the terrain. "." is nothing. */
+export const FEATURE_BY_CHAR: Record<string, TileFeature> = {
+  ".": { kind: "none" },
   S: { kind: "shop", stock: [], rerollCost: 2 },
   T: { kind: "smith" },
   R: { kind: "remove-card" },
@@ -50,25 +68,51 @@ const FEATURE_BY_CHAR: Record<string, TileFeature> = {
   x: { kind: "none" },
 };
 
-/** Template char marking a fixed sniper post. */
-const SNIPER_CHAR = "x";
-const SNIPER_RADIUS = 2;
+/** Overlay char marking a fixed sniper post. */
+export const SNIPER_CHAR = "x";
+export const SNIPER_RADIUS = 2;
 /** Snipers only appear once the player is this deep, per the design. */
 const SNIPER_MIN_DISTANCE = 5;
 
 export function validateTemplate(template: SectionTemplate): void {
-  const expected = hexesInHexagon(template.radius);
+  validateRows(template.id, "terrain", template.terrain, template.radius);
+  validateRows(template.id, "overlays", template.overlays, template.radius);
+  validateSpawns(template);
+}
+
+/** Every spawn point must sit on a hex of the template, with a sane delay. */
+function validateSpawns(template: SectionTemplate): void {
+  const hexes = new Set(hexesInHexagon(template.radius).map(hexKey));
+  for (const spawn of template.spawns) {
+    if (!hexes.has(hexKey({ q: spawn.q, r: spawn.r }))) {
+      throw new Error(
+        `template ${template.id}: spawn ${spawn.q},${spawn.r} is outside the hexagon`,
+      );
+    }
+    if (!Number.isInteger(spawn.delay) || spawn.delay < 0) {
+      throw new Error(`template ${template.id}: spawn ${spawn.q},${spawn.r} has a bad delay`);
+    }
+  }
+}
+
+function validateRows(
+  id: string,
+  layer: string,
+  rows: readonly string[],
+  radius: number,
+): void {
+  const expected = hexesInHexagon(radius);
   const perRow = new Map<number, number>();
   for (const coord of expected) {
     perRow.set(coord.r, (perRow.get(coord.r) ?? 0) + 1);
   }
-  if (template.rows.length !== template.radius * 2 + 1) {
-    throw new Error(`template ${template.id}: wrong row count`);
+  if (rows.length !== radius * 2 + 1) {
+    throw new Error(`template ${id}: wrong ${layer} row count`);
   }
-  template.rows.forEach((row, index) => {
-    const r = index - template.radius;
+  rows.forEach((row, index) => {
+    const r = index - radius;
     if (row.length !== perRow.get(r)) {
-      throw new Error(`template ${template.id}: row ${r} has ${row.length}, expected ${perRow.get(r)}`);
+      throw new Error(`template ${id}: ${layer} row ${r} has ${row.length}, expected ${perRow.get(r)}`);
     }
   });
 }
@@ -81,62 +125,47 @@ export function stampSection(
   template: SectionTemplate,
   origin: HexCoord,
   rotationSteps: number,
-  spawnTurnBase: number,
 ): HexCoord[] {
   const snipers: HexCoord[] = [];
-  template.rows.forEach((row, index) => {
+  template.terrain.forEach((row, index) => {
     const r = index - template.radius;
+    const overlayRow = template.overlays[index];
     for (let column = 0; column < row.length; column += 1) {
       const local = localCoord(template.radius, r, column);
       const rotated = rotateTimes(local, rotationSteps);
       const world: HexCoord = { q: origin.q + rotated.q, r: origin.r + rotated.r };
-      const char = row[column];
-      const terrain = TERRAIN_BY_CHAR[char];
-      const delay = spawnDelayFor(terrain);
+      const terrain = TERRAIN_BY_CHAR[row[column]];
+      const overlay = overlayRow[column];
       tiles.set(hexKey(world), {
         terrain,
-        feature: FEATURE_BY_CHAR[char],
-        spawnTurn: delay < 0 ? -1 : spawnTurnBase + delay,
+        feature: FEATURE_BY_CHAR[overlay],
+        spawnDelay: -1,
+        spawnTurn: -1,
       });
-      if (char === SNIPER_CHAR) {
+      if (overlay === SNIPER_CHAR) {
         snipers.push(world);
       }
     }
   });
+
+  // Authored spawn points, rotated like the terrain so they follow the section.
+  for (const spawn of template.spawns) {
+    const rotated = rotateTimes({ q: spawn.q, r: spawn.r }, rotationSteps);
+    const world: HexCoord = { q: origin.q + rotated.q, r: origin.r + rotated.r };
+    const key = hexKey(world);
+    const tile = tiles.get(key);
+    if (tile !== undefined) {
+      tiles.set(key, { ...tile, spawnDelay: spawn.delay });
+    }
+  }
   return snipers;
 }
 
 /** Column index → axial q for a shifted hexagon row. */
-function localCoord(radius: number, r: number, column: number): HexCoord {
+export function localCoord(radius: number, r: number, column: number): HexCoord {
   const q = column - radius - Math.min(0, r); // standard hexagon row shear
   return { q, r };
 }
-
-/**
- * Turns after a tile enters the map at which an assassin spawns on it; -1 means
- * never. Harder ground spawns sooner, so the danger follows the terrain.
- */
-function spawnDelayFor(terrain: Terrain): number {
-  switch (terrain) {
-    case "mountain":
-      return 5;
-    case "water":
-      return 8;
-    case "forest":
-      return 11;
-    case "grass":
-    case "dirt":
-    case "impassible":
-      return -1;
-  }
-}
-
-/** How many tiles in a section arm an assassin timer; ramps with depth. */
-function spawnCountFor(distance: number): number {
-  return 1 + Math.floor(distance / 5);
-}
-
-const ALL_EDGES: readonly number[] = [0, 1, 2, 3, 4, 5];
 
 /**
  * Hand-authored radius-3 sections. Every template keeps a grass perimeter, so
@@ -147,69 +176,12 @@ const ALL_EDGES: readonly number[] = [0, 1, 2, 3, 4, 5];
  * so they are reachable with the starting deck; the forest/water/mountain interior
  * is the shortcut that lets a better-equipped player skip them. `highlands` is the
  * exception: its upgrades are hidden behind the mountains, as the design asks.
+ *
+ * Assassin spawn points are authored per template (`spawns`), so difficulty is
+ * expressed by how many points a band's templates carry and how short their
+ * delays are — there is no terrain-derived or per-depth auto-spawning any more.
  */
-const SECTION_TEMPLATES: readonly SectionTemplate[] = [
-  {
-    id: "meadow",
-    difficulty: 0,
-    radius: 3,
-    rows: ["..c.", ".fff.", ".ffff.", ".fffff.", ".ffff.", ".fff.", "...."],
-    entryEdges: ALL_EDGES,
-    exitEdges: ALL_EDGES,
-  },
-  {
-    id: "village",
-    difficulty: 1,
-    radius: 3,
-    // Dirt is passable by any movement card, so the smith is always reachable.
-    rows: ["....", ".ddd.", ".dTdd.", ".ddddd.", ".dddd.", ".ddd.", "...."],
-    entryEdges: ALL_EDGES,
-    exitEdges: ALL_EDGES,
-  },
-  {
-    id: "crossing",
-    difficulty: 1,
-    radius: 3,
-    rows: ["..S.", ".www.", ".wwww.", ".wwwww.", ".wwww.", ".www.", "...."],
-    entryEdges: ALL_EDGES,
-    exitEdges: ALL_EDGES,
-  },
-  {
-    id: "grove",
-    difficulty: 1,
-    radius: 3,
-    rows: ["..G.", ".fff.", ".ffff.", ".fffff.", ".ffff.", ".fff.", "...."],
-    entryEdges: ALL_EDGES,
-    exitEdges: ALL_EDGES,
-  },
-  {
-    id: "quarry",
-    difficulty: 1,
-    radius: 3,
-    rows: ["..R.", ".mmm.", ".mmmm.", ".mmmmm.", ".mmmm.", ".mmm.", "...."],
-    entryEdges: ALL_EDGES,
-    exitEdges: ALL_EDGES,
-  },
-  {
-    id: "highlands",
-    difficulty: 2,
-    radius: 3,
-    // A grass corridor winds through the mountains to reach all three upgrades.
-    rows: ["....", ".m.m.", ".mTmm.", ".mmGmm.", ".mRmm.", ".mmm.", "...."],
-    entryEdges: ALL_EDGES,
-    exitEdges: ALL_EDGES,
-  },
-  {
-    id: "watchtower",
-    difficulty: 2,
-    radius: 3,
-    // A sniper holds the centre; the grass rim is the safe way past. Nothing
-    // else sits here, so the player is never forced into the kill zone.
-    rows: ["....", ".mmm.", ".mmmm.", ".mmxmm.", ".mmmm.", ".mmm.", "...."],
-    entryEdges: ALL_EDGES,
-    exitEdges: ALL_EDGES,
-  },
-];
+export const SECTION_TEMPLATES: readonly SectionTemplate[] = tiles;
 
 for (const template of SECTION_TEMPLATES) {
   validateTemplate(template);
@@ -312,26 +284,6 @@ type Placement = {
   snipers: Sniper[];
 };
 
-/** Keep only `count` of a section's armed tiles, so assassins trickle in. */
-function capSpawns(
-  sectionTiles: Map<string, Tile>,
-  count: number,
-  rng: Rng,
-): Rng {
-  const armed = [...sectionTiles.entries()].filter(([, tile]) => tile.spawnTurn >= 0);
-  if (armed.length <= count) {
-    return rng;
-  }
-  const rolled = shuffle(armed, rng);
-  const keep = new Set(rolled.items.slice(0, count).map(([key]) => key));
-  for (const [key, tile] of sectionTiles) {
-    if (tile.spawnTurn >= 0 && !keep.has(key)) {
-      sectionTiles.set(key, { ...tile, spawnTurn: -1 });
-    }
-  }
-  return rolled.rng;
-}
-
 /**
  * Draw the next template from the shuffled bag, refilling it when no id left in
  * the bag is still in the pool. This guarantees every template (and so every
@@ -372,7 +324,6 @@ function placeSection(
   rng: Rng,
   ids: IdFactory,
   queue: readonly string[],
-  spawnTurnBase: number,
 ): Placement | null {
   const band = difficultyBand(distance);
   const pool = SECTION_TEMPLATES.filter((t) => Math.abs(t.difficulty - band) <= 1);
@@ -411,13 +362,7 @@ function placeSection(
 
     const origin = frontier.origin;
     const sectionTiles = new Map<string, Tile>();
-    const sniperHexes = stampSection(
-      sectionTiles,
-      template,
-      origin,
-      rotation,
-      spawnTurnBase,
-    );
+    const sniperHexes = stampSection(sectionTiles, template, origin, rotation);
 
     let overlaps = false;
     for (const key of sectionTiles.keys()) {
@@ -435,8 +380,6 @@ function placeSection(
     if (!connects(sectionTiles, entryHex, exitHex)) {
       continue;
     }
-
-    current = capSpawns(sectionTiles, spawnCountFor(distance), current);
 
     for (const [key, tile] of sectionTiles) {
       if (tile.feature.kind === "shop") {
@@ -506,7 +449,6 @@ export function advanceMap(
   records: readonly SectionRecord[],
   cursor: MapCursor,
   ids: IdFactory,
-  spawnTurnBase: number,
 ): AdvanceResult | null {
   const nextTiles = new Map(tiles);
   const placed = placeSection(
@@ -518,7 +460,6 @@ export function advanceMap(
     cursor.rng,
     ids,
     cursor.queue,
-    spawnTurnBase,
   );
   if (placed === null) {
     return null;
@@ -555,7 +496,7 @@ export function generateMap(
   };
 
   for (let i = 0; i < sectionCount; i += 1) {
-    const advanced = advanceMap(tiles, records, cursor, ids, startTurn);
+    const advanced = advanceMap(tiles, records, cursor, ids);
     if (advanced === null) {
       break;
     }
@@ -566,11 +507,37 @@ export function generateMap(
   }
 
   let player: HexCoord = { q: 0, r: 0 };
-  if (records.length > 0) {
-    player = startingHex(tiles, records[0]);
+  const first = records[0];
+  if (first !== undefined) {
+    // The player starts inside the first section, so its timers start now.
+    tiles = armSection(tiles, first, startTurn);
+    player = startingHex(tiles, first);
   }
 
   return { tiles, records, player, cursor, snipers };
+}
+
+/**
+ * Start a section's assassin timers: the player has just entered it, so every
+ * armed tile gets an absolute `spawnTurn` counted from `turn`. Tiles keep their
+ * relative `spawnDelay`, and the `spawnTurn` guard means a section is armed only
+ * once.
+ */
+export function armSection(
+  tiles: ReadonlyMap<string, Tile>,
+  section: SectionRecord,
+  turn: number,
+): Map<string, Tile> {
+  const next = new Map(tiles);
+  for (const coord of section.footprint) {
+    const key = hexKey(coord);
+    const tile = next.get(key);
+    if (tile === undefined || tile.spawnTurn !== -1 || tile.spawnDelay < 0) {
+      continue;
+    }
+    next.set(key, { ...tile, spawnTurn: turn + tile.spawnDelay });
+  }
+  return next;
 }
 
 /**

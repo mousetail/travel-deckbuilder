@@ -125,10 +125,15 @@ export type SectionTemplate = {
   difficulty: number;
   radius: number;
   rows: readonly string[];       // rows[r + radius], lengths = hexagon row lengths
+  /** Authored assassin spawn points, in local hex coords. */
+  spawns: readonly SpawnPoint[];
   /** Edge indices (0..5) the player may enter from / leave through. */
   entryEdges: readonly number[];
   exitEdges: readonly number[];
 };
+
+/** `delay` = turns after the player enters the section before an assassin appears. */
+export type SpawnPoint = { q: number; r: number; delay: number };
 
 const TERRAIN_BY_CHAR: Record<string, Terrain> = {
   ".": "grass", f: "forest", w: "water", m: "mountain", d: "dirt", "#": "impassible",
@@ -181,7 +186,6 @@ export function stampSection(
   template: SectionTemplate,
   origin: HexCoord,
   rotationSteps: number,
-  spawnTurnBase: number,
 ): void {
   template.rows.forEach((row, index) => {
     const r = index - template.radius;
@@ -195,10 +199,21 @@ export function stampSection(
       tiles.set(hexKey(world), {
         terrain,
         feature,
-        spawnTurn: spawnTurnBase + spawnDelayFor(terrain),
+        spawnDelay: -1,
+        spawnTurn: -1,
       });
     }
   });
+
+  // Authored spawn points, rotated like the terrain so they follow the section.
+  for (const spawn of template.spawns) {
+    const rotated = rotateTimes({ q: spawn.q, r: spawn.r }, rotationSteps);
+    const world: HexCoord = { q: origin.q + rotated.q, r: origin.r + rotated.r };
+    const tile = tiles.get(hexKey(world));
+    if (tile !== undefined) {
+      tiles.set(hexKey(world), { ...tile, spawnDelay: spawn.delay });
+    }
+  }
 }
 
 /** Column index → axial q for a shifted hexagon row. */
@@ -208,9 +223,38 @@ function localCoord(radius: number, r: number, column: number): HexCoord {
 }
 ```
 
-`spawnDelayFor` encodes the design's rule that later/difficult tiles get assassins
-sooner (or at all): grass tiles might never spawn, mountains spawn quickly. This is
-the bridge to chapter 07.
+Assassin spawn points are **authored**, not derived from terrain: each template
+carries a `spawns` list of local hex coords and per-point delays. Sections are
+grouped into difficulty bands, so the template's `difficulty` and how many points
+it carries (and how short their delays are) set the pressure without any per-depth
+formula. The level editor paints these points and their delays.
+
+Note the delay is **relative** and `spawnTurn` starts at `-1`: a section is stamped
+well before the player reaches it (they are generated ahead, chapter 06), so its
+timers must not start yet. `spawnTurn` is armed when the player enters the section.
+
+```ts
+export function armSection(
+  tiles: ReadonlyMap<string, Tile>,
+  section: SectionRecord,
+  turn: number,
+): Map<string, Tile> {
+  const next = new Map(tiles);
+  for (const coord of section.footprint) {
+    const key = hexKey(coord);
+    const tile = next.get(key);
+    if (tile === undefined || tile.spawnTurn !== -1 || tile.spawnDelay < 0) {
+      continue;
+    }
+    next.set(key, { ...tile, spawnTurn: turn + tile.spawnDelay });
+  }
+  return next;
+}
+```
+
+The first section is armed at generation (the player starts inside it); every other
+one when `onPlayerMoved` (chapter 06) crosses into it. The `spawnTurn !== -1` guard
+means a section is only ever armed once.
 
 ## 5. The generation loop
 

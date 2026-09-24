@@ -153,7 +153,8 @@ Streaming must be callable *after each single-hex move* (chapter 04), not only a
 of turn. When a move completes:
 
 1. Recompute the player's section order.
-2. If it grew, call `streamToSection` and recompute `computeVisibility`.
+2. If it grew, arm the entered section's assassin timers, call `streamToSection` and
+   recompute `computeVisibility`.
 3. Re-render the map layer.
 
 Since the move does not end the turn, this is a pure "react to new position" step.
@@ -166,7 +167,10 @@ export function onPlayerMoved(state: GameState): GameState {
   if (order <= state.playerSectionOrder) {
     return state;                       // still in the same section
   }
-  const streamed = streamToSection(state.map.tiles, state.index, state.enemies, order);
+  const entered = state.map.index.sections[order];
+  const tiles =
+    entered === undefined ? state.map.tiles : armSection(state.map.tiles, entered, state.turn);
+  const streamed = streamToSection(tiles, state.index, state.enemies, order);
   return {
     ...state,
     playerSectionOrder: order,
@@ -176,6 +180,9 @@ export function onPlayerMoved(state: GameState): GameState {
   };
 }
 ```
+
+Entering a section is also when its assassin timers start (`armSection`, chapters 05
+and 07), which is why the arming happens here rather than at generation.
 
 ## 6. Rendering the window
 

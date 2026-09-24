@@ -40,6 +40,12 @@ export type GameOverReason =
 /** Per-turn bookkeeping, reset at the start of every turn. */
 export type TurnState = {
   cardsPlayedThisTurn: number;
+  /**
+   * Whether the no-card "skip turn" bonus has already been paid this turn. It
+   * is granted when the player commits to ending the turn, which is before a
+   * shop opens, so this stops it being paid again on the way out.
+   */
+  skipBonusTaken: boolean;
 };
 
 export type GameState = {

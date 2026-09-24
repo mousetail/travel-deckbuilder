@@ -115,18 +115,26 @@ export type TileFeature =
 export type Tile = {
   terrain: Terrain;
   feature: TileFeature;
-  /** Turn index at which an assassin spawns here; -1 means never. */
+  /**
+   * Turns after the player enters this tile's section that an assassin spawns
+   * here; -1 means never.
+   */
+  spawnDelay: number;
+  /** Absolute turn the armed timer fires; -1 until the section is entered. */
   spawnTurn: number;
 };
 
-export function emptyTile(terrain: Terrain, spawnTurn: number): Tile {
-  return { terrain, feature: { kind: "none" }, spawnTurn };
+export function emptyTile(terrain: Terrain, spawnDelay: number): Tile {
+  return { terrain, feature: { kind: "none" }, spawnDelay, spawnTurn: -1 };
 }
 ```
 
-Features and `spawnTurn` are filled in by map generation (chapter 05) and read by
-the economy (chapter 08) and enemy (chapter 07) chapters. Declaring them here keeps
-the tile the single source of truth for "what is on this hex".
+Features and the spawn timer are filled in by map generation (chapter 05) and read
+by the economy (chapter 08) and enemy (chapter 07) chapters. `spawnDelay` is the
+per-tile delay, fixed at generation; `spawnTurn` is filled in when the player
+enters the tile's section, so the timer only starts once the player is there.
+Declaring them here keeps the tile the single source of truth for "what is on this
+hex".
 
 > If `Card` is not defined yet in your build order, create a minimal `cards.ts`
 > exporting a `Card` type now; chapter 03 fills in the catalogue.

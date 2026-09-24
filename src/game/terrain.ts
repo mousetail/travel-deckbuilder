@@ -60,12 +60,18 @@ export type TileFeature =
 export type Tile = {
   terrain: Terrain;
   feature: TileFeature;
-  /** Turn index at which an assassin spawns here; -1 means never. */
+  /**
+   * Turns after the player enters this tile's section that an assassin spawns
+   * here; -1 means never. Fixed at generation, and the timer only starts when
+   * the section is entered (chapter 05).
+   */
+  spawnDelay: number;
+  /** Absolute turn the armed timer fires; -1 until the section is entered. */
   spawnTurn: number;
 };
 
-export function emptyTile(terrain: Terrain, spawnTurn: number): Tile {
-  return { terrain, feature: { kind: "none" }, spawnTurn };
+export function emptyTile(terrain: Terrain, spawnDelay: number): Tile {
+  return { terrain, feature: { kind: "none" }, spawnDelay, spawnTurn: -1 };
 }
 
 /** How a feature is drawn over its hex. */

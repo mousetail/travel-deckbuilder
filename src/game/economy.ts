@@ -10,20 +10,26 @@ import type { GameState } from "./state";
 import type { TileFeature } from "./terrain";
 import { still } from "./transition";
 import type { Transition } from "./transition";
-import { endTurn } from "./turn";
+import { endTurn, endTurnCurrency, takeSkipBonus } from "./turn";
 
 export { gainCurrency, spendCurrency };
 
 export type EndTurnAction =
-  | { kind: "end-turn" }
-  | { kind: "use-feature"; feature: TileFeature };
+  | { kind: "end-turn"; bonus: number }
+  | { kind: "use-feature"; feature: TileFeature; bonus: number };
 
-/** What the end-turn button should do, given the feature under the player. */
-export function endTurnAction(feature: TileFeature): EndTurnAction {
+/**
+ * What the end-turn button should do, given the feature under the player. The
+ * bonus is the coin for a turn with no card played, so the button can say
+ * exactly what pressing it will do — and so the UI never re-derives the rule.
+ */
+export function endTurnAction(state: GameState): EndTurnAction {
+  const bonus = endTurnCurrency(state.turnState);
+  const feature = playerFeature(state);
   if (feature.kind === "none") {
-    return { kind: "end-turn" };
+    return { kind: "end-turn", bonus };
   }
-  return { kind: "use-feature", feature };
+  return { kind: "use-feature", feature, bonus };
 }
 
 /** The feature on the tile the player is standing on. */
@@ -68,6 +74,9 @@ function finishFeature(state: GameState): Transition {
  * The "use feature" action: enter the feature's phase, or resolve it at once.
  * A coin pays out and ends the turn; shops, smiths, removal and gains open a
  * modal phase whose own action ends the turn.
+ *
+ * Opening a modal phase pays the skip bonus up front, so a coin earned by
+ * standing still can be spent in the shop it just opened.
  */
 export function useFeature(state: GameState): Transition {
   if (state.phase.kind !== "playing") {
@@ -79,18 +88,24 @@ export function useFeature(state: GameState): Transition {
       return endTurn(state);
     case "coin":
       return endTurn(collectCoin(state, state.map.player));
-    case "shop":
+    case "shop": {
+      const opened = takeSkipBonus(state);
       return still({
-        ...state,
+        ...opened,
         phase: { kind: "shop", stock: feature.stock, rerollCost: feature.rerollCost },
       });
+    }
     case "smith":
-      return still({ ...state, phase: { kind: "smith" } });
+      return still({ ...takeSkipBonus(state), phase: { kind: "smith" } });
     case "remove-card":
-      return still({ ...state, phase: { kind: "pending-remove" } });
+      return still({ ...takeSkipBonus(state), phase: { kind: "pending-remove" } });
     case "gain-card": {
       const rolled = rollGift(SHOP_CATALOGUE, state.rng);
-      return still({ ...state, rng: rolled.rng, phase: { kind: "pending-gain", spec: rolled.spec } });
+      return still({
+        ...takeSkipBonus(state),
+        rng: rolled.rng,
+        phase: { kind: "pending-gain", spec: rolled.spec },
+      });
     }
   }
 }

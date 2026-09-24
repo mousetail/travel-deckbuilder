@@ -1,7 +1,7 @@
-import { hexDistance, hexKey } from "./hex";
+import { hexDistance, hexKey, parseHexKey } from "./hex";
 import type { HexCoord } from "./hex";
 import { hexSide } from "./hexagon";
-import { advanceMap, buildMapIndex } from "./map";
+import { advanceMap, armSection, buildMapIndex } from "./map";
 import type { SectionRecord } from "./map";
 import type { Enemy } from "./enemies";
 import type { GameState, MapIndex } from "./state";
@@ -139,6 +139,28 @@ export function visibleMap(state: GameState): VisibleMap {
   return { tiles, fog };
 }
 
+/**
+ * How far ahead the player can see, in hex steps from their own tile: the far
+ * row of the fog sliver in the section ahead. Assassins never advance past it,
+ * so they can only ever lurk within the visible window.
+ */
+export function visibleReach(state: GameState): number {
+  const visibility = computeVisibility(state.map.index, state.playerSectionOrder);
+  const player = state.map.player;
+  const ahead =
+    visibility.peek.length > 0
+      ? visibility.peek.map((hex) => hex.coord)
+      : [...visibleMap(state).tiles.keys()].map(parseHexKey);
+  let reach = 0;
+  for (const coord of ahead) {
+    const distance = hexDistance(player, coord);
+    if (distance > reach) {
+      reach = distance;
+    }
+  }
+  return reach;
+}
+
 export type StreamResult = {
   tiles: Map<string, Tile>;
   index: MapIndex;
@@ -192,7 +214,7 @@ export function ensureAhead(state: GameState): GameState {
   let changed = false;
 
   while (records.length < state.playerSectionOrder + AHEAD) {
-    const advanced = advanceMap(tiles, records, cursor, state.ids, state.turn);
+    const advanced = advanceMap(tiles, records, cursor, state.ids);
     if (advanced === null) {
       break;
     }
@@ -238,7 +260,10 @@ export function onPlayerMoved(state: GameState): GameState {
   if (order <= state.playerSectionOrder) {
     return state;
   }
-  const streamed = streamToSection(state.map.tiles, state.map.index, state.enemies, order);
+  const entered = state.map.index.sections[order];
+  const tiles =
+    entered === undefined ? state.map.tiles : armSection(state.map.tiles, entered, state.turn);
+  const streamed = streamToSection(tiles, state.map.index, state.enemies, order);
   const advanced: GameState = {
     ...state,
     playerSectionOrder: order,

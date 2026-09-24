@@ -106,6 +106,75 @@ button {
   place-items: end;
 }
 
+/* The action label spells out the whole action, so keep it on one line. */
+.hud-button {
+  white-space: nowrap;
+}
+
+/* --- piles -------------------------------------------------------------- */
+
+/* A pile reads as a stack of cards rather than a button. */
+.pile {
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+  padding: 4px;
+  background: transparent;
+  border: none;
+
+  /* Lift the stack on hover instead of flashing a background behind it. */
+  &:hover {
+    background: transparent;
+  }
+
+  &:hover .pile-stack {
+    transform: translateY(-3px);
+  }
+}
+
+.pile-stack {
+  position: relative;
+  width: 40px;
+  height: 52px;
+}
+
+.pile-card {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 34px;
+  height: 46px;
+  background: var(--ui-bg);
+  border: 3px solid var(--ui-fg);
+}
+
+/* Two cards peeking out behind the top one give the pile its depth. */
+.pile-card-middle {
+  transform: translate(3px, 3px);
+}
+
+.pile-card-top {
+  display: grid;
+  place-items: center;
+  transform: translate(6px, 6px);
+}
+
+.pile-count {
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.pile-label {
+  font-size: 12px;
+}
+
+/* An empty pile is one flat, greyed card. */
+.pile-empty .pile-card-top {
+  background: #eee;
+  color: #999;
+  border-color: #999;
+}
+
 /* --- the hand fan ------------------------------------------------------- */
 
 .hand {
@@ -352,6 +421,40 @@ button {
   background: #f00;
   pointer-events: none;
 }
+
+/* --- main menu ---------------------------------------------------------- */
+
+.menu {
+  display: grid;
+  place-content: center;
+  gap: 24px;
+  width: 100vw;
+  height: 100vh;
+  background: #000;
+  color: #fff;
+  text-align: center;
+}
+
+.menu-title {
+  margin: 0;
+  font-size: 28px;
+}
+
+.menu-buttons {
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+}
+
+.menu-button {
+  min-width: 220px;
+  padding: 12px 24px;
+  font-size: 16px;
+}
+
+/* --- section editor ----------------------------------------------------- */
+
+/* The editor's own styles live in editor.css, imported by editor.ts. */
 
 /* Turns until an assassin spawns on this tile. */
 .spawn-badge {

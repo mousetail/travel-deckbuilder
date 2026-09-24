@@ -1,0 +1,203 @@
+/* Styles for the section editor only. The shared map/hex/card styles live in
+   style.css; the editor reuses `.hex`, `.hex-feature` and `.enemy-sniper`. */
+
+.editor {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: #000;
+  color: #fff;
+}
+
+.editor-header {
+  display: grid;
+  grid-auto-flow: column;
+  justify-content: start;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-bottom: 3px solid #fff;
+}
+
+.editor-title {
+  margin-right: 12px;
+  font-weight: bold;
+}
+
+.editor-body {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  overflow: hidden;
+}
+
+.editor-sidebar {
+  overflow: auto;
+  padding: 8px;
+  border-right: 3px solid #fff;
+}
+
+.editor-list {
+  display: grid;
+  gap: 4px;
+}
+
+.editor-list-item {
+  text-align: left;
+
+  &.active {
+    background: #ffd700;
+    color: #000;
+  }
+}
+
+.editor-main {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 16px;
+  overflow: auto;
+  padding: 12px;
+}
+
+.editor-left,
+.editor-right {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+}
+
+.editor-grid {
+  position: relative;
+  background: #111;
+  border: 3px solid #fff;
+}
+
+/* Entry and exit edges of the selected template, drawn along its sides. */
+.editor-edge {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 34px;
+  height: 4px;
+  pointer-events: none;
+}
+
+.editor-edge-entry {
+  background: #0f0;
+}
+
+.editor-edge-exit {
+  background: #0af;
+}
+
+.editor-edge-both {
+  background: #ff0;
+}
+
+/* Outline of the sniper range, matching the game's danger-zone border. */
+.editor-range-edge {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 32px; /* HEX_SIZE */
+  height: 3px;
+  background: #f00;
+  pointer-events: none;
+}
+
+.editor-palette {
+  display: grid;
+  gap: 6px;
+}
+
+/* One palette group per layer, all shown at once. */
+.editor-group {
+  display: grid;
+  gap: 6px;
+  padding: 6px;
+  border: 2px solid #333;
+}
+
+.editor-group-header {
+  justify-self: start;
+  font-weight: bold;
+}
+
+.editor-list-group {
+  margin-top: 8px;
+  color: #ffd700;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.editor-row {
+  display: grid;
+  grid-auto-flow: column;
+  justify-content: start;
+  align-items: center;
+  gap: 6px;
+}
+
+.editor-fields,
+.editor-edges,
+.editor-json {
+  display: grid;
+  gap: 6px;
+}
+
+.editor-field,
+.editor-edge-row {
+  display: grid;
+  grid-auto-flow: column;
+  justify-content: start;
+  align-items: center;
+  gap: 8px;
+}
+
+.editor-field-label {
+  min-width: 90px;
+}
+
+.editor-edge-buttons {
+  display: grid;
+  grid-auto-flow: column;
+  gap: 4px;
+}
+
+.editor-edge-buttons button.active {
+  background: #ffd700;
+  color: #000;
+}
+
+.editor-status {
+  color: #ffd700;
+}
+
+.editor-json-area {
+  width: 100%;
+  min-height: 200px;
+  font: 12px monospace;
+  background: #111;
+  color: #fff;
+  border: 2px solid #fff;
+}
+
+/* Authored assassin spawn point: shows its delay above the hex. */
+.hex-spawn {
+  position: absolute;
+  top: 0;
+  left: 0;
+  min-width: 18px;
+  padding: 1px 4px;
+  background: #c00;
+  color: #fff;
+  border: 2px solid #000;
+  font: 11px monospace;
+  text-align: center;
+  pointer-events: none;
+}
+
+.editor-number {
+  width: 60px;
+}

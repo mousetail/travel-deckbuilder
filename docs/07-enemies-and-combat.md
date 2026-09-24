@@ -176,9 +176,11 @@ assassins are not governed by the deck.
 
 ## 5. Spawning from tile timers
 
-Each tile carries a `spawnTurn` (set during generation; chapter 05). At the start of
-the enemy phase, spawn an assassin on every live tile whose `spawnTurn` equals the
-current turn:
+Assassin spawn points are **authored per template** in the level editor: each
+`SectionTemplate` lists `{ q, r, delay }` points (chapter 05). Stamping marks those
+tiles with `spawnDelay`; entering the section arms each one with an absolute
+`spawnTurn = entryTurn + delay` (chapters 05–06). At the start of the enemy phase,
+spawn an assassin on every live tile whose `spawnTurn` equals the current turn:
 
 ```ts
 import type { Tile } from "./terrain";
@@ -207,8 +209,9 @@ export function spawnAssassins(
 }
 ```
 
-Scaling ("further in, multiple spawn at once and get faster") is expressed purely by
-`spawnTurn` clustering and `movementFor`, e.g.:
+Scaling ("further in, multiple spawn at once and get faster") is expressed purely
+by the authored spawn points — how many a band's templates carry and their delays —
+and by `movementFor`, e.g.:
 
 ```ts
 export function assassinMovementFor(turn: number): number {
@@ -322,14 +325,39 @@ export function bountyFor(enemy: Enemy): number {
 }
 ```
 
-## 10. Milestone
+## 10. Crowding and line of sight
+
+Two extra constraints keep assassins readable instead of letting them pile up or
+creep in from the dark:
+
+- An assassin never **ends** its move on or within `ASSASSIN_SPACING` (2) hexes of
+  a peer. It may walk straight through one; only the resting spot matters. The
+  walked path is trimmed back to the furthest step that clears the crowd, or the
+  assassin stays put if no step does.
+- An assassin never advances past the furthest tile the player can see. The
+  frontier is `visibleReach` (chapter 06): the far row of the fog sliver in the
+  section ahead. `takeAssassinTurn` clamps the path to hexes within that many
+  steps of the player, so an assassin already out of sight cannot move at all.
+
+Both are passed into `takeAssassinTurn` as `maxDistance` and `peers`, and
+`resolveEnemyPhase` takes the `maxDistance` its caller computed:
+
+```ts
+const resolved = resolveEnemyPhase(paid, leadingEdge(paid), visibleReach(paid));
+```
+
+## 11. Milestone
 
 - Tiles spawn assassins on their `spawnTurn`; multiple can appear on the same turn.
+  A section's timers only start once the player enters it, so an assassin never
+  pops up in a section the player has not reached (and so cannot see).
 - An assassin that can reach you ends the game; one that cannot heads toward the
   leading edge.
 - Assassins cross grass quickly and water/mountains slowly, and cannot cross
   impassible hexes.
 - Ending your turn inside a sniper's radius ends the game.
+- Assassins never end a move crowded next to a peer, and never move past the
+  furthest tile the player can see.
 - A combat card kills a target within range and pays the bounty; a
   `range: 0` attack only works when you share the enemy's hex.
 - Enemies on a removed trailing section are gone.

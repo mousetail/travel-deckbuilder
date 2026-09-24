@@ -5,7 +5,7 @@ import { drawCards, drawUpTo, removeFromHand, toDiscard } from "./deck";
 import { bountyFor, enemiesInRange, killEnemy, resolveEnemyPhase } from "./enemies";
 import { hexKey, parseHexKey } from "./hex";
 import type { HexCoord } from "./hex";
-import { leadingEdge, onPlayerMoved, visibleMap } from "./fog";
+import { leadingEdge, onPlayerMoved, visibleMap, visibleReach } from "./fog";
 import { reachableHexes, resolveMove } from "./movement";
 import type { TerrainLookup } from "./movement";
 import type { Rng } from "./rng";
@@ -15,8 +15,26 @@ import type { Transition } from "./transition";
 
 export const HAND_SIZE = 4;
 
+/** The anti-softlock bonus for ending a turn without playing a card. */
 export function endTurnCurrency(turn: TurnState): number {
-  return turn.cardsPlayedThisTurn === 0 ? 1 : 0;
+  return turn.cardsPlayedThisTurn === 0 && !turn.skipBonusTaken ? 1 : 0;
+}
+
+/**
+ * Pay the skip bonus, if it is due, and mark it paid. It is granted when the
+ * player commits to ending the turn — before a shop opens — so the coin can be
+ * spent immediately rather than only after the shop closes.
+ */
+export function takeSkipBonus(state: GameState): GameState {
+  const bonus = endTurnCurrency(state.turnState);
+  if (bonus === 0) {
+    return state;
+  }
+  return {
+    ...state,
+    currency: state.currency + bonus,
+    turnState: { ...state.turnState, skipBonusTaken: true },
+  };
 }
 
 export function applyHandMode(deck: Deck, mode: CardMode, rng: Rng): DeckMutation {
@@ -71,7 +89,10 @@ function spent(state: GameState, deck: Deck, rng: Rng): GameState {
     ...state,
     deck,
     rng,
-    turnState: { cardsPlayedThisTurn: state.turnState.cardsPlayedThisTurn + 1 },
+    turnState: {
+      ...state.turnState,
+      cardsPlayedThisTurn: state.turnState.cardsPlayedThisTurn + 1,
+    },
   };
 }
 
@@ -183,7 +204,10 @@ export function resolveAttack(state: GameState, enemyId: string): Transition {
     enemies: killEnemy(paid.enemies, enemyId),
     deck: discardFromHand(paid.deck, card),
     phase: { kind: "playing" },
-    turnState: { cardsPlayedThisTurn: paid.turnState.cardsPlayedThisTurn + 1 },
+    turnState: {
+      ...paid.turnState,
+      cardsPlayedThisTurn: paid.turnState.cardsPlayedThisTurn + 1,
+    },
   });
 }
 
@@ -204,7 +228,10 @@ export function resolveMoveTo(state: GameState, to: HexCoord): Transition {
     deck: discardFromHand(state.deck, phase.card),
     map: { ...state.map, player: destination, previous: state.map.player },
     phase: { kind: "playing" },
-    turnState: { cardsPlayedThisTurn: state.turnState.cardsPlayedThisTurn + 1 },
+    turnState: {
+      ...state.turnState,
+      cardsPlayedThisTurn: state.turnState.cardsPlayedThisTurn + 1,
+    },
   };
   // Crossing into a new section streams the map, but never ends the turn.
   const next = onPlayerMoved(moved);
@@ -241,7 +268,7 @@ export function startTurn(state: GameState): GameState {
     ...state,
     deck: drawn.deck,
     rng: drawn.rng,
-    turnState: { cardsPlayedThisTurn: 0 },
+    turnState: { cardsPlayedThisTurn: 0, skipBonusTaken: false },
   };
 }
 
@@ -249,9 +276,8 @@ export function endTurn(state: GameState): Transition {
   if (state.phase.kind !== "playing") {
     return still(state);
   }
-  const bonus = endTurnCurrency(state.turnState);
-  const paid: GameState = { ...state, currency: state.currency + bonus };
-  const resolved = resolveEnemyPhase(paid, leadingEdge(paid));
+  const paid = takeSkipBonus(state);
+  const resolved = resolveEnemyPhase(paid, leadingEdge(paid), visibleReach(paid));
   if (resolved.state.phase.kind === "game-over") {
     return resolved;
   }

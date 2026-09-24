@@ -1,6 +1,6 @@
 import type { GameState } from "../game/state";
-import type { TileFeature } from "../game/terrain";
-import { endTurnAction, playerFeature } from "../game/economy";
+import { endTurnAction } from "../game/economy";
+import type { EndTurnAction } from "../game/economy";
 import { setChildren } from "./dom";
 
 /** The top bar (run stats and a contextual hint). */
@@ -43,34 +43,43 @@ export class Hud {
       return;
     }
 
-    const action = endTurnAction(playerFeature(state));
+    const action = endTurnAction(state);
     if (action.kind === "use-feature") {
       button.classList.add("use-feature");
-      button.textContent = featureLabel(action.feature);
-    } else {
-      button.textContent = "End turn";
     }
+    button.textContent = endTurnLabel(action);
     button.disabled = busy || phase.kind !== "playing";
     button.addEventListener("click", () => this.onAction());
     setChildren(slot, [button]);
   }
 }
 
-function featureLabel(feature: TileFeature): string {
-  switch (feature.kind) {
-    case "shop":
-      return "Shop";
-    case "smith":
-      return "Smith";
-    case "remove-card":
-      return "Remove a card";
-    case "gain-card":
-      return "Take a card";
-    case "coin":
-      return "Collect";
-    case "none":
-      return "End turn";
+/** The label spells out the whole action, including the skip-turn coin. */
+function endTurnLabel(action: EndTurnAction): string {
+  switch (action.kind) {
+    case "end-turn":
+      return endTurnPrefix(action.bonus);
+    case "use-feature":
+      switch (action.feature.kind) {
+        case "shop":
+          return `${endTurnPrefix(action.bonus)} & Enter Shop`;
+        case "smith":
+          return `${endTurnPrefix(action.bonus)} & Use Smith`;
+        case "remove-card":
+          return `${endTurnPrefix(action.bonus)} & Remove a card`;
+        case "gain-card":
+          return `${endTurnPrefix(action.bonus)} & Take a card`;
+        case "coin":
+          return `${endTurnPrefix(action.bonus)} & Collect coin`;
+        case "none":
+          return endTurnPrefix(action.bonus);
+      }
   }
+}
+
+/** Ending a turn without playing a card pays 1 currency. */
+function endTurnPrefix(bonus: number): string {
+  return bonus > 0 ? `Skip turn (+${bonus} currency)` : "End turn";
 }
 
 function hintFor(state: GameState): string {
