@@ -7,6 +7,7 @@ import { hexKey } from "./hex";
 import type { HexCoord } from "./hex";
 import { SHOP_STOCK_SIZE, rollGift, rollShopStock } from "./shop";
 import type { GameState } from "./state";
+import { acquireCard, countSite } from "./stats";
 import type { TileFeature } from "./terrain";
 import { still } from "./transition";
 import type { Transition } from "./transition";
@@ -83,26 +84,27 @@ export function useFeature(state: GameState): Transition {
     return still(state);
   }
   const feature = playerFeature(state);
+  const site = feature.kind === "none" ? state : { ...state, stats: countSite(state.stats) };
   switch (feature.kind) {
     case "none":
-      return endTurn(state);
+      return endTurn(site);
     case "coin":
-      return endTurn(collectCoin(state, state.map.player));
+      return endTurn(collectCoin(site, site.map.player));
     case "shop": {
-      const opened = takeSkipBonus(state);
+      const opened = takeSkipBonus(site);
       return still({
         ...opened,
         phase: { kind: "shop", stock: feature.stock, rerollCost: feature.rerollCost },
       });
     }
     case "smith":
-      return still({ ...takeSkipBonus(state), phase: { kind: "smith" } });
+      return still({ ...takeSkipBonus(site), phase: { kind: "smith" } });
     case "remove-card":
-      return still({ ...takeSkipBonus(state), phase: { kind: "pending-remove" } });
+      return still({ ...takeSkipBonus(site), phase: { kind: "pending-remove" } });
     case "gain-card": {
-      const rolled = rollGift(SHOP_CATALOGUE, state.rng);
+      const rolled = rollGift(SHOP_CATALOGUE, site.rng);
       return still({
-        ...takeSkipBonus(state),
+        ...takeSkipBonus(site),
         rng: rolled.rng,
         phase: { kind: "pending-gain", spec: rolled.spec },
       });
@@ -119,6 +121,7 @@ export function buyCard(state: GameState, card: Card): GameState {
   const next: GameState = {
     ...paid,
     deck: addPurchase(paid.deck, card),
+    stats: acquireCard(paid.stats, card, { kind: "shop", cost: card.cost }, paid.turn),
     phase: { kind: "shop", stock, rerollCost: state.phase.rerollCost },
   };
   return withShopStock(next, stock);
@@ -241,6 +244,10 @@ export function takeGift(state: GameState): Transition {
     return still(state);
   }
   const card = instantiate(state.phase.spec, state.ids());
-  const withCard = { ...state, deck: addPurchase(state.deck, card) };
+  const withCard = {
+    ...state,
+    deck: addPurchase(state.deck, card),
+    stats: acquireCard(state.stats, card, { kind: "gift" }, state.turn),
+  };
   return finishFeature(consumeFeatureAt(withCard, withCard.map.player));
 }

@@ -10,6 +10,7 @@ import { reachableHexes, resolveMove } from "./movement";
 import type { TerrainLookup } from "./movement";
 import type { Rng } from "./rng";
 import type { GameState, TurnState } from "./state";
+import { countDrawn, countKill, countPlay } from "./stats";
 import { moving, still } from "./transition";
 import type { Transition } from "./transition";
 
@@ -49,7 +50,7 @@ export function applyHandMode(deck: Deck, mode: CardMode, rng: Rng): DeckMutatio
     }
     case "discard-hand": {
       if (deck.hand.length < mode.threshold) {
-        return { deck, rng };
+        return { deck, rng, drawn: [] };
       }
       const discarded = toDiscard({ ...deck, hand: [] }, deck.hand);
       return drawCards(discarded, mode.draw, rng);
@@ -57,7 +58,11 @@ export function applyHandMode(deck: Deck, mode: CardMode, rng: Rng): DeckMutatio
     case "recover": {
       const recovered = deck.discard.slice(-mode.count);
       const remaining = deck.discard.slice(0, deck.discard.length - recovered.length);
-      return { deck: { draw: deck.draw, hand: [...deck.hand, ...recovered], discard: remaining }, rng };
+      return {
+        deck: { draw: deck.draw, hand: [...deck.hand, ...recovered], discard: remaining },
+        rng,
+        drawn: [],
+      };
     }
     case "move":
     case "attack":
@@ -84,11 +89,19 @@ function terrainAt(state: GameState): TerrainLookup {
   };
 }
 
-function spent(state: GameState, deck: Deck, rng: Rng): GameState {
+function spent(
+  state: GameState,
+  deck: Deck,
+  rng: Rng,
+  card: Card,
+  drawn: readonly Card[],
+): GameState {
+  const stats = countPlay(countDrawn(state.stats, drawn), card.id);
   return {
     ...state,
     deck,
     rng,
+    stats,
     turnState: {
       ...state.turnState,
       cardsPlayedThisTurn: state.turnState.cardsPlayedThisTurn + 1,
@@ -155,12 +168,12 @@ export function beginPlay(state: GameState, card: Card, modeIndex: number): Tran
     case "discard-hand":
     case "recover": {
       const applied = applyHandMode(state.deck, mode, state.rng);
-      return still(spent(state, discardFromHand(applied.deck, card), applied.rng));
+      return still(spent(state, discardFromHand(applied.deck, card), applied.rng, card, applied.drawn));
     }
     case "draw-discard": {
       const applied = applyHandMode(state.deck, mode, state.rng);
       const deck = discardFromHand(applied.deck, card);
-      const played = spent(state, deck, applied.rng);
+      const played = spent(state, deck, applied.rng, card, applied.drawn);
       if (mode.discard <= 0 || deck.hand.length === 0) {
         return still(played);
       }
@@ -168,7 +181,7 @@ export function beginPlay(state: GameState, card: Card, modeIndex: number): Tran
     }
     case "currency": {
       const paid = gainCurrency(state, mode.amount);
-      return still(spent(paid, discardFromHand(paid.deck, card), state.rng));
+      return still(spent(paid, discardFromHand(paid.deck, card), state.rng, card, []));
     }
   }
 }
@@ -201,6 +214,7 @@ export function resolveAttack(state: GameState, enemyId: string): Transition {
   const paid = gainCurrency(state, bountyFor(target));
   return still({
     ...paid,
+    stats: countPlay(countKill(paid.stats), card.id),
     enemies: killEnemy(paid.enemies, enemyId),
     deck: discardFromHand(paid.deck, card),
     phase: { kind: "playing" },
@@ -226,6 +240,7 @@ export function resolveMoveTo(state: GameState, to: HexCoord): Transition {
   const moved: GameState = {
     ...state,
     deck: discardFromHand(state.deck, phase.card),
+    stats: countPlay(state.stats, phase.card.id),
     map: { ...state.map, player: destination, previous: state.map.player },
     phase: { kind: "playing" },
     turnState: {
@@ -268,6 +283,7 @@ export function startTurn(state: GameState): GameState {
     ...state,
     deck: drawn.deck,
     rng: drawn.rng,
+    stats: countDrawn(state.stats, drawn.drawn),
     turnState: { cardsPlayedThisTurn: 0, skipBonusTaken: false },
   };
 }

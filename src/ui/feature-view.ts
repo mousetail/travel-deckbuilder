@@ -1,26 +1,34 @@
 import type { Card, CardSpec } from "../game/cards";
 import { allCards } from "../game/deck";
 import type { FeatureAction } from "../game/economy";
-import type { GameOverReason, GameState } from "../game/state";
+import type { GameState } from "../game/state";
 import { describeModes } from "./card-text";
 import { setChildren } from "./dom";
+import { gameOverPanel } from "./game-over-view";
+import type { History } from "./stats-store";
 
 /** Modal UI for the shop, smith, removal, gain and game-over phases. */
 export class FeatureView {
   private readonly layer: HTMLElement;
   private readonly onAction: (action: FeatureAction) => void;
+  private readonly onRestart: () => void;
 
-  constructor(layer: HTMLElement, onAction: (action: FeatureAction) => void) {
+  constructor(
+    layer: HTMLElement,
+    onAction: (action: FeatureAction) => void,
+    onRestart: () => void,
+  ) {
     this.layer = layer;
     this.onAction = onAction;
+    this.onRestart = onRestart;
   }
 
-  render(state: GameState): void {
-    const panel = this.panel(state);
+  render(state: GameState, history: History): void {
+    const panel = this.panel(state, history);
     setChildren(this.layer, panel === null ? [] : [panel]);
   }
 
-  private panel(state: GameState): HTMLElement | null {
+  private panel(state: GameState, history: History): HTMLElement | null {
     const phase = state.phase;
     switch (phase.kind) {
       case "shop":
@@ -38,20 +46,13 @@ export class FeatureView {
       case "pending-gain":
         return this.giftPanel(phase.spec);
       case "game-over":
-        return this.gameOverPanel(phase.reason);
+        return gameOverPanel(phase.reason, state, history, this.onRestart);
       case "playing":
       case "pending-move":
       case "pending-attack":
       case "pending-discard":
         return null;
     }
-  }
-
-  private gameOverPanel(reason: GameOverReason): HTMLElement {
-    const message = document.createElement("div");
-    message.classList.add("feature-text");
-    message.textContent = gameOverText(reason);
-    return this.panelElement([this.title("Game over"), message]);
   }
 
   private shopPanel(
@@ -144,16 +145,5 @@ export class FeatureView {
     panel.classList.add("overlay");
     setChildren(panel, nodes);
     return panel;
-  }
-}
-
-function gameOverText(reason: GameOverReason): string {
-  switch (reason.kind) {
-    case "assassin":
-      return "An assassin caught you. Reload the page to try again.";
-    case "sniper":
-      return "A sniper shot you down. Reload the page to try again.";
-    case "caught":
-      return "You were caught. Reload the page to try again.";
   }
 }

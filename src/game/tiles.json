@@ -38,6 +38,64 @@
     ]
   },
   {
+    "id": "meadow-1",
+    "difficulty": 0,
+    "radius": 2,
+    "terrain": [
+      ".ww",
+      ".ffw",
+      "..ff.",
+      "..f.",
+      "#.."
+    ],
+    "overlays": [
+      "...",
+      "....",
+      ".....",
+      "c...",
+      "..."
+    ],
+    "spawns": [
+      {
+        "q": 1,
+        "r": -2,
+        "delay": 4
+      }
+    ],
+    "entryEdges": [
+      0,
+      1
+    ],
+    "exitEdges": [
+      4,
+      5
+    ]
+  },
+  {
+    "id": "meadow super small",
+    "difficulty": -2,
+    "radius": 1,
+    "terrain": [
+      "ff",
+      "...",
+      ".f"
+    ],
+    "overlays": [
+      "..",
+      "...",
+      ".."
+    ],
+    "spawns": [],
+    "entryEdges": [
+      0,
+      1
+    ],
+    "exitEdges": [
+      4,
+      5
+    ]
+  },
+  {
     "id": "meadow 3",
     "difficulty": 0,
     "radius": 4,
@@ -630,7 +688,7 @@
     ]
   },
   {
-    "id": "watchtower 3",
+    "id": "watchtower 5",
     "difficulty": 2,
     "radius": 4,
     "terrain": [
@@ -652,7 +710,7 @@
       ".........",
       "........",
       ".......",
-      ".xR...",
+      ".xT.x.",
       "....."
     ],
     "spawns": [

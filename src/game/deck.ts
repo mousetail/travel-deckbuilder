@@ -29,12 +29,13 @@ export function shuffle(cards: readonly Card[], rng: Rng): Card[] {
   return result;
 }
 
-export type DeckMutation = { deck: Deck; rng: Rng };
+export type DeckMutation = { deck: Deck; rng: Rng; drawn: readonly Card[] };
 
 export function drawCards(deck: Deck, count: number, rng: Rng): DeckMutation {
   let draw = [...deck.draw];
   let discard = [...deck.discard];
   const hand = [...deck.hand];
+  const drawn: Card[] = [];
   let current = rng;
 
   for (let i = 0; i < count; i += 1) {
@@ -51,9 +52,10 @@ export function drawCards(deck: Deck, count: number, rng: Rng): DeckMutation {
       break;
     }
     hand.push(card);
+    drawn.push(card);
   }
 
-  return { deck: { draw, hand, discard }, rng: current };
+  return { deck: { draw, hand, discard }, rng: current, drawn };
 }
 
 export function toDiscard(deck: Deck, cards: readonly Card[]): Deck {

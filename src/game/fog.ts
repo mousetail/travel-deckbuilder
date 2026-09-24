@@ -5,6 +5,7 @@ import { advanceMap, armSection, buildMapIndex } from "./map";
 import type { SectionRecord } from "./map";
 import type { Enemy } from "./enemies";
 import type { GameState, MapIndex } from "./state";
+import { visitSections } from "./stats";
 import type { Tile } from "./terrain";
 
 /** How many sections beyond the player's own must always exist. */
@@ -264,9 +265,15 @@ export function onPlayerMoved(state: GameState): GameState {
   const tiles =
     entered === undefined ? state.map.tiles : armSection(state.map.tiles, entered, state.turn);
   const streamed = streamToSection(tiles, state.map.index, state.enemies, order);
+  // A long move may pass straight through a section, so record every one from
+  // the old position up to the new.
+  const enteredIds = state.map.index.sections
+    .slice(state.playerSectionOrder + 1, order + 1)
+    .map((section) => section.id);
   const advanced: GameState = {
     ...state,
     playerSectionOrder: order,
+    stats: visitSections(state.stats, enteredIds),
     map: { ...state.map, tiles: streamed.tiles, index: streamed.index },
     enemies: streamed.enemies,
   };

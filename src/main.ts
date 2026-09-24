@@ -4,9 +4,11 @@ import { App } from "./ui/app";
 import { Editor } from "./ui/editor";
 import { renderMenu } from "./ui/menu";
 import { buildDeck } from "./game/deck";
+import { allCards } from "./game/deck";
 import { counterIds, STARTING_DECK } from "./game/cards";
 import { buildMapIndex, generateMap } from "./game/map";
 import { ensureAhead } from "./game/fog";
+import { startingStats } from "./game/stats";
 import { startTurn } from "./game/turn";
 import type { GameState } from "./game/state";
 
@@ -15,11 +17,13 @@ const root = requireElementById("app", HTMLDivElement);
 function startGame(): void {
   const ids = counterIds("id");
   const generated = generateMap(1, 3, 1, ids);
+  const deck = buildDeck(STARTING_DECK, ids, generated.cursor.rng);
+  const startSection = generated.records[0];
 
   const state: GameState = {
     turn: 1,
     currency: 0,
-    deck: buildDeck(STARTING_DECK, ids, generated.cursor.rng),
+    deck,
     map: {
       tiles: generated.tiles,
       index: buildMapIndex(generated.records, generated.tiles),
@@ -33,9 +37,10 @@ function startGame(): void {
     rng: generated.cursor.rng,
     ids,
     turnState: { cardsPlayedThisTurn: 0, skipBonusTaken: false },
+    stats: startingStats(allCards(deck), startSection.id, 1),
   };
 
-  const app = new App(root, ensureAhead(startTurn(state)));
+  const app = new App(root, ensureAhead(startTurn(state)), startGame);
   app.mount();
 }
 

@@ -5,6 +5,7 @@ import type { Tile } from "./terrain";
 import type { Enemy } from "./enemies";
 import type { SectionRecord, MapCursor } from "./map";
 import type { Rng } from "./rng";
+import type { RunStats } from "./stats";
 
 export type { Deck };
 
@@ -59,4 +60,5 @@ export type GameState = {
   rng: Rng;
   ids: IdFactory;
   turnState: TurnState;
+  stats: RunStats;
 };

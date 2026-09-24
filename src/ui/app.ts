@@ -14,6 +14,9 @@ import { visibleMap } from "../game/fog";
 import { dangerZone, enemiesInRange } from "../game/enemies";
 import { applyFeatureAction, useFeature } from "../game/economy";
 import type { FeatureAction } from "../game/economy";
+import { runScores } from "../game/stats";
+import { loadHistory, recordRun, saveHistory } from "./stats-store";
+import type { History } from "./stats-store";
 import {
   beginPlay,
   cancelPending,
@@ -41,11 +44,19 @@ export class App {
   private openPile: Pile | null = null;
   /** True while a movement animation plays; input is ignored until it ends. */
   private animating = false;
+  /** The finished run is folded into saved history exactly once. */
+  private recordedGameOver = false;
+  /** Saved records, updated as runs finish. */
+  private history: History;
+  /** The records as they stood before this run, for the grey comparison columns. */
+  private previousHistory: History;
   private state: GameState;
 
-  constructor(root: HTMLElement, state: GameState) {
+  constructor(root: HTMLElement, state: GameState, restart: () => void) {
     this.root = root;
     this.state = state;
+    this.history = loadHistory();
+    this.previousHistory = this.history;
 
     const mapLayer = element("div", "map-layer");
     const hudLayer = element("div", "hud-layer");
@@ -80,7 +91,11 @@ export class App {
       () => this.handleAction(),
       () => this.handleCancel(),
     );
-    this.featureView = new FeatureView(this.middle, (action) => this.handleFeatureAction(action));
+    this.featureView = new FeatureView(
+      this.middle,
+      (action) => this.handleFeatureAction(action),
+      restart,
+    );
   }
 
   mount(): void {
@@ -95,11 +110,24 @@ export class App {
    */
   private apply(next: Transition): void {
     this.state = next.state;
+    this.captureGameOver(next.state);
     if (next.moves.length === 0 || prefersReducedMotion()) {
       this.render();
       return;
     }
     void this.animate(next.moves);
+  }
+
+  /** Fold a finished run into the saved history, once, before it is shown. */
+  private captureGameOver(state: GameState): void {
+    if (this.recordedGameOver || state.phase.kind !== "game-over") {
+      return;
+    }
+    this.recordedGameOver = true;
+    const scores = runScores(state.stats);
+    this.previousHistory = this.history;
+    this.history = recordRun(this.history, state.playerSectionOrder, scores);
+    saveHistory(this.history);
   }
 
   private async animate(moves: readonly MovePath[]): Promise<void> {
@@ -172,11 +200,11 @@ export class App {
     }
     if (isModalPhase(this.state.phase)) {
       this.openPile = null;
-      this.featureView.render(this.state);
+      this.featureView.render(this.state, this.previousHistory);
       return;
     }
     if (this.openPile === null) {
-      this.featureView.render(this.state);
+      this.featureView.render(this.state, this.previousHistory);
       return;
     }
     const pile = this.openPile;

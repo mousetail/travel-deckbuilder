@@ -14,13 +14,13 @@ import { hexSide, hexSideCentre } from "../game/hexagon";
 import { TERRAIN_TEXTURE, featureVisual } from "../game/terrain";
 import {
   FEATURE_BY_CHAR,
-  SECTION_TEMPLATES,
   SNIPER_CHAR,
   SNIPER_RADIUS,
   TERRAIN_BY_CHAR,
   localCoord,
   validateTemplate,
 } from "../game/map";
+import tiles from '../game/tiles.json';
 import type { SectionTemplate, SpawnPoint } from "../game/map";
 import { setChildren } from "./dom";
 
@@ -84,7 +84,7 @@ export class Editor {
   constructor(root: HTMLElement, onExit: () => void) {
     this.root = root;
     this.onExit = onExit;
-    this.templates = SECTION_TEMPLATES.map(cloneTemplate);
+    this.templates = tiles.map(cloneTemplate);
     this.selected = 0;
     this.brush = { type: "terrain", value: "." };
     this.spawnDelay = 3;
@@ -636,7 +636,7 @@ export class Editor {
     if (!confirmed) {
       return;
     }
-    this.templates = SECTION_TEMPLATES.map(cloneTemplate);
+    this.templates = tiles.map(cloneTemplate);
     this.selected = 0;
     this.render();
   }

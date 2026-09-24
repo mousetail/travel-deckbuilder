@@ -1,13 +1,12 @@
-import { findPath, hexDistance, hexKey, parseHexKey } from "./hex";
+import { hexDistance, hexKey, neighbours, parseHexKey } from "./hex";
 import type { HexCoord } from "./hex";
-import { hexesInHexagon, hexSide, hexSideCentre, rotateTimes } from "./hexagon";
-import { canEnter } from "./terrain";
+import { hexesInHexagon, hexSide, rotateTimes } from "./hexagon";
 import type { Terrain, Tile, TileFeature } from "./terrain";
 import type { IdFactory } from "./cards";
 import { SHOP_CATALOGUE } from "./cards";
 import type { Sniper } from "./enemies";
 import type { Rng } from "./rng";
-import { nextRng, pick, shuffle } from "./rng";
+import { pick, shuffle } from "./rng";
 import { SHOP_STOCK_SIZE, rollShopStock } from "./shop";
 import type { MapIndex } from "./state";
 import tiles from './tiles.json'
@@ -29,13 +28,9 @@ export type SectionTemplate = {
   id: string;
   difficulty: number;
   radius: number;
-  /** Terrain layer: rows[r + radius], lengths = hexagon row lengths. */
   terrain: readonly string[];
-  /** Overlay layer (features and snipers), same shape as `terrain`. */
   overlays: readonly string[];
-  /** Authored assassin spawn points, in local hex coords. */
   spawns: readonly SpawnPoint[];
-  /** Edge indices (0..5) the player may enter from / leave through. */
   entryEdges: readonly number[];
   exitEdges: readonly number[];
 };
@@ -117,22 +112,30 @@ function validateRows(
   });
 }
 
+/** Column index → axial q for a shifted hexagon row. */
+export function localCoord(radius: number, r: number, column: number): HexCoord {
+  const q = column - radius - Math.min(0, r); // standard hexagon row shear
+  return { q, r };
+}
+
 /**
- * Stamp `template` into `tiles` and return the world coords of its sniper posts.
+ * Stamp `template` into `tiles`, centred on the section that follows
+ * `frontier`, and return that centre plus the world coords of its sniper posts.
  */
 export function stampSection(
   tiles: Map<string, Tile>,
   template: SectionTemplate,
-  origin: HexCoord,
+  frontier: MapFrontier,
   rotationSteps: number,
-): HexCoord[] {
+  shift: number,
+): { origin: HexCoord; snipers: HexCoord[] } {
+  const origin = sectionOrigin(frontier, template.radius, shift);
   const snipers: HexCoord[] = [];
   template.terrain.forEach((row, index) => {
     const r = index - template.radius;
     const overlayRow = template.overlays[index];
     for (let column = 0; column < row.length; column += 1) {
-      const local = localCoord(template.radius, r, column);
-      const rotated = rotateTimes(local, rotationSteps);
+      const rotated = rotateTimes(localCoord(template.radius, r, column), rotationSteps);
       const world: HexCoord = { q: origin.q + rotated.q, r: origin.r + rotated.r };
       const terrain = TERRAIN_BY_CHAR[row[column]];
       const overlay = overlayRow[column];
@@ -158,40 +161,43 @@ export function stampSection(
       tiles.set(key, { ...tile, spawnDelay: spawn.delay });
     }
   }
-  return snipers;
+  return { origin, snipers };
 }
 
-/** Column index → axial q for a shifted hexagon row. */
-export function localCoord(radius: number, r: number, column: number): HexCoord {
-  const q = column - radius - Math.min(0, r); // standard hexagon row shear
-  return { q, r };
+function mirrorTemplate(template: SectionTemplate): SectionTemplate {
+  let mirrorEdge = (i: number)=>[1, 0, 5, 4, 3, 2][i]
+
+  return {
+    id: template.id+' (mirrored)',
+    difficulty: template.difficulty,
+    radius: template.radius,
+    terrain: template.terrain.toReversed(),
+    overlays: template.overlays.toReversed(),
+    spawns: template.spawns.toReversed(),
+    entryEdges: template.entryEdges.map(mirrorEdge),
+    exitEdges: template.exitEdges.map(mirrorEdge)
+  }
 }
 
-/**
- * Hand-authored radius-3 sections. Every template keeps a grass perimeter, so
- * any edge can be an entry or exit and the entry→exit path is always walkable
- * with the starting deck's terrains.
- *
- * Features sit on that grass path (the design's "grass path follows the outside"),
- * so they are reachable with the starting deck; the forest/water/mountain interior
- * is the shortcut that lets a better-equipped player skip them. `highlands` is the
- * exception: its upgrades are hidden behind the mountains, as the design asks.
- *
- * Assassin spawn points are authored per template (`spawns`), so difficulty is
- * expressed by how many points a band's templates carry and how short their
- * delays are — there is no terrain-derived or per-depth auto-spawning any more.
- */
-export const SECTION_TEMPLATES: readonly SectionTemplate[] = tiles;
+export const SECTION_TEMPLATES: readonly SectionTemplate[] = [...tiles, ...tiles.map(mirrorTemplate)];
 
 for (const template of SECTION_TEMPLATES) {
   validateTemplate(template);
 }
 
 export type MapFrontier = {
-  /** Centre of the next section. */
+  /** Centre of the section already placed; the next one grows out from here. */
   origin: HexCoord;
-  /** World edge index the player enters the next section through. */
+  /** Radius of that placed section, or 0 before the first section. */
+  radius: number;
   entryEdge: number;
+  /**
+   * Turn of that placed section, signed: 0 straight on, ±1 a 60° bend, ±2 a
+   * 120° fold, ±3 a full reversal. A fold is what puts the next section in
+   * danger of clipping the one before it, so placement watches this.
+   */
+  lastTurn: number;
+  bannedEdges: [number, number]
 };
 
 /**
@@ -202,7 +208,6 @@ export type MapFrontier = {
 export type MapCursor = {
   frontier: MapFrontier;
   distance: number;
-  lastTurn: number;
   rng: Rng;
   /** Shuffled bag of template ids; refilled once every template has been used. */
   queue: readonly string[];
@@ -253,32 +258,60 @@ function sideOffset(side: number, radius: number): HexCoord {
   return offsets[side];
 }
 
-/** The hex on `side` of a section centred at `origin`. */
-function edgeHex(origin: HexCoord, side: number, radius: number): HexCoord {
-  const local = hexSideCentre(side, radius);
-  return { q: origin.q + local.q, r: origin.r + local.r };
+/**
+ * One step from a hexagon's side `s` out to the facing side of the neighbouring
+ * section. `sideOffset(s, r)` is `OUTWARD[s] * (r + 1) + OUTWARD[s - 1] * r`,
+ * which is what lets the two sections' halves of the crossing grow apart.
+ */
+const OUTWARD: readonly HexCoord[] = [
+  { q: 1, r: 0 },
+  { q: 0, r: 1 },
+  { q: -1, r: 1 },
+  { q: -1, r: 0 },
+  { q: 0, r: -1 },
+  { q: 1, r: -1 },
+];
+
+/**
+ * Offset from the previous section's centre to the next one's, when the next is
+ * entered through world edge `entryEdge`. `sideOffset` assumes both sections
+ * share a radius; the second term slides the crossing by the radius difference
+ * so differently sized sections still meet edge-to-edge instead of overlapping.
+ */
+function sectionOffset(entryEdge: number, fromRadius: number, toRadius: number): HexCoord {
+  const base = sideOffset(normalize(entryEdge + 3), fromRadius);
+  const along = OUTWARD[(entryEdge + 5) % 6];
+  const grow = toRadius - fromRadius;
+  return { q: base.q - along.q * grow, r: base.r - along.r * grow };
 }
 
-/** Can the starting deck (grass + forest, plus dirt) walk entry → exit inside this section? */
-function connects(
-  sectionTiles: ReadonlyMap<string, Tile>,
-  entryHex: HexCoord,
-  exitHex: HexCoord,
-): boolean {
-  const passable = (coord: HexCoord): boolean => {
-    const tile = sectionTiles.get(hexKey(coord));
-    if (tile === undefined) {
-      return false;
-    }
-    return canEnter(tile.terrain, "grass") || canEnter(tile.terrain, "forest");
+/**
+ * The direction along the shared edge between the last section and the next,
+ * i.e. the cross axis that a new section may slide along. `sectionOffset`
+ * places the crossing flush with one end of the shared edge; sliding is always
+ * applied relative to that.
+ */
+function slideAxis(entryEdge: number): HexCoord {
+  return OUTWARD[(entryEdge + 4) % 6];
+}
+
+/** World centre of the next section, the one that follows `frontier`. */
+function sectionOrigin(frontier: MapFrontier, radius: number, shift: number): HexCoord {
+  if (frontier.radius === 0) {
+    // The opening section has no predecessor; it just sits on the frontier.
+    return frontier.origin;
+  }
+  const offset = sectionOffset(frontier.entryEdge, frontier.radius, radius);
+  const axis = slideAxis(frontier.entryEdge);
+  return {
+    q: frontier.origin.q + offset.q + axis.q * shift,
+    r: frontier.origin.r + offset.r + axis.r * shift,
   };
-  return findPath(entryHex, exitHex, passable).length > 0;
 }
 
 type Placement = {
   record: SectionRecord;
   frontier: MapFrontier;
-  lastTurn: number;
   rng: Rng;
   queue: readonly string[];
   snipers: Sniper[];
@@ -315,18 +348,75 @@ function drawTemplate(
   };
 }
 
+/**
+ * Slide positions to try for a section of `radius` after `frontier`, best first.
+ * Sliding is free for `±1` hex past the flush crossing, plus the radius gap when
+ * the two sections differ in size; beyond that they would part company. After a
+ * 120° fold a *smaller* section is slid fully to the outside edge first, which is
+ * where the gap from the section-before-last is largest and so leaves the most
+ * room for the section that follows.
+ */
+function shiftOrder(frontier: MapFrontier, radius: number): number[] {
+  if (frontier.radius === 0) {
+    return [0];
+  }
+  const reach = 1 + Math.abs(radius - frontier.radius);
+  const order: number[] = [];
+  if (Math.abs(frontier.lastTurn) === 2 && radius < frontier.radius) {
+    // A fold bends left (−) or right (+); slide the smaller follower to the
+    // outside of the bend, i.e. away from the section the fold came from.
+    const away = frontier.lastTurn > 0 ? -1 : 1;
+    for (let s = reach; s > 0; s -= 1) {
+      order.push(away * s);
+    }
+  }
+  order.push(0);
+  for (let s = 1; s <= reach; s += 1) {
+    order.push(s, -s);
+  }
+  return order;
+}
+
+/** True if any stamped hex is already occupied by an earlier section. */
+function collides(stamped: ReadonlyMap<string, Tile>, occupied: ReadonlySet<string>): boolean {
+  for (const key of stamped.keys()) {
+    if (occupied.has(key)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * True if the stamped section touches the one before it, so a slid placement
+ * cannot silently detach from the map. The opening section has nothing to join.
+ */
+function connects(stamped: ReadonlyMap<string, Tile>, previous: ReadonlySet<string>): boolean {
+  if (previous.size === 0) {
+    return true;
+  }
+  for (const key of stamped.keys()) {
+    for (const neighbour of neighbours(parseHexKey(key))) {
+      if (previous.has(hexKey(neighbour))) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 function placeSection(
   tiles: Map<string, Tile>,
   records: readonly SectionRecord[],
   frontier: MapFrontier,
   distance: number,
-  lastTurn: number,
   rng: Rng,
   ids: IdFactory,
   queue: readonly string[],
 ): Placement | null {
   const band = difficultyBand(distance);
   const pool = SECTION_TEMPLATES.filter((t) => Math.abs(t.difficulty - band) <= 1);
+  const emergencyPool = SECTION_TEMPLATES.filter((t) => t.radius <= 2);
   if (pool.length === 0) {
     return null;
   }
@@ -337,55 +427,72 @@ function placeSection(
       occupied.add(hexKey(coord));
     }
   }
+  // The section before this one: the new section must reach one of its hexes.
+  const previous = new Set<string>();
+  const previousRecord = records[records.length - 1];
+  if (previousRecord !== undefined) {
+    for (const coord of previousRecord.footprint) {
+      previous.add(hexKey(coord));
+    }
+  }
 
-  let current = rng;
+  let currentRng = rng;
   let bag = queue;
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
-    const drawn = drawTemplate(pool, bag, current);
-    current = drawn.rng;
+    let panicMode = attempt > MAX_ATTEMPTS * 3 / 4;
+
+    const drawn = drawTemplate(panicMode ? emergencyPool : pool, bag, currentRng);
+    currentRng = drawn.rng;
     bag = drawn.bag;
     const template = drawn.template;
 
-    const entryRoll = pick(current, template.entryEdges);
-    current = entryRoll.rng;
-    const rotation = normalize(frontier.entryEdge - entryRoll.item);
-
-    // Winding: turn 1 or 2 edges off straight, alternating direction each section.
-    const magnitudeRoll = nextRng(current);
-    current = magnitudeRoll.rng;
-    const turn = lastTurn * (1 + Math.floor(magnitudeRoll.value * 2));
-    const worldExit = normalize(frontier.entryEdge + 3 + turn);
-    const localExit = normalize(worldExit - rotation);
-    if (!template.exitEdges.includes(localExit)) {
+    const {item: localEntry, rng: localEntryRng} = pick(currentRng, template.entryEdges);
+    currentRng = localEntryRng;
+    const rotation = normalize(frontier.entryEdge - localEntry);
+    const { item: localExit, rng: exitRollRng } = pick(currentRng, template.exitEdges);
+    currentRng = exitRollRng;
+    const worldExit = normalize(rotation + localExit);
+    if (worldExit === frontier.entryEdge || frontier.bannedEdges.some(i => i == worldExit)) {
       continue;
     }
 
-    const origin = frontier.origin;
-    const sectionTiles = new Map<string, Tile>();
-    const sniperHexes = stampSection(sectionTiles, template, origin, rotation);
+    // When we are already digging into the panic pool, only let the path run
+    // straight on: a bend here is what folds the map back onto itself.
+    if (panicMode && worldExit !== normalize(frontier.entryEdge + 3)) {
+      continue;
+    }
 
-    let overlaps = false;
-    for (const key of sectionTiles.keys()) {
-      if (occupied.has(key)) {
-        overlaps = true;
-        break;
+    if ((template.radius < frontier.radius || panicMode) && (normalize(frontier.entryEdge + 1) === worldExit
+      || normalize(frontier.entryEdge - 1) === worldExit)
+    ) {
+      continue;
+    }
+
+    if (!panicMode && frontier.radius !== 0 && Math.abs(template.radius - frontier.radius) > 1) {
+      continue;
+    }
+
+    let chosen: { tiles: Map<string, Tile>; origin: HexCoord; snipers: HexCoord[] } | null = null;
+    for (const shift of shiftOrder(frontier, template.radius)) {
+      const sectionTiles = new Map<string, Tile>();
+      const stamped = stampSection(sectionTiles, template, frontier, rotation, shift);
+      if (collides(sectionTiles, occupied) || !connects(sectionTiles, previous)) {
+        continue;
       }
+      chosen = { tiles: sectionTiles, origin: stamped.origin, snipers: stamped.snipers };
+      break;
     }
-    if (overlaps) {
+    if (chosen === null) {
       continue;
     }
-
-    const entryHex = edgeHex(origin, frontier.entryEdge, template.radius);
-    const exitHex = edgeHex(origin, worldExit, template.radius);
-    if (!connects(sectionTiles, entryHex, exitHex)) {
-      continue;
-    }
+    const sectionTiles = chosen.tiles;
+    const origin = chosen.origin;
 
     for (const [key, tile] of sectionTiles) {
       if (tile.feature.kind === "shop") {
         // Stock is part of the tile, so leaving and returning shows the same cards.
-        const rolled = rollShopStock(SHOP_CATALOGUE, SHOP_STOCK_SIZE, current, ids);
-        current = rolled.rng;
+        const rolled = rollShopStock(SHOP_CATALOGUE, SHOP_STOCK_SIZE, currentRng, ids);
+        currentRng = rolled.rng;
         tiles.set(key, {
           ...tile,
           feature: { kind: "shop", stock: rolled.stock, rerollCost: tile.feature.rerollCost },
@@ -404,11 +511,9 @@ function placeSection(
       exitEdge: worldExit,
     };
 
-    const offset = sideOffset(worldExit, template.radius);
-    const nextOrigin: HexCoord = { q: origin.q + offset.q, r: origin.r + offset.r };
     const snipers: Sniper[] =
       distance >= SNIPER_MIN_DISTANCE
-        ? sniperHexes.map((position) => ({
+        ? chosen.snipers.map((position) => ({
             kind: "sniper",
             id: ids(),
             position,
@@ -416,11 +521,19 @@ function placeSection(
           }))
         : [];
 
+    const rawTurn = normalize(worldExit - frontier.entryEdge - 3);
+    const lastTurn = rawTurn > 3 ? rawTurn - 6 : rawTurn;
+
     return {
       record,
-      frontier: { origin: nextOrigin, entryEdge: normalize(worldExit + 3) },
-      lastTurn: -lastTurn,
-      rng: current,
+      frontier: {
+        origin,
+        radius: template.radius,
+        entryEdge: normalize(worldExit + 3),
+        lastTurn,
+        bannedEdges: frontier.bannedEdges,
+      },
+      rng: currentRng,
       queue: bag,
       snipers,
     };
@@ -456,7 +569,6 @@ export function advanceMap(
     records,
     cursor.frontier,
     cursor.distance,
-    cursor.lastTurn,
     cursor.rng,
     ids,
     cursor.queue,
@@ -470,7 +582,6 @@ export function advanceMap(
     cursor: {
       frontier: placed.frontier,
       distance: cursor.distance + 1,
-      lastTurn: placed.lastTurn,
       rng: placed.rng,
       queue: placed.queue,
     },
@@ -487,11 +598,18 @@ export function generateMap(
   let tiles = new Map<string, Tile>();
   let records: SectionRecord[] = [];
   let snipers: Sniper[] = [];
+
+  let rng = { seed };
+
+  let firstBannedEdge = pick(rng, [0, 1, 2, 3, 4, 5]);
+
   let cursor: MapCursor = {
-    frontier: { origin: { q: 0, r: 0 }, entryEdge: 3 },
+    frontier: {
+      origin: { q: 0, r: 0 }, radius: 0, entryEdge: 3, lastTurn: 0, bannedEdges: [
+        firstBannedEdge.item, normalize(firstBannedEdge.item + 1)]
+    },
     distance: 0,
-    lastTurn: 1,
-    rng: { seed },
+    rng: firstBannedEdge.rng,
     queue: [],
   };
 

@@ -293,6 +293,84 @@ button {
   padding: 8px 0;
 }
 
+/* --- end-of-run stats --------------------------------------------------- */
+
+.stats-table {
+  border-collapse: collapse;
+
+  & th,
+  & td {
+    padding: 4px 10px;
+    border: 2px solid var(--ui-fg);
+    text-align: left;
+  }
+
+  & th {
+    font-weight: bold;
+  }
+
+  /* Cards since removed from the deck are still listed, greyed out. */
+  & tr.card-removed td {
+    color: #999;
+  }
+}
+
+/* This run's numbers stay black; past runs are greyed so the live score
+   reads first. */
+.stat-current {
+  font-weight: bold;
+}
+
+.stat-past {
+  color: #999;
+}
+
+.usage {
+  display: grid;
+  grid-auto-flow: column;
+  justify-content: center;
+  gap: 16px;
+}
+
+.usage-block {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+}
+
+.usage-heading {
+  font-weight: bold;
+}
+
+.usage-caption,
+.usage-empty {
+  font-size: 12px;
+  text-align: center;
+}
+
+.usage-empty {
+  color: #999;
+}
+
+.more-stats {
+  display: grid;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 2px solid var(--ui-fg);
+
+  /* The author `display: grid` must not defeat the `hidden` attribute. */
+  &[hidden] {
+    display: none;
+  }
+}
+
+.game-over-buttons {
+  display: grid;
+  grid-auto-flow: column;
+  justify-content: start;
+  gap: 8px;
+}
+
 /* --- the map ------------------------------------------------------------ */
 
 /* Every map node sits in this layer at world-pixel coordinates, so the camera
