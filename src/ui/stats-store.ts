@@ -27,14 +27,19 @@ export function saveHistory(history: History): void {
 
 /** Fold a finished run into the saved history: best-ever per category, and the
  * run that reached the greatest depth. */
-export function recordRun(history: History, depth: number, scores: RunScores): History {
+export function recordRun(
+  history: History,
+  depth: number,
+  scores: RunScores,
+): History {
   if (history.kind === "none") {
     return { kind: "records", best: scores, furthest: { depth, scores } };
   }
   return {
     kind: "records",
     best: bestOf(history.best, scores),
-    furthest: depth > history.furthest.depth ? { depth, scores } : history.furthest,
+    furthest:
+      depth > history.furthest.depth ? { depth, scores } : history.furthest,
   };
 }
 

@@ -2,9 +2,7 @@ import type { Card } from "./cards";
 
 /** Where a card entered the deck, and at what cost. */
 export type CardOrigin =
-  | { kind: "starting" }
-  | { kind: "shop"; cost: number }
-  | { kind: "gift" };
+  { kind: "starting" } | { kind: "shop"; cost: number } | { kind: "gift" };
 
 /** Per-copy bookkeeping, keyed by the card's unique id. */
 export type CardRecord = {
@@ -49,7 +47,11 @@ export function emptyStats(): RunStats {
 }
 
 /** The stats at the moment a run begins: the start section and the opening deck. */
-export function startingStats(cards: readonly Card[], startSection: string, turn: number): RunStats {
+export function startingStats(
+  cards: readonly Card[],
+  startSection: string,
+  turn: number,
+): RunStats {
   let stats = visitSections(emptyStats(), [startSection]);
   for (const card of cards) {
     stats = acquireCard(stats, card, { kind: "starting" }, turn);
@@ -57,7 +59,10 @@ export function startingStats(cards: readonly Card[], startSection: string, turn
   return stats;
 }
 
-export function visitSections(stats: RunStats, sectionIds: readonly string[]): RunStats {
+export function visitSections(
+  stats: RunStats,
+  sectionIds: readonly string[],
+): RunStats {
   let sectionsVisited = stats.sectionsVisited;
   for (const id of sectionIds) {
     if (!sectionsVisited.includes(id)) {
@@ -149,7 +154,10 @@ export type CardUsageSet = {
  * Duplicates (two `Tredge`) share one entry so a single copy's low draw count
  * does not hide a card that was actually seen often.
  */
-export function usageByCard(cards: readonly Card[], stats: RunStats): CardUsage[] {
+export function usageByCard(
+  cards: readonly Card[],
+  stats: RunStats,
+): CardUsage[] {
   const byName = new Map<string, CardUsage>();
   for (const card of cards) {
     const record = stats.cards.find((candidate) => candidate.id === card.id);
@@ -158,7 +166,11 @@ export function usageByCard(cards: readonly Card[], stats: RunStats): CardUsage[
     }
     const existing = byName.get(card.name);
     if (existing === undefined) {
-      byName.set(card.name, { card, drawn: record.drawn, played: record.played });
+      byName.set(card.name, {
+        card,
+        drawn: record.drawn,
+        played: record.played,
+      });
     } else {
       existing.drawn += record.drawn;
       existing.played += record.played;
@@ -177,7 +189,9 @@ export function usageExtremes(
   stats: RunStats,
   minDraws: number,
 ): CardUsageSet {
-  const eligible = usageByCard(cards, stats).filter((usage) => usage.drawn >= minDraws);
+  const eligible = usageByCard(cards, stats).filter(
+    (usage) => usage.drawn >= minDraws,
+  );
   if (eligible.length === 0) {
     return { most: null, least: null };
   }
@@ -214,7 +228,10 @@ export type CardDetail = {
  * A record for every card the player ever acquired, oldest first — including
  * cards since removed from the deck, which are marked so.
  */
-export function cardDetails(cards: readonly Card[], stats: RunStats): CardDetail[] {
+export function cardDetails(
+  cards: readonly Card[],
+  stats: RunStats,
+): CardDetail[] {
   const held = new Set(cards.map((card) => card.id));
   return stats.cards
     .map((record) => ({
@@ -225,5 +242,7 @@ export function cardDetails(cards: readonly Card[], stats: RunStats): CardDetail
       played: record.played,
       removed: !held.has(record.id),
     }))
-    .sort((a, b) => a.acquiredTurn - b.acquiredTurn || a.name.localeCompare(b.name));
+    .sort(
+      (a, b) => a.acquiredTurn - b.acquiredTurn || a.name.localeCompare(b.name),
+    );
 }

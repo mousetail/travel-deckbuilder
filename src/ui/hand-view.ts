@@ -1,6 +1,5 @@
-import type { Card, CardMode } from "../game/cards";
+import type { Card } from "../game/cards";
 import { cardFace } from "./card-view";
-import { describeMode } from "./card-text";
 import { setChildren } from "./dom";
 
 /** The fanned hand: one card per held card, with a button per playable mode. */
@@ -22,7 +21,11 @@ export class HandView {
     this.modeAvailable = modeAvailable;
   }
 
-  render(cards: readonly Card[], selectedId: string | null, discarding: boolean): void {
+  render(
+    cards: readonly Card[],
+    selectedId: string | null,
+    discarding: boolean,
+  ): void {
     const nodes = cards.map((card, index) =>
       this.cardElement(card, index, cards.length, selectedId, discarding),
     );
@@ -36,11 +39,15 @@ export class HandView {
     selectedId: string | null,
     discarding: boolean,
   ): HTMLElement {
-    const footer: Node[] = discarding
-      ? []
-      : card.modes.map((mode, modeIndex) => this.modeButton(card, mode, modeIndex));
-
-    const element = cardFace(card, { index, count, viewOnly: false }, footer);
+    const element = cardFace(
+      card,
+      { index, count, viewOnly: false },
+      {
+        inHand: true,
+        modeAvailable: (modeIndex) => this.modeAvailable(card, modeIndex),
+        onPlay: (modeIndex) => this.onPlay(card, modeIndex),
+      },
+    );
     if (card.id === selectedId) {
       element.classList.add("selected");
     }
@@ -57,14 +64,5 @@ export class HandView {
       this.onDiscard(card);
     });
     return element;
-  }
-
-  private modeButton(card: Card, mode: CardMode, index: number): HTMLElement {
-    const button = document.createElement("button");
-    button.classList.add("card-mode");
-    button.textContent = describeMode(mode);
-    button.disabled = !this.modeAvailable(card, index);
-    button.addEventListener("click", () => this.onPlay(card, index));
-    return button;
   }
 }

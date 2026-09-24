@@ -22,7 +22,10 @@ export function pick<T>(rng: Rng, items: readonly T[]): { item: T; rng: Rng } {
 }
 
 /** Fisher–Yates shuffle, threading the RNG so the order stays reproducible. */
-export function shuffle<T>(items: readonly T[], rng: Rng): { items: T[]; rng: Rng } {
+export function shuffle<T>(
+  items: readonly T[],
+  rng: Rng,
+): { items: T[]; rng: Rng } {
   const result = [...items];
   let current = rng;
   for (let i = result.length - 1; i > 0; i -= 1) {

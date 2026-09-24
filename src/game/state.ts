@@ -10,21 +10,26 @@ import type { RunStats } from "./stats";
 export type { Deck };
 
 export type MapIndex = {
-  hexToSection: Map<string, string>;   // hexKey → section id, live sections only
-  sections: SectionRecord[];           // oldest → newest, includes removed sections
+  hexToSection: Map<string, string>; // hexKey → section id, live sections only
+  sections: SectionRecord[]; // oldest → newest, includes removed sections
 };
 
 export type MapState = {
-  tiles: Map<string, Tile>;            // key = hexKey(coord)
+  tiles: Map<string, Tile>; // key = hexKey(coord)
   index: MapIndex;
   player: HexCoord;
   previous: HexCoord;
-  cursor: MapCursor;                   // generation front, advanced as the player moves
+  cursor: MapCursor; // generation front, advanced as the player moves
 };
 
 export type Phase =
   | { kind: "playing" }
-  | { kind: "pending-move"; card: Card; modeIndex: number; reachable: HexCoord[] }
+  | {
+      kind: "pending-move";
+      card: Card;
+      modeIndex: number;
+      reachable: HexCoord[];
+    }
   | { kind: "pending-attack"; cardId: string; range: number }
   | { kind: "pending-discard"; count: number }
   | { kind: "pending-remove" }
@@ -34,9 +39,7 @@ export type Phase =
   | { kind: "game-over"; reason: GameOverReason };
 
 export type GameOverReason =
-  | { kind: 'assassin' }
-  | { kind: 'sniper' }
-  | { kind: 'caught' };
+  { kind: "assassin" } | { kind: "sniper" } | { kind: "caught" };
 
 /** Per-turn bookkeeping, reset at the start of every turn. */
 export type TurnState = {

@@ -48,7 +48,9 @@ export function rollGift(
   pool: readonly CardSpec[],
   rng: Rng,
 ): { spec: CardSpec; rng: Rng } {
-  const eligible = pool.filter((spec) => spec.rarity === "uncommon" || spec.rarity === "rare");
+  const eligible = pool.filter(
+    (spec) => spec.rarity === "uncommon" || spec.rarity === "rare",
+  );
   if (eligible.length === 0) {
     throw new Error("no eligible gift cards");
   }

@@ -11,12 +11,7 @@ import removeCardUrl from "../images/remove-card.png";
 import gainCardUrl from "../images/gain-card.png";
 
 export type Terrain =
-  | "grass"
-  | "forest"
-  | "water"
-  | "mountain"
-  | "dirt"
-  | "impassible";
+  "grass" | "forest" | "water" | "mountain" | "dirt" | "impassible";
 
 /** Terrain that a card can be printed with, hardest last. */
 export const CARD_TERRAINS: readonly Terrain[] = [
@@ -76,9 +71,7 @@ export function emptyTile(terrain: Terrain, spawnDelay: number): Tile {
 
 /** How a feature is drawn over its hex. */
 export type FeatureVisual =
-  | { kind: "none" }
-  | { kind: "image"; url: string }
-  | { kind: "coin" };
+  { kind: "none" } | { kind: "image"; url: string } | { kind: "coin" };
 
 /**
  * The overlay for a tile feature. There is no `coin.png`, so the coin is drawn

@@ -9,7 +9,7 @@ import type { Rng } from "./rng";
 import { pick, shuffle } from "./rng";
 import { SHOP_STOCK_SIZE, rollShopStock } from "./shop";
 import type { MapIndex } from "./state";
-import tiles from './tiles.json'
+import tiles from "./tiles.json";
 
 export type SectionRecord = {
   id: string;
@@ -49,7 +49,12 @@ export type SpawnPoint = {
 
 /** Terrain layer: one char per hex. */
 export const TERRAIN_BY_CHAR: Record<string, Terrain> = {
-  ".": "grass", f: "forest", w: "water", m: "mountain", d: "dirt", "#": "impassible",
+  ".": "grass",
+  f: "forest",
+  w: "water",
+  m: "mountain",
+  d: "dirt",
+  "#": "impassible",
 };
 
 /** Overlay layer: what sits on top of the terrain. "." is nothing. */
@@ -85,7 +90,9 @@ function validateSpawns(template: SectionTemplate): void {
       );
     }
     if (!Number.isInteger(spawn.delay) || spawn.delay < 0) {
-      throw new Error(`template ${template.id}: spawn ${spawn.q},${spawn.r} has a bad delay`);
+      throw new Error(
+        `template ${template.id}: spawn ${spawn.q},${spawn.r} has a bad delay`,
+      );
     }
   }
 }
@@ -107,13 +114,19 @@ function validateRows(
   rows.forEach((row, index) => {
     const r = index - radius;
     if (row.length !== perRow.get(r)) {
-      throw new Error(`template ${id}: ${layer} row ${r} has ${row.length}, expected ${perRow.get(r)}`);
+      throw new Error(
+        `template ${id}: ${layer} row ${r} has ${row.length}, expected ${perRow.get(r)}`,
+      );
     }
   });
 }
 
 /** Column index → axial q for a shifted hexagon row. */
-export function localCoord(radius: number, r: number, column: number): HexCoord {
+export function localCoord(
+  radius: number,
+  r: number,
+  column: number,
+): HexCoord {
   const q = column - radius - Math.min(0, r); // standard hexagon row shear
   return { q, r };
 }
@@ -135,8 +148,14 @@ export function stampSection(
     const r = index - template.radius;
     const overlayRow = template.overlays[index];
     for (let column = 0; column < row.length; column += 1) {
-      const rotated = rotateTimes(localCoord(template.radius, r, column), rotationSteps);
-      const world: HexCoord = { q: origin.q + rotated.q, r: origin.r + rotated.r };
+      const rotated = rotateTimes(
+        localCoord(template.radius, r, column),
+        rotationSteps,
+      );
+      const world: HexCoord = {
+        q: origin.q + rotated.q,
+        r: origin.r + rotated.r,
+      };
       const terrain = TERRAIN_BY_CHAR[row[column]];
       const overlay = overlayRow[column];
       tiles.set(hexKey(world), {
@@ -154,7 +173,10 @@ export function stampSection(
   // Authored spawn points, rotated like the terrain so they follow the section.
   for (const spawn of template.spawns) {
     const rotated = rotateTimes({ q: spawn.q, r: spawn.r }, rotationSteps);
-    const world: HexCoord = { q: origin.q + rotated.q, r: origin.r + rotated.r };
+    const world: HexCoord = {
+      q: origin.q + rotated.q,
+      r: origin.r + rotated.r,
+    };
     const key = hexKey(world);
     const tile = tiles.get(key);
     if (tile !== undefined) {
@@ -165,21 +187,24 @@ export function stampSection(
 }
 
 function mirrorTemplate(template: SectionTemplate): SectionTemplate {
-  let mirrorEdge = (i: number)=>[1, 0, 5, 4, 3, 2][i]
+  let mirrorEdge = (i: number) => [1, 0, 5, 4, 3, 2][i];
 
   return {
-    id: template.id+' (mirrored)',
+    id: template.id + " (mirrored)",
     difficulty: template.difficulty,
     radius: template.radius,
     terrain: template.terrain.toReversed(),
     overlays: template.overlays.toReversed(),
     spawns: template.spawns.toReversed(),
     entryEdges: template.entryEdges.map(mirrorEdge),
-    exitEdges: template.exitEdges.map(mirrorEdge)
-  }
+    exitEdges: template.exitEdges.map(mirrorEdge),
+  };
 }
 
-export const SECTION_TEMPLATES: readonly SectionTemplate[] = [...tiles, ...tiles.map(mirrorTemplate)];
+export const SECTION_TEMPLATES: readonly SectionTemplate[] = [
+  ...tiles,
+  ...tiles.map(mirrorTemplate),
+];
 
 for (const template of SECTION_TEMPLATES) {
   validateTemplate(template);
@@ -197,7 +222,7 @@ export type MapFrontier = {
    * danger of clipping the one before it, so placement watches this.
    */
   lastTurn: number;
-  bannedEdges: [number, number]
+  bannedEdges: [number, number];
 };
 
 /**
@@ -278,7 +303,11 @@ const OUTWARD: readonly HexCoord[] = [
  * share a radius; the second term slides the crossing by the radius difference
  * so differently sized sections still meet edge-to-edge instead of overlapping.
  */
-function sectionOffset(entryEdge: number, fromRadius: number, toRadius: number): HexCoord {
+function sectionOffset(
+  entryEdge: number,
+  fromRadius: number,
+  toRadius: number,
+): HexCoord {
   const base = sideOffset(normalize(entryEdge + 3), fromRadius);
   const along = OUTWARD[(entryEdge + 5) % 6];
   const grow = toRadius - fromRadius;
@@ -296,7 +325,11 @@ function slideAxis(entryEdge: number): HexCoord {
 }
 
 /** World centre of the next section, the one that follows `frontier`. */
-function sectionOrigin(frontier: MapFrontier, radius: number, shift: number): HexCoord {
+function sectionOrigin(
+  frontier: MapFrontier,
+  radius: number,
+  shift: number,
+): HexCoord {
   if (frontier.radius === 0) {
     // The opening section has no predecessor; it just sits on the frontier.
     return frontier.origin;
@@ -331,7 +364,10 @@ function drawTemplate(
   let queue = bag;
   let index = queue.findIndex((id) => pool.some((t) => t.id === id));
   if (index < 0) {
-    const refill = shuffle(pool.map((t) => t.id), current);
+    const refill = shuffle(
+      pool.map((t) => t.id),
+      current,
+    );
     current = refill.rng;
     queue = refill.items;
     index = 0;
@@ -378,7 +414,10 @@ function shiftOrder(frontier: MapFrontier, radius: number): number[] {
 }
 
 /** True if any stamped hex is already occupied by an earlier section. */
-function collides(stamped: ReadonlyMap<string, Tile>, occupied: ReadonlySet<string>): boolean {
+function collides(
+  stamped: ReadonlyMap<string, Tile>,
+  occupied: ReadonlySet<string>,
+): boolean {
   for (const key of stamped.keys()) {
     if (occupied.has(key)) {
       return true;
@@ -391,7 +430,10 @@ function collides(stamped: ReadonlyMap<string, Tile>, occupied: ReadonlySet<stri
  * True if the stamped section touches the one before it, so a slid placement
  * cannot silently detach from the map. The opening section has nothing to join.
  */
-function connects(stamped: ReadonlyMap<string, Tile>, previous: ReadonlySet<string>): boolean {
+function connects(
+  stamped: ReadonlyMap<string, Tile>,
+  previous: ReadonlySet<string>,
+): boolean {
   if (previous.size === 0) {
     return true;
   }
@@ -415,7 +457,9 @@ function placeSection(
   queue: readonly string[],
 ): Placement | null {
   const band = difficultyBand(distance);
-  const pool = SECTION_TEMPLATES.filter((t) => Math.abs(t.difficulty - band) <= 1);
+  const pool = SECTION_TEMPLATES.filter(
+    (t) => Math.abs(t.difficulty - band) <= 1,
+  );
   const emergencyPool = SECTION_TEMPLATES.filter((t) => t.radius <= 2);
   if (pool.length === 0) {
     return null;
@@ -439,20 +483,33 @@ function placeSection(
   let currentRng = rng;
   let bag = queue;
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
-    let panicMode = attempt > MAX_ATTEMPTS * 3 / 4;
+    let panicMode = attempt > (MAX_ATTEMPTS * 3) / 4;
 
-    const drawn = drawTemplate(panicMode ? emergencyPool : pool, bag, currentRng);
+    const drawn = drawTemplate(
+      panicMode ? emergencyPool : pool,
+      bag,
+      currentRng,
+    );
     currentRng = drawn.rng;
     bag = drawn.bag;
     const template = drawn.template;
 
-    const {item: localEntry, rng: localEntryRng} = pick(currentRng, template.entryEdges);
+    const { item: localEntry, rng: localEntryRng } = pick(
+      currentRng,
+      template.entryEdges,
+    );
     currentRng = localEntryRng;
     const rotation = normalize(frontier.entryEdge - localEntry);
-    const { item: localExit, rng: exitRollRng } = pick(currentRng, template.exitEdges);
+    const { item: localExit, rng: exitRollRng } = pick(
+      currentRng,
+      template.exitEdges,
+    );
     currentRng = exitRollRng;
     const worldExit = normalize(rotation + localExit);
-    if (worldExit === frontier.entryEdge || frontier.bannedEdges.some(i => i == worldExit)) {
+    if (
+      worldExit === frontier.entryEdge ||
+      frontier.bannedEdges.some((i) => i == worldExit)
+    ) {
       continue;
     }
 
@@ -462,24 +519,47 @@ function placeSection(
       continue;
     }
 
-    if ((template.radius < frontier.radius || panicMode) && (normalize(frontier.entryEdge + 1) === worldExit
-      || normalize(frontier.entryEdge - 1) === worldExit)
+    if (
+      (template.radius < frontier.radius || panicMode) &&
+      (normalize(frontier.entryEdge + 1) === worldExit ||
+        normalize(frontier.entryEdge - 1) === worldExit)
     ) {
       continue;
     }
 
-    if (!panicMode && frontier.radius !== 0 && Math.abs(template.radius - frontier.radius) > 1) {
+    if (
+      !panicMode &&
+      frontier.radius !== 0 &&
+      Math.abs(template.radius - frontier.radius) > 1
+    ) {
       continue;
     }
 
-    let chosen: { tiles: Map<string, Tile>; origin: HexCoord; snipers: HexCoord[] } | null = null;
+    let chosen: {
+      tiles: Map<string, Tile>;
+      origin: HexCoord;
+      snipers: HexCoord[];
+    } | null = null;
     for (const shift of shiftOrder(frontier, template.radius)) {
       const sectionTiles = new Map<string, Tile>();
-      const stamped = stampSection(sectionTiles, template, frontier, rotation, shift);
-      if (collides(sectionTiles, occupied) || !connects(sectionTiles, previous)) {
+      const stamped = stampSection(
+        sectionTiles,
+        template,
+        frontier,
+        rotation,
+        shift,
+      );
+      if (
+        collides(sectionTiles, occupied) ||
+        !connects(sectionTiles, previous)
+      ) {
         continue;
       }
-      chosen = { tiles: sectionTiles, origin: stamped.origin, snipers: stamped.snipers };
+      chosen = {
+        tiles: sectionTiles,
+        origin: stamped.origin,
+        snipers: stamped.snipers,
+      };
       break;
     }
     if (chosen === null) {
@@ -491,11 +571,20 @@ function placeSection(
     for (const [key, tile] of sectionTiles) {
       if (tile.feature.kind === "shop") {
         // Stock is part of the tile, so leaving and returning shows the same cards.
-        const rolled = rollShopStock(SHOP_CATALOGUE, SHOP_STOCK_SIZE, currentRng, ids);
+        const rolled = rollShopStock(
+          SHOP_CATALOGUE,
+          SHOP_STOCK_SIZE,
+          currentRng,
+          ids,
+        );
         currentRng = rolled.rng;
         tiles.set(key, {
           ...tile,
-          feature: { kind: "shop", stock: rolled.stock, rerollCost: tile.feature.rerollCost },
+          feature: {
+            kind: "shop",
+            stock: rolled.stock,
+            rerollCost: tile.feature.rerollCost,
+          },
         });
       } else {
         tiles.set(key, tile);
@@ -605,8 +694,11 @@ export function generateMap(
 
   let cursor: MapCursor = {
     frontier: {
-      origin: { q: 0, r: 0 }, radius: 0, entryEdge: 3, lastTurn: 0, bannedEdges: [
-        firstBannedEdge.item, normalize(firstBannedEdge.item + 1)]
+      origin: { q: 0, r: 0 },
+      radius: 0,
+      entryEdge: 3,
+      lastTurn: 0,
+      bannedEdges: [firstBannedEdge.item, normalize(firstBannedEdge.item + 1)],
     },
     distance: 0,
     rng: firstBannedEdge.rng,
@@ -662,10 +754,16 @@ export function armSection(
  * The player enters through the first section's entry edge. Prefer an edge hex
  * with no feature, so the opening turn is not forced onto a shop or a coin.
  */
-function startingHex(tiles: ReadonlyMap<string, Tile>, section: SectionRecord): HexCoord {
+function startingHex(
+  tiles: ReadonlyMap<string, Tile>,
+  section: SectionRecord,
+): HexCoord {
   const radius = radiusOf(section);
   for (const local of hexSide(section.entryEdge, radius)) {
-    const coord: HexCoord = { q: section.origin.q + local.q, r: section.origin.r + local.r };
+    const coord: HexCoord = {
+      q: section.origin.q + local.q,
+      r: section.origin.r + local.r,
+    };
     const tile = tiles.get(hexKey(coord));
     if (tile !== undefined && tile.feature.kind === "none") {
       return coord;

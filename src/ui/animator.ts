@@ -124,7 +124,8 @@ export class Animator {
   /** Await the next frame, ease the camera, and report the time it took. */
   private async tick(): Promise<number> {
     const time = await nextFrame();
-    const dt = this.lastFrame === 0 ? 0 : Math.min(MAX_FRAME_MS, time - this.lastFrame);
+    const dt =
+      this.lastFrame === 0 ? 0 : Math.min(MAX_FRAME_MS, time - this.lastFrame);
     this.lastFrame = time;
     this.advanceCamera(dt);
     return dt;
@@ -142,8 +143,10 @@ export class Animator {
 
   private cameraSettled(): boolean {
     const desired = this.centredOn(this.focus);
-    return Math.abs(desired.x - this.camera.x) < SETTLE_PX
-      && Math.abs(desired.y - this.camera.y) < SETTLE_PX;
+    return (
+      Math.abs(desired.x - this.camera.x) < SETTLE_PX &&
+      Math.abs(desired.y - this.camera.y) < SETTLE_PX
+    );
   }
 
   private centredOn(point: Point): Point {
@@ -178,7 +181,9 @@ function nextFrame(): Promise<number> {
 
 /** Whether the user has asked the system to avoid motion. */
 export function prefersReducedMotion(): boolean {
-  return typeof window !== "undefined"
-    && typeof window.matchMedia === "function"
-    && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  return (
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
 }

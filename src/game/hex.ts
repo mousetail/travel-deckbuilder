@@ -80,8 +80,8 @@ function cubeRound(q: number, r: number): HexCoord {
 }
 
 export function pixelToHex(point: { x: number; y: number }): HexCoord {
-  const q = (SQRT3 / 3 * point.x - point.y / 3) / HEX_SIZE;
-  const r = (2 / 3 * point.y) / HEX_SIZE;
+  const q = ((SQRT3 / 3) * point.x - point.y / 3) / HEX_SIZE;
+  const r = ((2 / 3) * point.y) / HEX_SIZE;
   return cubeRound(q, r);
 }
 
@@ -89,7 +89,11 @@ export function pixelToHex(point: { x: number; y: number }): HexCoord {
 export function hexesInRange(centre: HexCoord, radius: number): HexCoord[] {
   const results: HexCoord[] = [];
   for (let dq = -radius; dq <= radius; dq += 1) {
-    for (let dr = Math.max(-radius, -dq - radius); dr <= Math.min(radius, -dq + radius); dr += 1) {
+    for (
+      let dr = Math.max(-radius, -dq - radius);
+      dr <= Math.min(radius, -dq + radius);
+      dr += 1
+    ) {
       results.push({ q: centre.q + dq, r: centre.r + dr });
     }
   }
@@ -105,10 +109,7 @@ export function hexLine(a: HexCoord, b: HexCoord): HexCoord[] {
   const results: HexCoord[] = [];
   for (let i = 0; i <= n; i += 1) {
     const t = i / n;
-    results.push(cubeRound(
-      a.q + (b.q - a.q) * t,
-      a.r + (b.r - a.r) * t,
-    ));
+    results.push(cubeRound(a.q + (b.q - a.q) * t, a.r + (b.r - a.r) * t));
   }
   return results;
 }
@@ -246,7 +247,10 @@ export function findPathByCost(
     }
     const currentCost = best.get(hexKey(current)) ?? Infinity;
     if (equalsHex(current, goal)) {
-      return { path: reconstructPath(cameFrom, start, goal), cost: currentCost };
+      return {
+        path: reconstructPath(cameFrom, start, goal),
+        cost: currentCost,
+      };
     }
     for (const next of neighbours(current)) {
       const step = costAt(next);

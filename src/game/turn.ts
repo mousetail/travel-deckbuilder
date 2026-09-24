@@ -2,7 +2,12 @@ import type { Card, CardMode } from "./cards";
 import { gainCurrency } from "./currency";
 import type { Deck, DeckMutation } from "./deck";
 import { drawCards, drawUpTo, removeFromHand, toDiscard } from "./deck";
-import { bountyFor, enemiesInRange, killEnemy, resolveEnemyPhase } from "./enemies";
+import {
+  bountyFor,
+  enemiesInRange,
+  killEnemy,
+  resolveEnemyPhase,
+} from "./enemies";
 import { hexKey, parseHexKey } from "./hex";
 import type { HexCoord } from "./hex";
 import { leadingEdge, onPlayerMoved, visibleMap, visibleReach } from "./fog";
@@ -38,7 +43,11 @@ export function takeSkipBonus(state: GameState): GameState {
   };
 }
 
-export function applyHandMode(deck: Deck, mode: CardMode, rng: Rng): DeckMutation {
+export function applyHandMode(
+  deck: Deck,
+  mode: CardMode,
+  rng: Rng,
+): DeckMutation {
   switch (mode.kind) {
     case "draw": {
       return drawCards(deck, mode.count, rng);
@@ -57,9 +66,16 @@ export function applyHandMode(deck: Deck, mode: CardMode, rng: Rng): DeckMutatio
     }
     case "recover": {
       const recovered = deck.discard.slice(-mode.count);
-      const remaining = deck.discard.slice(0, deck.discard.length - recovered.length);
+      const remaining = deck.discard.slice(
+        0,
+        deck.discard.length - recovered.length,
+      );
       return {
-        deck: { draw: deck.draw, hand: [...deck.hand, ...recovered], discard: remaining },
+        deck: {
+          draw: deck.draw,
+          hand: [...deck.hand, ...recovered],
+          discard: remaining,
+        },
         rng,
         drawn: [],
       };
@@ -113,7 +129,9 @@ function spent(
 export function modeIsAvailable(state: GameState, mode: CardMode): boolean {
   switch (mode.kind) {
     case "attack":
-      return enemiesInRange(state.enemies, state.map.player, mode.range).length > 0;
+      return (
+        enemiesInRange(state.enemies, state.map.player, mode.range).length > 0
+      );
     case "discard-hand":
       return state.deck.hand.length >= mode.threshold;
     case "recover":
@@ -122,8 +140,15 @@ export function modeIsAvailable(state: GameState, mode: CardMode): boolean {
     case "draw-discard":
       return state.deck.draw.length > 0 || state.deck.discard.length > 0;
     case "move": {
-      const reachable = reachableHexes(state.map.player, mode.distance, mode.terrain, terrainAt(state));
-      return [...reachable.keys()].some((key) => key !== hexKey(state.map.player));
+      const reachable = reachableHexes(
+        state.map.player,
+        mode.distance,
+        mode.terrain,
+        terrainAt(state),
+      );
+      return [...reachable.keys()].some(
+        (key) => key !== hexKey(state.map.player),
+      );
     }
     case "currency":
       return true;
@@ -135,7 +160,11 @@ export function modeIsAvailable(state: GameState, mode: CardMode): boolean {
  * `pending-move`, an attack with no target is refused, and everything else
  * resolves at once.
  */
-export function beginPlay(state: GameState, card: Card, modeIndex: number): Transition {
+export function beginPlay(
+  state: GameState,
+  card: Card,
+  modeIndex: number,
+): Transition {
   if (state.phase.kind !== "playing") {
     return still(state);
   }
@@ -146,7 +175,12 @@ export function beginPlay(state: GameState, card: Card, modeIndex: number): Tran
 
   switch (mode.kind) {
     case "move": {
-      const reachable = reachableHexes(state.map.player, mode.distance, mode.terrain, terrainAt(state));
+      const reachable = reachableHexes(
+        state.map.player,
+        mode.distance,
+        mode.terrain,
+        terrainAt(state),
+      );
       return still({
         ...state,
         phase: {
@@ -159,16 +193,29 @@ export function beginPlay(state: GameState, card: Card, modeIndex: number): Tran
     }
     case "attack": {
       // No candidates: refuse rather than waste the card (the UI greys it out).
-      if (enemiesInRange(state.enemies, state.map.player, mode.range).length === 0) {
+      if (
+        enemiesInRange(state.enemies, state.map.player, mode.range).length === 0
+      ) {
         return still(state);
       }
-      return still({ ...state, phase: { kind: "pending-attack", cardId: card.id, range: mode.range } });
+      return still({
+        ...state,
+        phase: { kind: "pending-attack", cardId: card.id, range: mode.range },
+      });
     }
     case "draw":
     case "discard-hand":
     case "recover": {
       const applied = applyHandMode(state.deck, mode, state.rng);
-      return still(spent(state, discardFromHand(applied.deck, card), applied.rng, card, applied.drawn));
+      return still(
+        spent(
+          state,
+          discardFromHand(applied.deck, card),
+          applied.rng,
+          card,
+          applied.drawn,
+        ),
+      );
     }
     case "draw-discard": {
       const applied = applyHandMode(state.deck, mode, state.rng);
@@ -177,11 +224,16 @@ export function beginPlay(state: GameState, card: Card, modeIndex: number): Tran
       if (mode.discard <= 0 || deck.hand.length === 0) {
         return still(played);
       }
-      return still({ ...played, phase: { kind: "pending-discard", count: mode.discard } });
+      return still({
+        ...played,
+        phase: { kind: "pending-discard", count: mode.discard },
+      });
     }
     case "currency": {
       const paid = gainCurrency(state, mode.amount);
-      return still(spent(paid, discardFromHand(paid.deck, card), state.rng, card, []));
+      return still(
+        spent(paid, discardFromHand(paid.deck, card), state.rng, card, []),
+      );
     }
   }
 }
@@ -197,7 +249,11 @@ export function discardForChoice(state: GameState, card: Card): Transition {
   if (remaining <= 0 || deck.hand.length === 0) {
     return still({ ...state, deck, phase: { kind: "playing" } });
   }
-  return still({ ...state, deck, phase: { kind: "pending-discard", count: remaining } });
+  return still({
+    ...state,
+    deck,
+    phase: { kind: "pending-discard", count: remaining },
+  });
 }
 
 /** Kill one enemy in range and pay its bounty. */
@@ -235,7 +291,12 @@ export function resolveMoveTo(state: GameState, to: HexCoord): Transition {
     return still(state);
   }
 
-  const path = resolveMove(state.map.player, to, mode.terrain, terrainAt(state));
+  const path = resolveMove(
+    state.map.player,
+    to,
+    mode.terrain,
+    terrainAt(state),
+  );
   const destination = path[path.length - 1];
   const moved: GameState = {
     ...state,
@@ -293,7 +354,11 @@ export function endTurn(state: GameState): Transition {
     return still(state);
   }
   const paid = takeSkipBonus(state);
-  const resolved = resolveEnemyPhase(paid, leadingEdge(paid), visibleReach(paid));
+  const resolved = resolveEnemyPhase(
+    paid,
+    leadingEdge(paid),
+    visibleReach(paid),
+  );
   if (resolved.state.phase.kind === "game-over") {
     return resolved;
   }

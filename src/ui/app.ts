@@ -68,7 +68,12 @@ export class App {
     this.discardSlot = element("div", "pile-slot");
     this.actionSlot = element("div", "hud-action");
 
-    setChildren(bottomBar, [this.drawSlot, handLayer, this.discardSlot, this.actionSlot]);
+    setChildren(bottomBar, [
+      this.drawSlot,
+      handLayer,
+      this.discardSlot,
+      this.actionSlot,
+    ]);
     setChildren(hudLayer, [topBar, this.middle, bottomBar]);
 
     this.shell = element("div", "app");
@@ -182,10 +187,14 @@ export class App {
     this.hud.renderAction(this.actionSlot, this.state, this.animating);
 
     setChildren(this.drawSlot, [
-      pileButton("Draw", this.state.deck.draw.length, "draw", () => this.togglePile("draw")),
+      pileButton("Draw", this.state.deck.draw.length, "draw", () =>
+        this.togglePile("draw"),
+      ),
     ]);
     setChildren(this.discardSlot, [
-      pileButton("Discard", this.state.deck.discard.length, "discard", () => this.togglePile("discard")),
+      pileButton("Discard", this.state.deck.discard.length, "discard", () =>
+        this.togglePile("discard"),
+      ),
     ]);
     this.renderMiddle();
   }
@@ -208,9 +217,12 @@ export class App {
       return;
     }
     const pile = this.openPile;
-    const cards = pile === "draw" ? this.state.deck.draw : this.state.deck.discard;
+    const cards =
+      pile === "draw" ? this.state.deck.draw : this.state.deck.discard;
     const title = pile === "draw" ? "Draw pile" : "Discard pile";
-    setChildren(this.middle, [pileOverlay(title, cards, () => this.closePile())]);
+    setChildren(this.middle, [
+      pileOverlay(title, cards, () => this.closePile()),
+    ]);
   }
 
   private togglePile(pile: Pile): void {
@@ -240,7 +252,11 @@ export class App {
       return new Set();
     }
     return new Set(
-      enemiesInRange(this.state.enemies, this.state.map.player, phase.range).map((e) => e.id),
+      enemiesInRange(
+        this.state.enemies,
+        this.state.map.player,
+        phase.range,
+      ).map((e) => e.id),
     );
   }
 
@@ -284,7 +300,9 @@ export class App {
     const phase = this.state.phase;
     if (phase.kind === "pending-attack") {
       const target = this.state.enemies.find(
-        (enemy) => this.targets().has(enemy.id) && hexKey(enemy.position) === hexKey(coord),
+        (enemy) =>
+          this.targets().has(enemy.id) &&
+          hexKey(enemy.position) === hexKey(coord),
       );
       if (target !== undefined) {
         this.apply(resolveAttack(this.state, target.id));

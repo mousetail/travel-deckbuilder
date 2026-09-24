@@ -3,7 +3,11 @@ import type { HexCoord } from "./hex";
 export function hexesInHexagon(radius: number): HexCoord[] {
   const results: HexCoord[] = [];
   for (let q = -radius; q <= radius; q += 1) {
-    for (let r = Math.max(-radius, -q - radius); r <= Math.min(radius, -q + radius); r += 1) {
+    for (
+      let r = Math.max(-radius, -q - radius);
+      r <= Math.min(radius, -q + radius);
+      r += 1
+    ) {
       results.push({ q, r });
     }
   }

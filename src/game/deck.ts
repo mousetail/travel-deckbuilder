@@ -10,7 +10,11 @@ export type Deck = {
   discard: Card[];
 };
 
-export function buildDeck(specs: readonly CardSpec[], ids: IdFactory, rng: Rng): Deck {
+export function buildDeck(
+  specs: readonly CardSpec[],
+  ids: IdFactory,
+  rng: Rng,
+): Deck {
   const cards = specs.map((s) => instantiate(s, ids()));
   return { draw: shuffle(cards, rng), hand: [], discard: [] };
 }
@@ -59,7 +63,11 @@ export function drawCards(deck: Deck, count: number, rng: Rng): DeckMutation {
 }
 
 export function toDiscard(deck: Deck, cards: readonly Card[]): Deck {
-  return { draw: deck.draw, hand: deck.hand, discard: [...deck.discard, ...cards] };
+  return {
+    draw: deck.draw,
+    hand: deck.hand,
+    discard: [...deck.discard, ...cards],
+  };
 }
 
 export function removeFromHand(deck: Deck, card: Card): Deck {

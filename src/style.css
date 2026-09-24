@@ -190,7 +190,8 @@ button {
 
     &:hover {
       z-index: 1;
-      transform: translateY(-16px) rotate(calc((var(--i) - (var(--n) - 1) / 2) * 7deg));
+      transform: translateY(-16px)
+        rotate(calc((var(--i) - (var(--n) - 1) / 2) * 7deg));
     }
   }
 }
@@ -249,6 +250,26 @@ button {
   font: 11px monospace;
 }
 
+/* A card with context info (cost, usage) below it; the card itself is
+   unchanged, the extra line sits underneath. */
+.card-caption {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+}
+
+.card-caption-text {
+  font-size: 12px;
+  text-align: center;
+}
+
+/* A card offered as a choice: the card with a full-width action button
+   underneath. */
+.card-choice {
+  display: grid;
+  gap: 4px;
+}
+
 /* --- piles and overlays ------------------------------------------------- */
 
 .overlay {
@@ -279,14 +300,9 @@ button {
   }
 }
 
-.feature-row {
-  display: grid;
-  grid-auto-flow: column;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-  padding: 8px;
-  border: 2px solid var(--ui-fg);
+/* A standalone action button that spans the whole overlay width. */
+.feature-button {
+  width: 100%;
 }
 
 .feature-text {
@@ -342,7 +358,6 @@ button {
   font-weight: bold;
 }
 
-.usage-caption,
 .usage-empty {
   font-size: 12px;
   text-align: center;

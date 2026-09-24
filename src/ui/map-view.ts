@@ -1,4 +1,12 @@
-import { AXIAL_DIRECTIONS, HEX_SIZE, addHex, hexKey, hexToPixel, parseHexKey, pixelToHex } from "../game/hex";
+import {
+  AXIAL_DIRECTIONS,
+  HEX_SIZE,
+  addHex,
+  hexKey,
+  hexToPixel,
+  parseHexKey,
+  pixelToHex,
+} from "../game/hex";
 import type { HexCoord } from "../game/hex";
 import { TERRAIN_TEXTURE, featureVisual } from "../game/terrain";
 import type { Tile } from "../game/terrain";
@@ -64,10 +72,12 @@ export class MapView {
 
     layer.addEventListener("click", (event) => {
       const rect = layer.getBoundingClientRect();
-      this.onHexClick(pixelToHex({
-        x: event.clientX - rect.left + this.camera.x,
-        y: event.clientY - rect.top + this.camera.y,
-      }));
+      this.onHexClick(
+        pixelToHex({
+          x: event.clientX - rect.left + this.camera.x,
+          y: event.clientY - rect.top + this.camera.y,
+        }),
+      );
     });
     layer.addEventListener("contextmenu", (event) => {
       event.preventDefault();
@@ -78,7 +88,9 @@ export class MapView {
   render(view: MapViewState): void {
     const nodes: Node[] = [];
     for (const [key, tile] of view.tiles) {
-      nodes.push(this.hexElement(key, tile, view.reachable.has(key), view.fog.get(key)));
+      nodes.push(
+        this.hexElement(key, tile, view.reachable.has(key), view.fog.get(key)),
+      );
     }
     for (const edge of this.dangerEdges(view)) {
       nodes.push(edge);
@@ -186,7 +198,11 @@ export class MapView {
       }
       const coord = parseHexKey(key);
       const pixel = hexToPixel(coord);
-      for (let direction = 0; direction < AXIAL_DIRECTIONS.length; direction += 1) {
+      for (
+        let direction = 0;
+        direction < AXIAL_DIRECTIONS.length;
+        direction += 1
+      ) {
         const neighbour = addHex(coord, AXIAL_DIRECTIONS[direction]);
         if (view.danger.has(hexKey(neighbour))) {
           continue;
@@ -209,7 +225,11 @@ export class MapView {
   }
 
   /** Turns until an assassin spawns here, or null if none is due. */
-  private spawnBadge(key: string, tile: Tile, turn: number): HTMLElement | null {
+  private spawnBadge(
+    key: string,
+    tile: Tile,
+    turn: number,
+  ): HTMLElement | null {
     if (tile.spawnTurn < 0 || tile.spawnTurn < turn) {
       return null;
     }

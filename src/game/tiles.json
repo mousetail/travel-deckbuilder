@@ -28,33 +28,15 @@
         "delay": 4
       }
     ],
-    "entryEdges": [
-      0,
-      1
-    ],
-    "exitEdges": [
-      4,
-      5
-    ]
+    "entryEdges": [0, 1],
+    "exitEdges": [4, 5]
   },
   {
     "id": "meadow-1",
     "difficulty": 0,
     "radius": 2,
-    "terrain": [
-      ".ww",
-      ".ffw",
-      "..ff.",
-      "..f.",
-      "#.."
-    ],
-    "overlays": [
-      "...",
-      "....",
-      ".....",
-      "c...",
-      "..."
-    ],
+    "terrain": [".ww", ".ffw", "..ff.", "..f.", "#.."],
+    "overlays": ["...", "....", ".....", "c...", "..."],
     "spawns": [
       {
         "q": 1,
@@ -62,38 +44,18 @@
         "delay": 4
       }
     ],
-    "entryEdges": [
-      0,
-      1
-    ],
-    "exitEdges": [
-      4,
-      5
-    ]
+    "entryEdges": [0, 1],
+    "exitEdges": [4, 5]
   },
   {
     "id": "meadow super small",
     "difficulty": -2,
     "radius": 1,
-    "terrain": [
-      "ff",
-      "...",
-      ".f"
-    ],
-    "overlays": [
-      "..",
-      "...",
-      ".."
-    ],
+    "terrain": ["ff", "...", ".f"],
+    "overlays": ["..", "...", ".."],
     "spawns": [],
-    "entryEdges": [
-      0,
-      1
-    ],
-    "exitEdges": [
-      4,
-      5
-    ]
+    "entryEdges": [0, 1],
+    "exitEdges": [4, 5]
   },
   {
     "id": "meadow 3",
@@ -128,14 +90,8 @@
         "delay": 4
       }
     ],
-    "entryEdges": [
-      0,
-      1
-    ],
-    "exitEdges": [
-      4,
-      5
-    ]
+    "entryEdges": [0, 1],
+    "exitEdges": [4, 5]
   },
   {
     "id": "meadow 2",
@@ -166,14 +122,8 @@
         "delay": 3
       }
     ],
-    "entryEdges": [
-      0,
-      1
-    ],
-    "exitEdges": [
-      3,
-      4
-    ]
+    "entryEdges": [0, 1],
+    "exitEdges": [3, 4]
   },
   {
     "id": "field",
@@ -198,18 +148,8 @@
       "...."
     ],
     "spawns": [],
-    "entryEdges": [
-      0,
-      2,
-      3,
-      5
-    ],
-    "exitEdges": [
-      0,
-      2,
-      3,
-      5
-    ]
+    "entryEdges": [0, 2, 3, 5],
+    "exitEdges": [0, 2, 3, 5]
   },
   {
     "id": "village",
@@ -245,16 +185,8 @@
         "delay": 3
       }
     ],
-    "entryEdges": [
-      0,
-      5
-    ],
-    "exitEdges": [
-      0,
-      2,
-      3,
-      5
-    ]
+    "entryEdges": [0, 5],
+    "exitEdges": [0, 2, 3, 5]
   },
   {
     "id": "crossing",
@@ -290,14 +222,8 @@
         "delay": 4
       }
     ],
-    "entryEdges": [
-      0,
-      1
-    ],
-    "exitEdges": [
-      3,
-      4
-    ]
+    "entryEdges": [0, 1],
+    "exitEdges": [3, 4]
   },
   {
     "id": "crossing-2",
@@ -337,14 +263,8 @@
         "delay": 4
       }
     ],
-    "entryEdges": [
-      0,
-      1
-    ],
-    "exitEdges": [
-      3,
-      4
-    ]
+    "entryEdges": [0, 1],
+    "exitEdges": [3, 4]
   },
   {
     "id": "grove",
@@ -380,14 +300,8 @@
         "delay": 4
       }
     ],
-    "entryEdges": [
-      0,
-      1
-    ],
-    "exitEdges": [
-      4,
-      5
-    ]
+    "entryEdges": [0, 1],
+    "exitEdges": [4, 5]
   },
   {
     "id": "quarry",
@@ -428,14 +342,8 @@
         "delay": 3
       }
     ],
-    "entryEdges": [
-      0,
-      1
-    ],
-    "exitEdges": [
-      4,
-      5
-    ]
+    "entryEdges": [0, 1],
+    "exitEdges": [4, 5]
   },
   {
     "id": "quarry-1",
@@ -480,14 +388,8 @@
         "delay": 3
       }
     ],
-    "entryEdges": [
-      0,
-      1
-    ],
-    "exitEdges": [
-      4,
-      5
-    ]
+    "entryEdges": [0, 1],
+    "exitEdges": [4, 5]
   },
   {
     "id": "highlands",
@@ -528,16 +430,8 @@
         "delay": 3
       }
     ],
-    "entryEdges": [
-      0,
-      1,
-      4,
-      5
-    ],
-    "exitEdges": [
-      4,
-      5
-    ]
+    "entryEdges": [0, 1, 4, 5],
+    "exitEdges": [4, 5]
   },
   {
     "id": "watchtower",
@@ -578,14 +472,8 @@
         "delay": 4
       }
     ],
-    "entryEdges": [
-      0,
-      1
-    ],
-    "exitEdges": [
-      3,
-      4
-    ]
+    "entryEdges": [0, 1],
+    "exitEdges": [3, 4]
   },
   {
     "id": "watchtower 2",
@@ -626,14 +514,8 @@
         "delay": 5
       }
     ],
-    "entryEdges": [
-      0,
-      1
-    ],
-    "exitEdges": [
-      3,
-      4
-    ]
+    "entryEdges": [0, 1],
+    "exitEdges": [3, 4]
   },
   {
     "id": "watchtower 3",
@@ -678,14 +560,8 @@
         "delay": 5
       }
     ],
-    "entryEdges": [
-      0,
-      1
-    ],
-    "exitEdges": [
-      3,
-      4
-    ]
+    "entryEdges": [0, 1],
+    "exitEdges": [3, 4]
   },
   {
     "id": "watchtower 5",
@@ -730,14 +606,8 @@
         "delay": 5
       }
     ],
-    "entryEdges": [
-      0,
-      1
-    ],
-    "exitEdges": [
-      3,
-      4
-    ]
+    "entryEdges": [0, 1],
+    "exitEdges": [3, 4]
   },
   {
     "id": "watchtower 4",
@@ -786,14 +656,8 @@
         "delay": 5
       }
     ],
-    "entryEdges": [
-      0,
-      1
-    ],
-    "exitEdges": [
-      3,
-      4
-    ]
+    "entryEdges": [0, 1],
+    "exitEdges": [3, 4]
   },
   {
     "id": "zigzag",
@@ -846,12 +710,8 @@
         "delay": 3
       }
     ],
-    "entryEdges": [
-      0
-    ],
-    "exitEdges": [
-      3
-    ]
+    "entryEdges": [0],
+    "exitEdges": [3]
   },
   {
     "id": "pass",
@@ -904,14 +764,8 @@
         "delay": 5
       }
     ],
-    "entryEdges": [
-      0,
-      1
-    ],
-    "exitEdges": [
-      3,
-      4
-    ]
+    "entryEdges": [0, 1],
+    "exitEdges": [3, 4]
   },
   {
     "id": "pass-1",
@@ -964,12 +818,8 @@
         "delay": 5
       }
     ],
-    "entryEdges": [
-      0
-    ],
-    "exitEdges": [
-      4
-    ]
+    "entryEdges": [0],
+    "exitEdges": [4]
   },
   {
     "id": "pass-2",
@@ -1022,11 +872,7 @@
         "delay": 5
       }
     ],
-    "entryEdges": [
-      0
-    ],
-    "exitEdges": [
-      4
-    ]
+    "entryEdges": [0],
+    "exitEdges": [4]
   }
 ]

@@ -20,7 +20,7 @@ import {
   localCoord,
   validateTemplate,
 } from "../game/map";
-import tiles from '../game/tiles.json';
+import tiles from "../game/tiles.json";
 import type { SectionTemplate, SpawnPoint } from "../game/map";
 import { setChildren } from "./dom";
 
@@ -163,7 +163,11 @@ export class Editor {
     const left = el("div", "editor-left");
     setChildren(left, [this.grid(template), this.palette()]);
     const right = el("div", "editor-right");
-    setChildren(right, [this.fields(template), this.edges(template), this.jsonPanel()]);
+    setChildren(right, [
+      this.fields(template),
+      this.edges(template),
+      this.jsonPanel(),
+    ]);
     setChildren(main, [left, right]);
     return main;
   }
@@ -185,7 +189,10 @@ export class Editor {
     const maxX = Math.max(...pixels.map((p) => p.x));
     const minY = Math.min(...pixels.map((p) => p.y));
     const maxY = Math.max(...pixels.map((p) => p.y));
-    const offset: Point = { x: -minX + HEX_WIDTH / 2 + 24, y: -minY + HEX_HEIGHT / 2 + 24 };
+    const offset: Point = {
+      x: -minX + HEX_WIDTH / 2 + 24,
+      y: -minY + HEX_HEIGHT / 2 + 24,
+    };
 
     const container = el("div", "editor-grid");
     container.style.width = `${maxX - minX + HEX_WIDTH + 48}px`;
@@ -244,7 +251,11 @@ export class Editor {
     return container;
   }
 
-  private hexElement(terrainChar: string, overlayChar: string, pixel: Point): HTMLElement {
+  private hexElement(
+    terrainChar: string,
+    overlayChar: string,
+    pixel: Point,
+  ): HTMLElement {
     const terrain = TERRAIN_BY_CHAR[terrainChar];
     const hex = el("div", "hex");
     hex.classList.add(`terrain-${terrain}`);
@@ -279,7 +290,11 @@ export class Editor {
       }
       const coord = parseHexKey(key);
       const pixel = hexToPixel(coord);
-      for (let direction = 0; direction < AXIAL_DIRECTIONS.length; direction += 1) {
+      for (
+        let direction = 0;
+        direction < AXIAL_DIRECTIONS.length;
+        direction += 1
+      ) {
         const neighbour = addHex(coord, AXIAL_DIRECTIONS[direction]);
         if (range.has(hexKey(neighbour))) {
           continue;
@@ -298,7 +313,10 @@ export class Editor {
   }
 
   /** One segment per hex edge along each marked side, so the outline zig-zags. */
-  private edgeSegments(template: SectionTemplate, offset: Point): HTMLElement[] {
+  private edgeSegments(
+    template: SectionTemplate,
+    offset: Point,
+  ): HTMLElement[] {
     const nodes: HTMLElement[] = [];
     for (let side = 0; side < 6; side += 1) {
       const isEntry = template.entryEdges.includes(side);
@@ -325,8 +343,14 @@ export class Editor {
   private palette(): HTMLElement {
     const palette = el("div", "editor-palette");
     setChildren(palette, [
-      this.brushGroup("Terrain", TERRAIN_CHARS, TERRAIN_LABEL, (value) => ({ type: "terrain", value })),
-      this.brushGroup("Overlay", OVERLAY_CHARS, OVERLAY_LABEL, (value) => ({ type: "overlay", value })),
+      this.brushGroup("Terrain", TERRAIN_CHARS, TERRAIN_LABEL, (value) => ({
+        type: "terrain",
+        value,
+      })),
+      this.brushGroup("Overlay", OVERLAY_CHARS, OVERLAY_LABEL, (value) => ({
+        type: "overlay",
+        value,
+      })),
       this.spawnGroup(),
     ]);
     return palette;
@@ -339,12 +363,17 @@ export class Editor {
     labels: Record<string, string>,
     make: (char: string) => Brush,
   ): HTMLElement {
-    const brushes = chars.map((char) => button(labels[char], () => this.setBrush(make(char))));
+    const brushes = chars.map((char) =>
+      button(labels[char], () => this.setBrush(make(char))),
+    );
     return this.group(label, brushes);
   }
 
   private spawnGroup(): HTMLElement {
-    return this.group("Spawn", [this.spawnDelayInput(), this.spawnClearButton()]);
+    return this.group("Spawn", [
+      this.spawnDelayInput(),
+      this.spawnClearButton(),
+    ]);
   }
 
   /** A labelled palette group. */
@@ -384,7 +413,9 @@ export class Editor {
 
   /** Select the spawn brush in its clearing mode. */
   private spawnClearButton(): HTMLButtonElement {
-    return button("Clear", () => this.setBrush({ type: "spawn", value: "clear" }));
+    return button("Clear", () =>
+      this.setBrush({ type: "spawn", value: "clear" }),
+    );
   }
 
   private fields(template: SectionTemplate): HTMLElement {
@@ -398,7 +429,9 @@ export class Editor {
         template.difficulty = value;
         this.render();
       }),
-      this.numberField("radius", template.radius, (value) => this.setRadius(value)),
+      this.numberField("radius", template.radius, (value) =>
+        this.setRadius(value),
+      ),
       button("Clone template", () => this.cloneSelected()),
       button("Delete template", () => this.deleteTemplate()),
     );
@@ -518,7 +551,8 @@ export class Editor {
       this.paintSpawn(template, rowIndex, column, brush.value);
       return;
     }
-    const rows = brush.type === "terrain" ? template.terrain : template.overlays;
+    const rows =
+      brush.type === "terrain" ? template.terrain : template.overlays;
     const row = rows[rowIndex];
     if (row === undefined) {
       return;
@@ -542,7 +576,11 @@ export class Editor {
     column: number,
     value: "clear" | number,
   ): void {
-    const local = localCoord(template.radius, rowIndex - template.radius, column);
+    const local = localCoord(
+      template.radius,
+      rowIndex - template.radius,
+      column,
+    );
     const others: SpawnPoint[] = template.spawns.filter(
       (spawn) => spawn.q !== local.q || spawn.r !== local.r,
     );
@@ -566,7 +604,8 @@ export class Editor {
     template.terrain = resizeRows(template.terrain, template.radius, clamped);
     template.overlays = resizeRows(template.overlays, template.radius, clamped);
     template.spawns = template.spawns.filter(
-      (spawn) => hexDistance({ q: spawn.q, r: spawn.r }, { q: 0, r: 0 }) <= clamped,
+      (spawn) =>
+        hexDistance({ q: spawn.q, r: spawn.r }, { q: 0, r: 0 }) <= clamped,
     );
     template.radius = clamped;
     this.render();
@@ -590,13 +629,10 @@ export class Editor {
       return base;
     }
     const position = base.search(/\d+$/g);
-    let [stem, digit]: [string, number] = position >= 0 ? [
-      base.substring(0, position),
-      +base.substring(position)
-    ] : [
-      base + '-',
-      1
-    ];
+    let [stem, digit]: [string, number] =
+      position >= 0
+        ? [base.substring(0, position), +base.substring(position)]
+        : [base + "-", 1];
 
     while (taken.has(`${stem}${digit}`)) {
       digit += 1;
@@ -642,9 +678,7 @@ export class Editor {
   }
 
   private copyJson(): void {
-    this.templates.sort(
-      (a,b)=>a.difficulty-b.difficulty
-    )
+    this.templates.sort((a, b) => a.difficulty - b.difficulty);
     const json = JSON.stringify(this.templates, null, 2);
     if (navigator.clipboard !== undefined) {
       void navigator.clipboard.writeText(json);
@@ -657,7 +691,10 @@ export class Editor {
  * staircase: the outward edges of every side hex, plus the connecting edges of
  * all but the hex shared with the next side (that edge belongs to the next side).
  */
-function sideEdges(side: number, radius: number): { hex: HexCoord; dir: number }[] {
+function sideEdges(
+  side: number,
+  radius: number,
+): { hex: HexCoord; dir: number }[] {
   const outward = (1 - side + 6) % 6;
   const next = (outward + 5) % 6;
   const nextHexes = new Set(hexSide((side + 1) % 6, radius).map(hexKey));
@@ -716,7 +753,11 @@ function emptyRows(radius: number): string[] {
 }
 
 /** Rebuild a layer's rows for a new radius, keeping the overlapping cells. */
-function resizeRows(rows: readonly string[], oldRadius: number, newRadius: number): string[] {
+function resizeRows(
+  rows: readonly string[],
+  oldRadius: number,
+  newRadius: number,
+): string[] {
   const result: string[] = [];
   for (let r = -newRadius; r <= newRadius; r += 1) {
     const length = newRadius * 2 + 1 - Math.abs(r);

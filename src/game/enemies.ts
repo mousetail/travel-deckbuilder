@@ -1,5 +1,12 @@
 import type { IdFactory } from "./cards";
-import { findPathByCost, hexDistance, hexKey, hexesInRange, hexesWithinCost, parseHexKey } from "./hex";
+import {
+  findPathByCost,
+  hexDistance,
+  hexKey,
+  hexesInRange,
+  hexesWithinCost,
+  parseHexKey,
+} from "./hex";
 import type { CostLookup, HexCoord } from "./hex";
 import type { GameState } from "./state";
 import type { Terrain, Tile } from "./terrain";
@@ -111,7 +118,10 @@ function retreatFromPeers(
 ): HexCoord[] {
   for (let i = path.length - 1; i >= 0; i -= 1) {
     const spot = path[i];
-    if (spot !== undefined && peers.every((peer) => hexDistance(spot, peer) > ASSASSIN_SPACING)) {
+    if (
+      spot !== undefined &&
+      peers.every((peer) => hexDistance(spot, peer) > ASSASSIN_SPACING)
+    ) {
       return path.slice(0, i + 1);
     }
   }
@@ -156,7 +166,10 @@ export function takeAssassinTurn(
   const advanced = advanceAlongPath(inSight, assassin.movement, costAt);
   const path = retreatFromPeers(advanced.path, peers);
   return {
-    assassin: { ...assassin, position: path[path.length - 1] ?? assassin.position },
+    assassin: {
+      ...assassin,
+      position: path[path.length - 1] ?? assassin.position,
+    },
     killedPlayer: false,
     path,
   };
@@ -193,10 +206,15 @@ export function enemiesInRange(
   origin: HexCoord,
   range: number,
 ): Enemy[] {
-  return enemies.filter((enemy) => hexDistance(enemy.position, origin) <= range);
+  return enemies.filter(
+    (enemy) => hexDistance(enemy.position, origin) <= range,
+  );
 }
 
-export function killEnemy(enemies: readonly Enemy[], targetId: string): Enemy[] {
+export function killEnemy(
+  enemies: readonly Enemy[],
+  targetId: string,
+): Enemy[] {
   return enemies.filter((enemy) => enemy.id !== targetId);
 }
 
@@ -231,7 +249,11 @@ export function dangerZone(state: GameState): Set<string> {
         zone.add(hexKey(coord));
       }
     } else {
-      for (const coord of hexesWithinCost(enemy.position, enemy.movement, costAt)) {
+      for (const coord of hexesWithinCost(
+        enemy.position,
+        enemy.movement,
+        costAt,
+      )) {
         zone.add(hexKey(coord));
       }
     }
@@ -251,7 +273,12 @@ export function resolveEnemyPhase(
 ): Transition {
   const costAt = terrainCostAt(state.map.tiles);
 
-  const spawned = spawnAssassins(state.map.tiles, state.turn, assassinMovementFor, state.ids);
+  const spawned = spawnAssassins(
+    state.map.tiles,
+    state.turn,
+    assassinMovementFor,
+    state.ids,
+  );
   const alreadyHere = state.enemies;
   let enemies: Enemy[] = [...alreadyHere, ...spawned];
   const moves: MovePath[] = [];
@@ -260,7 +287,11 @@ export function resolveEnemyPhase(
   for (const enemy of enemies) {
     if (enemy.kind === "sniper" && sniperKills(enemy, state.map.player)) {
       return moving(
-        { ...state, enemies, phase: { kind: "game-over", reason: { kind: "sniper" } } },
+        {
+          ...state,
+          enemies,
+          phase: { kind: "game-over", reason: { kind: "sniper" } },
+        },
         moves,
       );
     }
@@ -276,14 +307,27 @@ export function resolveEnemyPhase(
     const peers = enemies
       .filter((e): e is Assassin => e.kind === "assassin" && e.id !== enemy.id)
       .map((e) => e.position);
-    const turn = takeAssassinTurn(enemy, state.map.player, leadingEdge, costAt, maxDistance, peers);
+    const turn = takeAssassinTurn(
+      enemy,
+      state.map.player,
+      leadingEdge,
+      costAt,
+      maxDistance,
+      peers,
+    );
     if (turn.path.length > 1) {
       moves.push({ mover: { kind: "enemy", id: enemy.id }, path: turn.path });
     }
-    enemies = enemies.map((e) => (e.id === turn.assassin.id ? turn.assassin : e));
+    enemies = enemies.map((e) =>
+      e.id === turn.assassin.id ? turn.assassin : e,
+    );
     if (turn.killedPlayer) {
       return moving(
-        { ...state, enemies, phase: { kind: "game-over", reason: { kind: "assassin" } } },
+        {
+          ...state,
+          enemies,
+          phase: { kind: "game-over", reason: { kind: "assassin" } },
+        },
         moves,
       );
     }

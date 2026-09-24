@@ -1,4 +1,4 @@
-import type { Card, CardMode } from "./cards";
+import type { Card } from "./cards";
 import { SHOP_CATALOGUE, instantiate } from "./cards";
 import { gainCurrency, spendCurrency } from "./currency";
 import type { Deck } from "./deck";
@@ -84,7 +84,10 @@ export function useFeature(state: GameState): Transition {
     return still(state);
   }
   const feature = playerFeature(state);
-  const site = feature.kind === "none" ? state : { ...state, stats: countSite(state.stats) };
+  const site =
+    feature.kind === "none"
+      ? state
+      : { ...state, stats: countSite(state.stats) };
   switch (feature.kind) {
     case "none":
       return endTurn(site);
@@ -94,13 +97,20 @@ export function useFeature(state: GameState): Transition {
       const opened = takeSkipBonus(site);
       return still({
         ...opened,
-        phase: { kind: "shop", stock: feature.stock, rerollCost: feature.rerollCost },
+        phase: {
+          kind: "shop",
+          stock: feature.stock,
+          rerollCost: feature.rerollCost,
+        },
       });
     }
     case "smith":
       return still({ ...takeSkipBonus(site), phase: { kind: "smith" } });
     case "remove-card":
-      return still({ ...takeSkipBonus(site), phase: { kind: "pending-remove" } });
+      return still({
+        ...takeSkipBonus(site),
+        phase: { kind: "pending-remove" },
+      });
     case "gain-card": {
       const rolled = rollGift(SHOP_CATALOGUE, site.rng);
       return still({
@@ -121,7 +131,12 @@ export function buyCard(state: GameState, card: Card): GameState {
   const next: GameState = {
     ...paid,
     deck: addPurchase(paid.deck, card),
-    stats: acquireCard(paid.stats, card, { kind: "shop", cost: card.cost }, paid.turn),
+    stats: acquireCard(
+      paid.stats,
+      card,
+      { kind: "shop", cost: card.cost },
+      paid.turn,
+    ),
     phase: { kind: "shop", stock, rerollCost: state.phase.rerollCost },
   };
   return withShopStock(next, stock);
@@ -132,26 +147,27 @@ export function rerollShop(state: GameState): GameState {
     return state;
   }
   const paid = spendCurrency(state, state.phase.rerollCost);
-  const rolled = rollShopStock(SHOP_CATALOGUE, SHOP_STOCK_SIZE, paid.rng, paid.ids);
+  const rolled = rollShopStock(
+    SHOP_CATALOGUE,
+    SHOP_STOCK_SIZE,
+    paid.rng,
+    paid.ids,
+  );
   const next: GameState = {
     ...paid,
     rng: rolled.rng,
-    phase: { kind: "shop", stock: rolled.stock, rerollCost: state.phase.rerollCost },
+    phase: {
+      kind: "shop",
+      stock: rolled.stock,
+      rerollCost: state.phase.rerollCost,
+    },
   };
   return withShopStock(next, rolled.stock);
 }
 
 /** Bump the first movement mode by 1; attack modes are never touched. */
 export function upgradeCard(card: Card): Card {
-  let done = false;
-  const modes = card.modes.map((mode): CardMode => {
-    if (mode.kind === "move" && !done) {
-      done = true;
-      return { kind: "move", terrain: mode.terrain, distance: mode.distance + 1 };
-    }
-    return mode;
-  });
-  return { ...card, modes };
+  return card.upgradedForm ? instantiate(card.upgradedForm, card.id): card
 }
 
 function mapDeckCards(deck: Deck, fn: (card: Card) => Card): Deck {
@@ -163,12 +179,19 @@ function mapDeckCards(deck: Deck, fn: (card: Card) => Card): Deck {
 }
 
 export function upgradeCardInDeck(deck: Deck, cardId: string): Deck {
-  return mapDeckCards(deck, (card) => (card.id === cardId ? upgradeCard(card) : card));
+  return mapDeckCards(deck, (card) =>
+    card.id === cardId ? upgradeCard(card) : card,
+  );
 }
 
 export function removeCardFromDeck(deck: Deck, cardId: string): Deck {
-  const strip = (cards: readonly Card[]): Card[] => cards.filter((c) => c.id !== cardId);
-  return { draw: strip(deck.draw), hand: strip(deck.hand), discard: strip(deck.discard) };
+  const strip = (cards: readonly Card[]): Card[] =>
+    cards.filter((c) => c.id !== cardId);
+  return {
+    draw: strip(deck.draw),
+    hand: strip(deck.hand),
+    discard: strip(deck.discard),
+  };
 }
 
 export function collectCoin(state: GameState, coord: HexCoord): GameState {
@@ -188,7 +211,10 @@ export type FeatureAction =
   | { kind: "remove"; cardId: string }
   | { kind: "take-gift" };
 
-export function applyFeatureAction(state: GameState, action: FeatureAction): Transition {
+export function applyFeatureAction(
+  state: GameState,
+  action: FeatureAction,
+): Transition {
   switch (action.kind) {
     case "buy":
       return still(buyCard(state, action.card));
@@ -229,14 +255,20 @@ export function chooseSmithCard(state: GameState, cardId: string): Transition {
   if (state.phase.kind !== "smith") {
     return still(state);
   }
-  return finishFeature({ ...state, deck: upgradeCardInDeck(state.deck, cardId) });
+  return finishFeature({
+    ...state,
+    deck: upgradeCardInDeck(state.deck, cardId),
+  });
 }
 
 export function chooseRemoveCard(state: GameState, cardId: string): Transition {
   if (state.phase.kind !== "pending-remove") {
     return still(state);
   }
-  return finishFeature({ ...state, deck: removeCardFromDeck(state.deck, cardId) });
+  return finishFeature({
+    ...state,
+    deck: removeCardFromDeck(state.deck, cardId),
+  });
 }
 
 export function takeGift(state: GameState): Transition {

@@ -1,22 +1,29 @@
 import type { Card } from "../game/cards";
 import { allCards } from "../game/deck";
 import { cardDetails, runScores, usageExtremes } from "../game/stats";
-import type { CardDetail, CardOrigin, CardUsage, RunScores, RunStats } from "../game/stats";
+import type {
+  CardDetail,
+  CardOrigin,
+  CardUsage,
+  RunScores,
+  RunStats,
+} from "../game/stats";
 import type { GameOverReason, GameState } from "../game/state";
-import { cardFace } from "./card-view";
+import { NOT_IN_HAND, cardWithCaption } from "./card-view";
 import { setChildren } from "./dom";
 import type { History } from "./stats-store";
 
 /** A card must be seen at least this often before it counts toward usage. */
 const MIN_DRAWS = 3;
 
-const STATS: readonly { label: string; pick: (scores: RunScores) => number }[] = [
-  { label: "Tiles visited", pick: (scores) => scores.tilesVisited },
-  { label: "Cards played", pick: (scores) => scores.cardsPlayed },
-  { label: "Cards drawn", pick: (scores) => scores.cardsDrawn },
-  { label: "Enemies killed", pick: (scores) => scores.enemiesKilled },
-  { label: "Sites visited", pick: (scores) => scores.sitesVisited },
-];
+const STATS: readonly { label: string; pick: (scores: RunScores) => number }[] =
+  [
+    { label: "Tiles visited", pick: (scores) => scores.tilesVisited },
+    { label: "Cards played", pick: (scores) => scores.cardsPlayed },
+    { label: "Cards drawn", pick: (scores) => scores.cardsDrawn },
+    { label: "Enemies killed", pick: (scores) => scores.enemiesKilled },
+    { label: "Sites visited", pick: (scores) => scores.sitesVisited },
+  ];
 
 /**
  * The end-of-run panel: the reason the run ended, this run's headline numbers
@@ -153,11 +160,14 @@ function usageBlock(heading: string, usage: CardUsage | null): HTMLElement {
     empty.textContent = `No card drawn ${MIN_DRAWS}+ times`;
     nodes.push(empty);
   } else {
-    nodes.push(cardFace(usage.card, { index: 0, count: 1, viewOnly: true }, []));
-    const caption = document.createElement("div");
-    caption.classList.add("usage-caption");
-    caption.textContent = `Played ${usage.played} times · drawn ${usage.drawn} times`;
-    nodes.push(caption);
+    nodes.push(
+      cardWithCaption(
+        usage.card,
+        { index: 0, count: 1, viewOnly: true },
+        NOT_IN_HAND,
+        `Played ${usage.played} times · drawn ${usage.drawn} times`,
+      ),
+    );
   }
   setChildren(block, nodes);
   return block;
@@ -176,7 +186,14 @@ function detailsSection(cards: readonly Card[], stats: RunStats): HTMLElement {
 
   const head = document.createElement("thead");
   const headRow = document.createElement("tr");
-  for (const heading of ["Card", "Acquired", "Turn", "Drawn", "Played", "Status"]) {
+  for (const heading of [
+    "Card",
+    "Acquired",
+    "Turn",
+    "Drawn",
+    "Played",
+    "Status",
+  ]) {
     const cell = document.createElement("th");
     cell.textContent = heading;
     headRow.append(cell);

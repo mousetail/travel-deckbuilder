@@ -43,7 +43,8 @@ export function resolveMove(
   cardTerrain: Terrain,
   terrainAt: TerrainLookup,
 ): HexCoord[] {
-  const passable = (coord: HexCoord): boolean => canEnter(terrainAt(coord), cardTerrain);
+  const passable = (coord: HexCoord): boolean =>
+    canEnter(terrainAt(coord), cardTerrain);
   const path = findPath(from, to, passable);
   if (path.length === 0) {
     throw new Error("unreachable destination");

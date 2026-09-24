@@ -2,9 +2,7 @@ import type { HexCoord } from "./hex";
 import type { GameState } from "./state";
 
 /** Who a movement belongs to. */
-export type Mover =
-  | { kind: "player" }
-  | { kind: "enemy"; id: string };
+export type Mover = { kind: "player" } | { kind: "enemy"; id: string };
 
 /**
  * One actor's movement as a hex-by-hex path, start and end included. The UI
@@ -29,6 +27,9 @@ export function still(state: GameState): Transition {
 }
 
 /** A transition where these movements happened, in order. */
-export function moving(state: GameState, moves: readonly MovePath[]): Transition {
+export function moving(
+  state: GameState,
+  moves: readonly MovePath[],
+): Transition {
   return { state, moves };
 }

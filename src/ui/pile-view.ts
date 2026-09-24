@@ -1,5 +1,5 @@
 import type { Card } from "../game/cards";
-import { cardFace } from "./card-view";
+import { NOT_IN_HAND, cardFace } from "./card-view";
 import { setChildren } from "./dom";
 
 /**
@@ -66,7 +66,9 @@ export function pileOverlay(
   list.classList.add("overlay-cards");
   setChildren(
     list,
-    cards.map((card, index) => cardFace(card, { index, count: cards.length, viewOnly: true }, [])),
+    cards.map((card, index) =>
+      cardFace(card, { index, count: cards.length, viewOnly: true }, NOT_IN_HAND),
+    ),
   );
 
   const close = document.createElement("button");

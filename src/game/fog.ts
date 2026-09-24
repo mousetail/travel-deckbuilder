@@ -95,7 +95,10 @@ export type Visibility = {
  * hex distances: the previous section, the current one, and the first two rows
  * of the next.
  */
-export function computeVisibility(index: MapIndex, playerSectionOrder: number): Visibility {
+export function computeVisibility(
+  index: MapIndex,
+  playerSectionOrder: number,
+): Visibility {
   const full: string[] = [];
   const previous = index.sections[playerSectionOrder - 1];
   const current = index.sections[playerSectionOrder];
@@ -122,7 +125,10 @@ export type VisibleMap = {
  * they disappear from the render for free.
  */
 export function visibleMap(state: GameState): VisibleMap {
-  const visibility = computeVisibility(state.map.index, state.playerSectionOrder);
+  const visibility = computeVisibility(
+    state.map.index,
+    state.playerSectionOrder,
+  );
   const full = new Set(visibility.full);
   const fog = new Map<string, FogLevel>();
   for (const hex of visibility.peek) {
@@ -146,7 +152,10 @@ export function visibleMap(state: GameState): VisibleMap {
  * so they can only ever lurk within the visible window.
  */
 export function visibleReach(state: GameState): number {
-  const visibility = computeVisibility(state.map.index, state.playerSectionOrder);
+  const visibility = computeVisibility(
+    state.map.index,
+    state.playerSectionOrder,
+  );
   const player = state.map.player;
   const ahead =
     visibility.peek.length > 0
@@ -180,7 +189,9 @@ export function streamToSection(
   enemies: readonly Enemy[],
   playerSectionOrder: number,
 ): StreamResult {
-  const stale = index.sections.filter((_, order) => order <= playerSectionOrder - 2);
+  const stale = index.sections.filter(
+    (_, order) => order <= playerSectionOrder - 2,
+  );
   if (stale.length === 0) {
     return { tiles: new Map(tiles), index, enemies: [...enemies], removed: [] };
   }
@@ -196,7 +207,9 @@ export function streamToSection(
   for (const key of staleHexes) {
     nextTiles.delete(key);
   }
-  const survivors = enemies.filter((enemy) => !staleHexes.has(hexKey(enemy.position)));
+  const survivors = enemies.filter(
+    (enemy) => !staleHexes.has(hexKey(enemy.position)),
+  );
 
   return {
     tiles: nextTiles,
@@ -263,8 +276,15 @@ export function onPlayerMoved(state: GameState): GameState {
   }
   const entered = state.map.index.sections[order];
   const tiles =
-    entered === undefined ? state.map.tiles : armSection(state.map.tiles, entered, state.turn);
-  const streamed = streamToSection(tiles, state.map.index, state.enemies, order);
+    entered === undefined
+      ? state.map.tiles
+      : armSection(state.map.tiles, entered, state.turn);
+  const streamed = streamToSection(
+    tiles,
+    state.map.index,
+    state.enemies,
+    order,
+  );
   // A long move may pass straight through a section, so record every one from
   // the old position up to the new.
   const enteredIds = state.map.index.sections
