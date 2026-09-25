@@ -22,7 +22,7 @@ function startGame(): void {
 
   const state: GameState = {
     turn: 1,
-    currency: 0,
+    currency: 3,
     deck,
     map: {
       tiles: generated.tiles,

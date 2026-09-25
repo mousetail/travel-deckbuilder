@@ -312,23 +312,52 @@ button {
     border-top: 2px solid var(--ui-fg);
   }
 
-  /* The on-discard effect: a note, not a button, so it is drawn with a dashed
-     rule and never reacts to the cursor. */
+  /* An effect note: not a button, so it never reacts to the cursor. */
+  & .card-on-play,
   & .card-on-discard {
     font-size: 11px;
-    border-top: 2px dashed var(--ui-fg);
+    border-top: 2px solid var(--ui-fg);
+    padding-top: 2px;
+
+    & .card-symbol-icon {
+      width: 12px;
+      height: 12px;
+      margin-right: 2px;
+      vertical-align: -2px;
+    }
+  }
+
+  /* A discard effect is a bonus, set apart from the play effects above it with
+     a dashed rule. */
+  & .card-on-discard {
+    border-top-style: dashed;
+  }
+
+  /* The action that triggers an effect, kept small so the line fits the card. */
+  & .card-effect-trigger {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
   }
 
   /* A sleeping card's reshuffles-left counter, pinned to the top-right corner. */
-  & .card-sleep {
+  & .card-sleeping {
     position: absolute;
     top: 2px;
     right: 2px;
-    padding: 0 3px;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 1px 3px;
     font-size: 10px;
     font-weight: bold;
     background: #00c;
     color: #fff;
+
+    & .card-symbol-icon {
+      width: 10px;
+      height: 10px;
+    }
   }
 }
 

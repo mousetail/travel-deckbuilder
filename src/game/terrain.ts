@@ -15,6 +15,7 @@ import dropUrl from "../images/terrain-icons/drop.svg";
 import rockUrl from "../images/terrain-icons/rock.svg";
 import houseUrl from "../images/terrain-icons/house.png";
 import targetUrl from "../images/terrain-icons/target.png";
+import moonUrl from "../images/terrain-icons/moon.svg";
 
 export type Terrain =
   "grass" | "forest" | "water" | "mountain" | "dirt" | "impassible";
@@ -52,6 +53,9 @@ export const TERRAIN_ICON: Record<Terrain, string | null> = {
 
 /** Icon for attack cards: the target reticle. */
 export const ATTACK_ICON = targetUrl;
+
+/** Icon for sleeping: a moon, shown wherever a sleep amount is printed. */
+export const SLEEP_ICON = moonUrl;
 
 /**
  * A movement card printed with `cardTerrain` may enter `terrain`.

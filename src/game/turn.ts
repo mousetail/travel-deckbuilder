@@ -264,26 +264,25 @@ function playInstant(state: GameState, card: Card, mode: CardMode): Transition {
   }
 }
 
-/** Apply every discarded card's on-discard effect. */
+/** Apply every discarded card's on-discard effects. */
 function applyOnDiscard(
   state: GameState,
   discarded: readonly Card[],
 ): GameState {
   let next = state;
   for (const card of discarded) {
-    if (card.onDiscard === null) {
-      continue;
-    }
-    switch (card.onDiscard.kind) {
-      case "currency":
-        next = gainCurrency(next, card.onDiscard.amount);
-        break;
-      case "sleep-self":
-        next = {
-          ...next,
-          deck: sleepInDiscard(next.deck, card.id, card.onDiscard.reshuffles),
-        };
-        break;
+    for (const effect of card.onDiscard) {
+      switch (effect.kind) {
+        case "currency":
+          next = gainCurrency(next, effect.amount);
+          break;
+        case "sleep":
+          next = {
+            ...next,
+            deck: sleepInDiscard(next.deck, card.id, effect.reshuffles),
+          };
+          break;
+      }
     }
   }
   return next;

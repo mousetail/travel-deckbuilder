@@ -1,5 +1,5 @@
-import type { Card, CardMode, OnDiscard } from "../game/cards";
-import { ATTACK_ICON, TERRAIN_ICON } from "../game/terrain";
+import type { Card, CardEffect, CardMode } from "../game/cards";
+import { ATTACK_ICON, SLEEP_ICON, TERRAIN_ICON } from "../game/terrain";
 
 /**
  * Compact "headline" for a card's modes, shown in the top-left corner: one
@@ -35,17 +35,32 @@ function modeSymbolNodes(mode: CardMode): Node[] {
     case "currency":
       return [text(`$${mode.amount}`)];
     case "sleep-card":
-      return [text(`zZ${mode.reshuffles}`)];
+      return sleepNodes(mode.reshuffles);
   }
 }
 
-/** The footer line of a card with an on-discard effect. */
-export function describeOnDiscard(onDiscard: OnDiscard): string {
-  switch (onDiscard.kind) {
+/** The visual for a card effect, without its trigger. */
+export function effectNodes(effect: CardEffect): Node[] {
+  switch (effect.kind) {
     case "currency":
-      return `discard: +${onDiscard.amount}$`;
-    case "sleep-self":
-      return `discard: sleep ${onDiscard.reshuffles}`;
+      return [text(`+${effect.amount}$`)];
+    case "sleep":
+      return sleepNodes(effect.reshuffles);
+  }
+}
+
+/** A moon and a reshuffle count, used wherever a sleep amount is shown. */
+export function sleepNodes(reshuffles: number): Node[] {
+  return symbolIcon(SLEEP_ICON, `${reshuffles}`);
+}
+
+/** The description of a card effect, without its trigger. */
+export function describeEffect(effect: CardEffect): string {
+  switch (effect.kind) {
+    case "currency":
+      return `+${effect.amount}$`;
+    case "sleep":
+      return `sleep for ${effect.reshuffles} reshuffles`;
   }
 }
 

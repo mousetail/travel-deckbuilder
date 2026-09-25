@@ -1,5 +1,5 @@
-import type { Card, OnDiscard } from "../game/cards";
-import { describeOnDiscard, symbolNodes } from "./card-text";
+import type { Card, CardEffect } from "../game/cards";
+import { describeEffect, effectNodes, sleepNodes, symbolNodes } from "./card-text";
 import { setChildren } from "./dom";
 
 export type CardFace = {
@@ -12,8 +12,8 @@ export type CardFace = {
 
 /**
  * A playing-card face: a symbol for every mode in the top-left, the name, the
- * art placeholder, and — for cards with one — the on-discard effect as a footer
- * line. The card itself is the button: the hand view wires up the clicks.
+ * art placeholder, and a footer line for every play and discard effect. The
+ * card itself is the button: the hand view wires up the clicks.
  *
  * A `div`, not a `button`, so the hand view can add its own handlers.
  */
@@ -46,9 +46,8 @@ export function cardFace(card: Card, face: CardFace): HTMLElement {
   }
 
   const nodes: Node[] = [symbol, name, art];
-  if (card.onDiscard !== null) {
-    nodes.push(onDiscardLine(card.onDiscard));
-  }
+  nodes.push(...effectLines("play", card.onPlay, "card-on-play"));
+  nodes.push(...effectLines("discard", card.onDiscard, "card-on-discard"));
   if (card.sleeping > 0) {
     nodes.push(sleepBadge(card.sleeping));
   }
@@ -56,19 +55,30 @@ export function cardFace(card: Card, face: CardFace): HTMLElement {
   return root;
 }
 
+/** One footer line per effect, labelled with the action that triggers it. */
+function effectLines(
+  trigger: string,
+  effects: readonly CardEffect[],
+  className: string,
+): HTMLElement[] {
+  return effects.map((effect) => {
+    const line = document.createElement("div");
+    line.classList.add(className);
+    const label = document.createElement("span");
+    label.classList.add("card-effect-trigger");
+    label.textContent = trigger;
+    line.append(label, document.createTextNode(" "), ...effectNodes(effect));
+    line.title = `When ${trigger}ed: ${describeEffect(effect)}`;
+    return line;
+  });
+}
+
 /** How many reshuffles a sleeping card still has to sit out. */
 function sleepBadge(reshuffles: number): HTMLElement {
   const badge = document.createElement("div");
-  badge.classList.add("card-sleep");
-  badge.textContent = `zZ ${reshuffles}`;
+  badge.classList.add("card-sleeping");
+  badge.append(...sleepNodes(reshuffles));
   return badge;
-}
-
-function onDiscardLine(onDiscard: OnDiscard): HTMLElement {
-  const line = document.createElement("div");
-  line.classList.add("card-on-discard");
-  line.textContent = describeOnDiscard(onDiscard);
-  return line;
 }
 
 /**
