@@ -1,5 +1,5 @@
 import type { Card } from "../game/cards";
-import { NOT_IN_HAND, cardFace } from "./card-view";
+import { cardFace } from "./card-view";
 import { setChildren } from "./dom";
 
 /**
@@ -67,11 +67,7 @@ export function pileOverlay(
   setChildren(
     list,
     cards.map((card, index) =>
-      cardFace(
-        card,
-        { index, count: cards.length, viewOnly: true },
-        NOT_IN_HAND,
-      ),
+      cardFace(card, { index, count: cards.length, viewOnly: true }),
     ),
   );
 

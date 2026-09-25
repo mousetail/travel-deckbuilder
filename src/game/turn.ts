@@ -1,4 +1,4 @@
-import type { Card, CardMode } from "./cards";
+import type { Card, CardMode, MoveMode } from "./cards";
 import { gainCurrency } from "./currency";
 import type { Deck, DeckMutation } from "./deck";
 import { drawCards, drawUpTo, removeFromHand, toDiscard } from "./deck";
@@ -8,11 +8,11 @@ import {
   killEnemy,
   resolveEnemyPhase,
 } from "./enemies";
-import { equalsHex, hexKey } from "./hex";
+import { equalsHex } from "./hex";
 import type { HexCoord } from "./hex";
-import { leadingEdge, onPlayerMoved, visibleMap, visibleReach } from "./fog";
+import { leadingEdge, onPlayerMoved, visibleReach } from "./fog";
 import { reachableHexes, resolveMove } from "./movement";
-import type { TileLookup } from "./movement";
+import { cardReach, tileAt } from "./reach";
 import type { Rng } from "./rng";
 import type { GameState, TurnState } from "./state";
 import { countDrawn, countKill, countPlay } from "./stats";
@@ -95,13 +95,6 @@ export function discardFromHand(deck: Deck, card: Card): Deck {
   return toDiscard(without, [card]);
 }
 
-function tileAt(state: GameState): TileLookup {
-  // Movement is confined to the visible window: the current section, the one
-  // behind, and the fog sliver of the next. Removed sections are gone entirely.
-  const visible = visibleMap(state).tiles;
-  return (coord) => visible.get(hexKey(coord));
-}
-
 function spent(
   state: GameState,
   deck: Deck,
@@ -150,67 +143,68 @@ export function modeIsAvailable(state: GameState, mode: CardMode): boolean {
   }
 }
 
+/** Whether any of `card`'s modes could be played right now. */
+export function cardIsPlayable(state: GameState, card: Card): boolean {
+  return card.modes.some((mode) => modeIsAvailable(state, mode));
+}
+
 /**
- * Play one mode of `card` (the player picks the mode in the UI). Movement enters
- * `pending-move`, an attack with no target is refused, and everything else
- * resolves at once.
+ * Play `card`: the player clicked it. A card with move or attack modes opens the
+ * `pending-card` phase, where the map shows every reachable tile and every enemy
+ * in range and the player clicks one. A card with only instant modes resolves at
+ * once. A card with nothing usable right now is refused.
  */
-export function beginPlay(
-  state: GameState,
-  card: Card,
-  modeIndex: number,
-): Transition {
+export function beginPlay(state: GameState, card: Card): Transition {
   if (state.phase.kind !== "playing") {
     return still(state);
   }
-  const mode = card.modes[modeIndex];
-  if (mode === undefined) {
+  if (!state.deck.hand.some((c) => c.id === card.id)) {
+    return still(state);
+  }
+  if (!cardIsPlayable(state, card)) {
     return still(state);
   }
 
+  const reach = cardReach(state, card);
+  if (reach.moves.length > 0 || reach.attacks.length > 0) {
+    return still({
+      ...state,
+      phase: {
+        kind: "pending-card",
+        card,
+        reachable: reach.moves.flatMap((move) => move.reachable),
+        targets: reach.attacks.flatMap((attack) => attack.targets),
+      },
+    });
+  }
+
+  const instant = card.modes[0];
+  if (instant === undefined) {
+    return still(state);
+  }
+  return playInstant(state, card, instant);
+}
+
+/** Resolve a card whose only modes are instant effects. */
+function playInstant(state: GameState, card: Card, mode: CardMode): Transition {
   switch (mode.kind) {
-    case "move": {
-      const reachable = reachableHexes(
-        state.map.player,
-        mode.distance,
-        mode.terrain,
-        tileAt(state),
-      );
-      return still({
-        ...state,
-        phase: {
-          kind: "pending-move",
-          card,
-          modeIndex,
-          reachable,
-        },
-      });
-    }
-    case "attack": {
-      // No candidates: refuse rather than waste the card (the UI greys it out).
-      if (
-        enemiesInRange(state.enemies, state.map.player, mode.range).length === 0
-      ) {
-        return still(state);
-      }
-      return still({
-        ...state,
-        phase: { kind: "pending-attack", cardId: card.id, range: mode.range },
-      });
-    }
     case "draw":
     case "discard-hand":
     case "recover": {
       const applied = applyHandMode(state.deck, mode, state.rng);
-      return still(
-        spent(
-          state,
-          discardFromHand(applied.deck, card),
-          applied.rng,
-          card,
-          applied.drawn,
-        ),
+      const discarded =
+        mode.kind === "discard-hand" &&
+        state.deck.hand.length >= mode.threshold
+          ? state.deck.hand
+          : [];
+      const played = spent(
+        state,
+        discardFromHand(applied.deck, card),
+        applied.rng,
+        card,
+        applied.drawn,
       );
+      return still(applyOnDiscard(played, discarded));
     }
     case "draw-discard": {
       const applied = applyHandMode(state.deck, mode, state.rng);
@@ -230,7 +224,28 @@ export function beginPlay(
         spent(paid, discardFromHand(paid.deck, card), state.rng, card, []),
       );
     }
+    case "move":
+    case "attack":
+      throw new Error(`not an instant mode: ${mode.kind}`);
   }
+}
+
+/** Apply every discarded card's on-discard effect. */
+function applyOnDiscard(
+  state: GameState,
+  discarded: readonly Card[],
+): GameState {
+  let next = state;
+  for (const card of discarded) {
+    if (card.onDiscard === null) {
+      continue;
+    }
+    switch (card.onDiscard.kind) {
+      case "currency":
+        next = gainCurrency(next, card.onDiscard.amount);
+    }
+  }
+  return next;
 }
 
 /** Discard one card as part of a `draw-discard` choice; ends the phase when done. */
@@ -240,13 +255,13 @@ export function discardForChoice(state: GameState, card: Card): Transition {
     return still(state);
   }
   const deck = discardFromHand(state.deck, card);
+  const withEffect = applyOnDiscard({ ...state, deck }, [card]);
   const remaining = phase.count - 1;
   if (remaining <= 0 || deck.hand.length === 0) {
-    return still({ ...state, deck, phase: { kind: "playing" } });
+    return still({ ...withEffect, phase: { kind: "playing" } });
   }
   return still({
-    ...state,
-    deck,
+    ...withEffect,
     phase: { kind: "pending-discard", count: remaining },
   });
 }
@@ -254,12 +269,16 @@ export function discardForChoice(state: GameState, card: Card): Transition {
 /** Kill one enemy in range and pay its bounty. */
 export function resolveAttack(state: GameState, enemyId: string): Transition {
   const phase = state.phase;
-  if (phase.kind !== "pending-attack") {
+  if (phase.kind !== "pending-card") {
     return still(state);
   }
   const target = state.enemies.find((enemy) => enemy.id === enemyId);
-  const card = state.deck.hand.find((c) => c.id === phase.cardId);
-  if (target === undefined || card === undefined) {
+  const card = state.deck.hand.find((c) => c.id === phase.card.id);
+  if (
+    target === undefined ||
+    card === undefined ||
+    !phase.targets.some((enemy) => enemy.id === enemyId)
+  ) {
     return still(state);
   }
   const paid = gainCurrency(state, bountyFor(target));
@@ -278,11 +297,11 @@ export function resolveAttack(state: GameState, enemyId: string): Transition {
 
 export function resolveMoveTo(state: GameState, to: HexCoord): Transition {
   const phase = state.phase;
-  if (phase.kind !== "pending-move") {
+  if (phase.kind !== "pending-card") {
     return still(state);
   }
-  const mode = phase.card.modes[phase.modeIndex];
-  if (mode.kind !== "move") {
+  const mode = moveModeReaching(state, phase.card, to);
+  if (mode === null) {
     return still(state);
   }
 
@@ -310,10 +329,23 @@ export function resolveMoveTo(state: GameState, to: HexCoord): Transition {
   return moving(next, [{ mover: { kind: "player" }, path }]);
 }
 
+/** The first move mode of `card` that can reach `to`, or null. */
+function moveModeReaching(
+  state: GameState,
+  card: Card,
+  to: HexCoord,
+): MoveMode | null {
+  for (const move of cardReach(state, card).moves) {
+    if (move.reachable.some((coord) => equalsHex(coord, to))) {
+      return move.mode;
+    }
+  }
+  return null;
+}
+
 export function cancelPending(state: GameState): Transition {
   switch (state.phase.kind) {
-    case "pending-move":
-    case "pending-attack":
+    case "pending-card":
       return still({ ...state, phase: { kind: "playing" } });
     case "playing":
     case "pending-discard":
@@ -331,7 +363,8 @@ export function discardCard(state: GameState, card: Card): Transition {
   if (state.phase.kind !== "playing") {
     return still(state);
   }
-  return still({ ...state, deck: discardFromHand(state.deck, card) });
+  const deck = discardFromHand(state.deck, card);
+  return still(applyOnDiscard({ ...state, deck }, [card]));
 }
 
 export function startTurn(state: GameState): GameState {

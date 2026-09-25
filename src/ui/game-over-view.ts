@@ -9,7 +9,7 @@ import type {
   RunStats,
 } from "../game/stats";
 import type { GameOverReason, GameState } from "../game/state";
-import { NOT_IN_HAND, cardWithCaption } from "./card-view";
+import { cardWithCaption } from "./card-view";
 import { setChildren } from "./dom";
 import type { History } from "./stats-store";
 
@@ -164,7 +164,6 @@ function usageBlock(heading: string, usage: CardUsage | null): HTMLElement {
       cardWithCaption(
         usage.card,
         { index: 0, count: 1, viewOnly: true },
-        NOT_IN_HAND,
         `Played ${usage.played} times · drawn ${usage.drawn} times`,
       ),
     );

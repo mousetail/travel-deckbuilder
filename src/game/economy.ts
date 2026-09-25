@@ -245,8 +245,7 @@ export function leaveFeature(state: GameState): Transition {
     case "pending-gain":
       return finishFeature(state);
     case "playing":
-    case "pending-move":
-    case "pending-attack":
+    case "pending-card":
     case "pending-discard":
     case "game-over":
       return still(state);

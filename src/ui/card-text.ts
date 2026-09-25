@@ -1,33 +1,16 @@
-import type { Card, CardMode } from "../game/cards";
+import type { Card, CardMode, OnDiscard } from "../game/cards";
 import { ATTACK_ICON, TERRAIN_ICON } from "../game/terrain";
 
-export function describeMode(mode: CardMode): string {
-  switch (mode.kind) {
-    case "move":
-      return `${mode.terrain} ${mode.distance}`;
-    case "attack":
-      return `attack ${mode.range}`;
-    case "draw-discard":
-      return `draw ${mode.draw}, discard ${mode.discard}`;
-    case "discard-hand":
-      return `discard hand, draw ${mode.draw}`;
-    case "draw":
-      return `draw ${mode.count}`;
-    case "recover":
-      return `recover ${mode.count}`;
-    case "currency":
-      return `+${mode.amount} currency`;
-  }
-}
-
-export function describeModes(modes: readonly CardMode[]): string {
-  return modes.map(describeMode).join(" / ");
-}
-
-/** Compact "headline" for a card's first mode, shown in the top-left corner. */
+/**
+ * Compact "headline" for a card's modes, shown in the top-left corner: one
+ * symbol per mode, so a combination card reads as its whole set of options.
+ */
 export function symbolNodes(card: Card): Node[] {
-  const mode = card.modes[0];
-  return mode === undefined ? [text("?")] : modeSymbolNodes(mode);
+  const nodes: Node[] = [];
+  for (const mode of card.modes) {
+    nodes.push(...modeSymbolNodes(mode));
+  }
+  return nodes;
 }
 
 function modeSymbolNodes(mode: CardMode): Node[] {
@@ -51,6 +34,14 @@ function modeSymbolNodes(mode: CardMode): Node[] {
       return [text(`^${mode.count}`)];
     case "currency":
       return [text(`$${mode.amount}`)];
+  }
+}
+
+/** The footer line of a card with an on-discard effect. */
+export function describeOnDiscard(onDiscard: OnDiscard): string {
+  switch (onDiscard.kind) {
+    case "currency":
+      return `discard: +${onDiscard.amount}$`;
   }
 }
 

@@ -3,7 +3,7 @@ import { allCards } from "../game/deck";
 import { instantiate } from "../game/cards";
 import type { FeatureAction } from "../game/economy";
 import type { GameState } from "../game/state";
-import { NOT_IN_HAND, cardFace, cardWithCaption } from "./card-view";
+import { cardFace, cardWithCaption } from "./card-view";
 import { setChildren } from "./dom";
 import { gameOverPanel } from "./game-over-view";
 import type { History } from "./stats-store";
@@ -50,8 +50,7 @@ export class FeatureView {
       case "game-over":
         return gameOverPanel(phase.reason, state, history, this.onRestart);
       case "playing":
-      case "pending-move":
-      case "pending-attack":
+      case "pending-card":
       case "pending-discard":
         return null;
     }
@@ -65,9 +64,9 @@ export class FeatureView {
   }
 
   /**
-   * A card offered as a choice: the card itself (with its mode buttons, disabled
-   * outside the hand) and a full-width action button underneath. Any context
-   * info (cost, upgrade target) lives in the button text.
+   * A card offered as a choice: the card itself and a full-width action button
+   * underneath. Any context info (cost, upgrade target) lives in the button
+   * text.
    */
   private cardChoice(
     card: Card,
@@ -77,11 +76,7 @@ export class FeatureView {
   ): HTMLElement {
     const wrapper = document.createElement("div");
     wrapper.classList.add("card-choice");
-    const cardEl = cardFace(
-      card,
-      { index: 0, count: 1, viewOnly: false },
-      NOT_IN_HAND,
-    );
+    const cardEl = cardFace(card, { index: 0, count: 1, viewOnly: false });
     setChildren(wrapper, [cardEl, this.button(buttonText, disabled, onChoose)]);
     return wrapper;
   }
@@ -162,8 +157,8 @@ export class FeatureView {
     const nodes: Node[] = [
       this.title("Upgrade preview"),
       this.cardsContainer([
-        cardWithCaption(originalCard, face, NOT_IN_HAND, "Current"),
-        cardWithCaption(upgradedCard, face, NOT_IN_HAND, "Upgraded"),
+        cardWithCaption(originalCard, face, "Current"),
+        cardWithCaption(upgradedCard, face, "Upgraded"),
       ]),
       this.button("Confirm upgrade", false, () => {
         const cardId = this.smithPreviewCardId;
@@ -204,11 +199,7 @@ export class FeatureView {
     const nodes: Node[] = [
       this.title("Gain a card"),
       this.cardsContainer([
-        cardFace(
-          giftCard,
-          { index: 0, count: 1, viewOnly: false },
-          NOT_IN_HAND,
-        ),
+        cardFace(giftCard, { index: 0, count: 1, viewOnly: false }),
       ]),
       this.button("Take it", false, () => this.onAction({ kind: "take-gift" })),
       this.button("Skip", false, () => this.onAction({ kind: "leave" })),

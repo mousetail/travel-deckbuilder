@@ -188,11 +188,27 @@ button {
     margin-inline: -22px;
     transform-origin: 50% 170%;
     transform: rotate(calc((var(--i) - (var(--n) - 1) / 2) * 7deg));
+    /* Later cards in the fan sit on top; hovered and selected cards lift above
+       the rest, and unplayable cards tuck underneath so their faded text never
+       bleeds over a neighbour. */
+    z-index: calc(var(--i) + 1);
 
-    &:hover {
-      z-index: 1;
+    &:hover,
+    &.card-hovered {
+      z-index: 100;
       transform: translateY(-16px)
         rotate(calc((var(--i) - (var(--n) - 1) / 2) * 7deg));
+    }
+
+    &.selected {
+      z-index: 100;
+    }
+
+    /* An unplayable card is not interactive: it stays put and sits behind its
+       neighbours instead of letting its faded text overlap them. */
+    &.card-unplayable {
+      z-index: 0;
+      transform: rotate(calc((var(--i) - (var(--n) - 1) / 2) * 7deg));
     }
   }
 }
@@ -223,6 +239,12 @@ button {
     border-color: #c00;
   }
 
+  /* A card with no usable mode right now: clicking it does nothing. */
+  &.card-unplayable {
+    background: #8e8e8e;
+    cursor: default;
+  }
+
   /* Viewer cards must not become clickable via the inherited `auto` of the
      overlay they sit in. */
   &.card-view-only {
@@ -232,14 +254,15 @@ button {
   }
 
   & .card-symbol {
-    font-size: 18px;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    font-size: 16px;
     font-weight: bold;
 
-    /* Inline, not grid, so the icon and its number sit flush as one unit. */
     & .card-symbol-icon {
       width: 16px;
       height: 16px;
-      vertical-align: middle;
     }
   }
 
@@ -251,11 +274,13 @@ button {
     background: #eee;
     border-top: 2px solid var(--ui-fg);
   }
-}
 
-.card-mode {
-  padding: 2px 4px;
-  font: 11px monospace;
+  /* The on-discard effect: a note, not a button, so it is drawn with a dashed
+     rule and never reacts to the cursor. */
+  & .card-on-discard {
+    font-size: 11px;
+    border-top: 2px dashed var(--ui-fg);
+  }
 }
 
 /* A card with context info (cost, usage) below it; the card itself is
@@ -423,13 +448,6 @@ button {
     filter: brightness(0.5);
   }
 
-  &.reachable::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: rgba(255, 255, 255, 0.35);
-  }
-
   /* The not-yet-entered sliver of the next section. The entry edge is where the
      player steps next, so it is dimmed less than the row behind it. */
   &.fog-near {
@@ -555,6 +573,24 @@ button {
   height: 3px;
   background: #f00;
   pointer-events: none;
+}
+
+/* The reachable region as one green outline, drawn in the same style as the
+   danger zone. One SVG per highlight, hidden unless it is the active one. */
+.reachable-outline {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+
+  & line {
+    stroke: #0f0;
+    stroke-width: 3;
+  }
+}
+
+.hidden {
+  display: none;
 }
 
 /* --- main menu ---------------------------------------------------------- */

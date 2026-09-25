@@ -35,7 +35,7 @@ export class Hud {
     button.classList.add("hud-button");
 
     const phase = state.phase;
-    if (phase.kind === "pending-move" || phase.kind === "pending-attack") {
+    if (phase.kind === "pending-card") {
       button.textContent = "Cancel";
       button.disabled = busy;
       button.addEventListener("click", () => this.onCancel());
@@ -86,13 +86,12 @@ function endTurnPrefix(bonus: number): string {
 
 function hintFor(state: GameState): string {
   switch (state.phase.kind) {
-    case "pending-move":
-      return "Pick a destination (right-click to cancel)";
-    case "pending-attack":
-      return "Pick a target (right-click to cancel)";
+    case "pending-card":
+      return "Pick a destination or target (right-click to cancel)";
     case "pending-discard":
       return `Discard ${state.phase.count} card${state.phase.count === 1 ? "" : "s"}`;
     case "playing":
+      return "Click a card or reachable tile · right-click to discard";
     case "pending-remove":
     case "pending-gain":
     case "shop":

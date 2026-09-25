@@ -7,11 +7,11 @@ import { pileButton, pileOverlay } from "./pile-view";
 import { setChildren } from "./dom";
 import { hexKey, hexToPixel } from "../game/hex";
 import type { HexCoord } from "../game/hex";
-import type { Card, CardMode } from "../game/cards";
+import type { Card } from "../game/cards";
 import type { GameState, Phase } from "../game/state";
 import type { MovePath, Transition } from "../game/transition";
 import { visibleMap } from "../game/fog";
-import { dangerZone, enemiesInRange } from "../game/enemies";
+import { dangerZone } from "../game/enemies";
 import { applyFeatureAction, useFeature } from "../game/economy";
 import type { FeatureAction } from "../game/economy";
 import { runScores } from "../game/stats";
@@ -20,14 +20,23 @@ import type { History } from "./stats-store";
 import {
   beginPlay,
   cancelPending,
+  cardIsPlayable,
   discardCard,
   discardForChoice,
-  modeIsAvailable,
   resolveAttack,
   resolveMoveTo,
 } from "../game/turn";
+import {
+  bestAttackCard,
+  bestMoveCard,
+  handReach,
+} from "../game/reach";
+import type { HighlightGroup } from "./map-view";
 
 type Pile = "draw" | "discard";
+
+/** The highlight key for the union across the whole hand. */
+const UNION_KEY = "union";
 
 export class App {
   private readonly root: HTMLElement;
@@ -44,6 +53,10 @@ export class App {
   private openPile: Pile | null = null;
   /** True while a movement animation plays; input is ignored until it ends. */
   private animating = false;
+  /** The card highlighted by hover (hovering it or a tile), playing only. */
+  private hoveredCard: Card | null = null;
+  /** Best card per hovered tile, valid until the next state change. */
+  private readonly bestCardCache = new Map<string, Card | null>();
   /** The finished run is folded into saved history exactly once. */
   private recordedGameOver = false;
   /** Saved records, updated as runs finish. */
@@ -82,14 +95,16 @@ export class App {
     this.mapView = new MapView(
       mapLayer,
       (coord) => this.handleHexClick(coord),
+      (coord) => this.handleHexHover(coord),
       () => this.handleCancel(),
     );
     this.animator = new Animator(this.mapView);
     this.handView = new HandView(
       handLayer,
-      (card, modeIndex) => this.handlePlay(card, modeIndex),
+      (card) => this.handlePlay(card),
       (card) => this.handleDiscard(card),
-      (card, modeIndex) => this.modeAvailable(card, modeIndex),
+      (card) => this.cardPlayable(card),
+      (card) => this.handleCardHover(card),
     );
     this.hud = new Hud(
       topBar,
@@ -115,6 +130,7 @@ export class App {
    */
   private apply(next: Transition): void {
     this.state = next.state;
+    this.hoveredCard = null;
     this.captureGameOver(next.state);
     if (next.moves.length === 0 || prefersReducedMotion()) {
       this.render();
@@ -163,26 +179,23 @@ export class App {
   }
 
   private render(): void {
+    this.bestCardCache.clear();
     const visible = visibleMap(this.state);
     this.mapView.render({
       tiles: visible.tiles,
       fog: visible.fog,
       player: this.state.map.player,
-      reachable: this.reachableKeys(),
       enemies: this.state.enemies,
-      targets: this.targets(),
       danger: dangerZone(this.state),
       turn: this.state.turn,
+      highlights: this.highlightGroups(),
+      activeHighlight: this.activeHighlightKey(),
     });
     // Mid-animation the animator owns the camera; otherwise keep it on the player.
     if (!this.animating) {
       this.animator.snap(hexToPixel(this.state.map.player));
     }
-    this.handView.render(
-      this.state.deck.hand,
-      this.selectedCardId(),
-      this.state.phase.kind === "pending-discard",
-    );
+    this.renderHand();
     this.hud.render(this.state);
     this.hud.renderAction(this.actionSlot, this.state, this.animating);
 
@@ -197,6 +210,15 @@ export class App {
       ),
     ]);
     this.renderMiddle();
+  }
+
+  private renderHand(): void {
+    this.handView.render(
+      this.state.deck.hand,
+      this.selectedCardId(),
+      this.hoveredCard?.id ?? null,
+      this.state.phase.kind === "pending-discard",
+    );
   }
 
   /** A modal phase takes over the middle band; otherwise a pile may be open. */
@@ -230,6 +252,7 @@ export class App {
       return;
     }
     this.openPile = this.openPile === pile ? null : pile;
+    this.hoveredCard = null;
     this.render();
   }
 
@@ -238,48 +261,113 @@ export class App {
     this.render();
   }
 
-  private reachableKeys(): ReadonlySet<string> {
-    if (this.state.phase.kind !== "pending-move") {
-      return new Set();
-    }
-    return new Set(this.state.phase.reachable.map(hexKey));
+  /**
+   * Every possible highlight, pre-computed so hover can just show/hide: the
+   * union across the hand, plus one group per card in hand.
+   */
+  private highlightGroups(): HighlightGroup[] {
+    const hand = handReach(this.state);
+    const groups = hand.cards.map((reach) => ({
+      key: reach.card.id,
+      reachable: new Set(
+        reach.moves.flatMap((move) => move.reachable).map(hexKey),
+      ),
+      targets: new Set(
+        reach.attacks
+          .flatMap((attack) => attack.targets)
+          .map((enemy) => enemy.id),
+      ),
+    }));
+    groups.unshift({
+      key: UNION_KEY,
+      reachable: new Set(hand.reachable.map(hexKey)),
+      targets: new Set(hand.targets.map((enemy) => enemy.id)),
+    });
+    return groups;
   }
 
-  /** Enemies the player may currently attack. */
-  private targets(): ReadonlySet<string> {
+  /** Which highlight is visible right now. */
+  private activeHighlightKey(): string | null {
     const phase = this.state.phase;
-    if (phase.kind !== "pending-attack") {
-      return new Set();
+    if (phase.kind === "pending-card") {
+      return phase.card.id;
     }
-    return new Set(
-      enemiesInRange(
-        this.state.enemies,
-        this.state.map.player,
-        phase.range,
-      ).map((e) => e.id),
-    );
+    if (phase.kind === "playing") {
+      return this.hoveredCard?.id ?? UNION_KEY;
+    }
+    return null;
   }
 
   private selectedCardId(): string | null {
-    if (this.state.phase.kind !== "pending-move") {
+    if (this.state.phase.kind !== "pending-card") {
       return null;
     }
     return this.state.phase.card.id;
   }
 
-  private modeAvailable(card: Card, modeIndex: number): boolean {
+  private cardPlayable(card: Card): boolean {
     if (this.animating || this.state.phase.kind !== "playing") {
       return false;
     }
-    const mode: CardMode | undefined = card.modes[modeIndex];
-    return mode !== undefined && modeIsAvailable(this.state, mode);
+    return cardIsPlayable(this.state, card);
   }
 
-  private handlePlay(card: Card, modeIndex: number): void {
+  private handleCardHover(card: Card | null): void {
+    this.setHoveredCard(card);
+  }
+
+  private handleHexHover(coord: HexCoord | null): void {
+    this.setHoveredCard(this.bestCardFor(coord));
+  }
+
+  /** The card that would be auto-played for `coord`, or null. */
+  private bestCardFor(coord: HexCoord | null): Card | null {
+    if (coord === null) {
+      return null;
+    }
+    const key = hexKey(coord);
+    const cached = this.bestCardCache.get(key);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const card = this.computeBestCardFor(coord);
+    this.bestCardCache.set(key, card);
+    return card;
+  }
+
+  private computeBestCardFor(coord: HexCoord): Card | null {
+    const enemy = this.state.enemies.find(
+      (e) => hexKey(e.position) === hexKey(coord),
+    );
+    if (enemy !== undefined) {
+      const attack = bestAttackCard(this.state, enemy.id);
+      if (attack !== null) {
+        return attack;
+      }
+    }
+    return bestMoveCard(this.state, coord);
+  }
+
+  /** Adopt a hovered card, re-rendering only when it actually changes. */
+  private setHoveredCard(card: Card | null): void {
+    if (this.animating || this.state.phase.kind !== "playing") {
+      return;
+    }
+    if (card !== null && !cardIsPlayable(this.state, card)) {
+      card = null;
+    }
+    if (card?.id !== this.hoveredCard?.id) {
+      this.hoveredCard = card;
+      this.mapView.setHighlight(this.activeHighlightKey());
+      this.renderHand();
+    }
+  }
+
+  private handlePlay(card: Card): void {
     if (this.animating) {
       return;
     }
-    this.apply(beginPlay(this.state, card, modeIndex));
+    this.apply(beginPlay(this.state, card));
   }
 
   private handleDiscard(card: Card): void {
@@ -298,24 +386,42 @@ export class App {
       return;
     }
     const phase = this.state.phase;
-    if (phase.kind === "pending-attack") {
-      const target = this.state.enemies.find(
-        (enemy) =>
-          this.targets().has(enemy.id) &&
-          hexKey(enemy.position) === hexKey(coord),
+    if (phase.kind === "pending-card") {
+      // An enemy on a reachable tile is attacked, not walked onto: standing on an
+      // enemy is never useful, and the enemy marker is the more precise target.
+      const target = phase.targets.find(
+        (enemy) => hexKey(enemy.position) === hexKey(coord),
       );
       if (target !== undefined) {
         this.apply(resolveAttack(this.state, target.id));
+        return;
+      }
+      if (phase.reachable.some((c) => hexKey(c) === hexKey(coord))) {
+        this.apply(resolveMoveTo(this.state, coord));
       }
       return;
     }
-    if (phase.kind !== "pending-move") {
+    if (phase.kind !== "playing") {
       return;
     }
-    if (!this.reachableKeys().has(hexKey(coord))) {
-      return;
+    // No card selected: play the best card for the clicked tile directly.
+    const enemy = this.state.enemies.find(
+      (e) => hexKey(e.position) === hexKey(coord),
+    );
+    if (enemy !== undefined) {
+      const attack = bestAttackCard(this.state, enemy.id);
+      if (attack !== null) {
+        this.apply(resolveAttack(this.state, enemy.id));
+        return;
+      }
     }
-    this.apply(resolveMoveTo(this.state, coord));
+    const move = bestMoveCard(this.state, coord);
+    if (move !== null) {
+      const pending = beginPlay(this.state, move);
+      if (pending.state.phase.kind === "pending-card") {
+        this.apply(resolveMoveTo(pending.state, coord));
+      }
+    }
   }
 
   private handleCancel(): void {
@@ -355,8 +461,7 @@ function isModalPhase(phase: Phase): boolean {
     case "game-over":
       return true;
     case "playing":
-    case "pending-move":
-    case "pending-attack":
+    case "pending-card":
     case "pending-discard":
       return false;
   }

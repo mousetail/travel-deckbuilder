@@ -25,12 +25,13 @@ export type MapState = {
 export type Phase =
   | { kind: "playing" }
   | {
-      kind: "pending-move";
+      kind: "pending-card";
       card: Card;
-      modeIndex: number;
+      /** Union of every move mode's reachable hexes, the player's own excluded. */
       reachable: HexCoord[];
+      /** Enemies in range of any attack mode. */
+      targets: Enemy[];
     }
-  | { kind: "pending-attack"; cardId: string; range: number }
   | { kind: "pending-discard"; count: number }
   | { kind: "pending-remove" }
   | { kind: "pending-gain"; spec: CardSpec }

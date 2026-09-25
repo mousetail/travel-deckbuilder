@@ -1,13 +1,25 @@
 import type { Terrain } from "./terrain";
 
+export type MoveMode = { kind: "move"; terrain: Terrain; distance: number };
+export type AttackMode = { kind: "attack"; range: number };
+
+/**
+ * A card's playable modes. A card's modes are either all map-targeted
+ * (`move`/`attack`, played by clicking the card then a tile or enemy) or a
+ * single instant effect (played by clicking the card); never both — a card with
+ * an active ability alongside movement carries it as `onDiscard` instead.
+ */
 export type CardMode =
-  | { kind: "move"; terrain: Terrain; distance: number }
-  | { kind: "attack"; range: number }
+  | MoveMode
+  | AttackMode
   | { kind: "draw-discard"; draw: number; discard: number }
   | { kind: "discard-hand"; threshold: number; draw: number }
   | { kind: "draw"; count: number }
   | { kind: "recover"; count: number }
   | { kind: "currency"; amount: number };
+
+/** Effect applied when the card is discarded (right-click). */
+export type OnDiscard = { kind: "currency"; amount: number };
 
 export type Rarity = "starting" | "common" | "uncommon" | "rare";
 
@@ -29,6 +41,7 @@ export type Card = {
   cost: number;
   rarity: Rarity;
   modes: readonly CardMode[];
+  onDiscard: OnDiscard | null;
   upgradedForm: CardSpec | null;
 };
 
@@ -38,6 +51,7 @@ export type CardSpec = {
   cost: number;
   rarity: Rarity;
   modes: readonly CardMode[];
+  onDiscard: OnDiscard | null;
   upgradedForm: CardSpec | null;
 };
 
@@ -59,6 +73,7 @@ export function instantiate(spec: CardSpec, id: string): Card {
     cost: spec.cost,
     rarity: spec.rarity,
     modes: spec.modes,
+    onDiscard: spec.onDiscard,
     upgradedForm: spec.upgradedForm,
   };
 }
@@ -75,28 +90,32 @@ export const STARTING_DECK: readonly CardSpec[] = [
     "starting",
     0,
     [move("grass", 1)],
-    spec("Tredge+", "starting", 0, [move("grass", 2)], null),
+    null,
+    spec("Tredge+", "starting", 0, [move("grass", 2)], null, null),
   ),
   spec(
     "Tredge",
     "starting",
     0,
     [move("grass", 1)],
-    spec("Tredge+", "starting", 0, [move("grass", 2)], null),
+    null,
+    spec("Tredge+", "starting", 0, [move("grass", 2)], null, null),
   ),
   spec(
     "Walk",
     "starting",
     0,
     [move("grass", 3)],
-    spec("Walk+", "starting", 0, [move("grass", 4)], null),
+    null,
+    spec("Walk+", "starting", 0, [move("grass", 4)], null, null),
   ),
   spec(
     "Blaze",
     "starting",
     0,
     [move("forest", 1)],
-    spec("Blaze+", "starting", 0, [move("forest", 2)], null),
+    null,
+    spec("Blaze+", "starting", 0, [move("forest", 2)], null, null),
   ),
 ];
 
@@ -107,42 +126,48 @@ export const SHOP_CATALOGUE: readonly CardSpec[] = [
     "common",
     2,
     [move("grass", 4)],
-    spec("Stride+", "common", 2, [move("grass", 5)], null),
+    null,
+    spec("Stride+", "common", 2, [move("grass", 5)], null, null),
   ),
   spec(
     "Marathon",
     "uncommon",
     3,
     [move("grass", 6)],
-    spec("Marathon+", "uncommon", 3, [move("grass", 7)], null),
+    null,
+    spec("Marathon+", "uncommon", 3, [move("grass", 7)], null, null),
   ),
   spec(
     "Sprint",
     "uncommon",
     4,
     [move("grass", 8)],
-    spec("Sprint+", "uncommon", 4, [move("grass", 9)], null),
+    null,
+    spec("Sprint+", "uncommon", 4, [move("grass", 9)], null, null),
   ),
   spec(
     "Wade",
     "common",
     2,
     [move("water", 1)],
-    spec("Wade+", "common", 2, [move("water", 2)], null),
+    null,
+    spec("Wade+", "common", 2, [move("water", 2)], null, null),
   ),
   spec(
     "Swim",
     "uncommon",
     3,
     [move("water", 2)],
-    spec("Swim+", "uncommon", 3, [move("water", 3)], null),
+    null,
+    spec("Swim+", "uncommon", 3, [move("water", 3)], null, null),
   ),
   spec(
     "Climb",
     "uncommon",
     3,
     [move("mountain", 1)],
-    spec("Climb+", "uncommon", 3, [move("mountain", 2)], null),
+    null,
+    spec("Climb+", "uncommon", 3, [move("mountain", 2)], null, null),
   ),
 
   // combination movement
@@ -151,25 +176,36 @@ export const SHOP_CATALOGUE: readonly CardSpec[] = [
     "common",
     2,
     [move("grass", 1), move("forest", 1)],
-    spec("Thicket+", "common", 2, [move("grass", 2), move("forest", 2)], null),
+    null,
+    spec(
+      "Thicket+",
+      "common",
+      2,
+      [move("grass", 2), move("forest", 2)],
+      null,
+      null,
+    ),
   ),
   spec(
     "Ford",
     "common",
     2,
     [move("grass", 1), move("water", 1)],
-    spec("Ford+", "common", 2, [move("grass", 2), move("water", 2)], null),
+    null,
+    spec("Ford+", "common", 2, [move("grass", 2), move("water", 2)], null, null),
   ),
   spec(
     "Ridge",
     "uncommon",
     3,
     [move("forest", 1), move("mountain", 1)],
+    null,
     spec(
       "Ridge+",
       "uncommon",
       3,
       [move("forest", 2), move("mountain", 2)],
+      null,
       null,
     ),
   ),
@@ -178,18 +214,21 @@ export const SHOP_CATALOGUE: readonly CardSpec[] = [
     "uncommon",
     3,
     [move("grass", 3), move("forest", 1)],
-    spec("Trail+", "uncommon", 3, [move("grass", 4), move("forest", 2)], null),
+    null,
+    spec("Trail+", "uncommon", 3, [move("grass", 4), move("forest", 2)], null, null),
   ),
   spec(
     "Ravine",
     "uncommon",
     4,
     [move("forest", 1), move("water", 1), move("mountain", 1)],
+    null,
     spec(
       "Ravine+",
       "uncommon",
       4,
       [move("forest", 2), move("water", 2), move("mountain", 2)],
+      null,
       null,
     ),
   ),
@@ -198,18 +237,21 @@ export const SHOP_CATALOGUE: readonly CardSpec[] = [
     "uncommon",
     4,
     [move("grass", 5), move("forest", 3)],
-    spec("Moor+", "uncommon", 4, [move("grass", 6), move("forest", 4)], null),
+    null,
+    spec("Moor+", "uncommon", 4, [move("grass", 6), move("forest", 4)], null, null),
   ),
   spec(
     "Delta",
     "rare",
     6,
     [move("grass", 6), move("water", 2), move("mountain", 1)],
+    null,
     spec(
       "Delta+",
       "rare",
       6,
       [move("grass", 7), move("water", 3), move("mountain", 2)],
+      null,
       null,
     ),
   ),
@@ -220,11 +262,13 @@ export const SHOP_CATALOGUE: readonly CardSpec[] = [
     "common",
     2,
     [{ kind: "draw-discard", draw: 3, discard: 2 }],
+    null,
     spec(
       "Forage+",
       "common",
       2,
       [{ kind: "draw-discard", draw: 3, discard: 2 }],
+      null,
       null,
     ),
   ),
@@ -233,11 +277,13 @@ export const SHOP_CATALOGUE: readonly CardSpec[] = [
     "common",
     2,
     [{ kind: "discard-hand", threshold: 3, draw: 4 }],
+    null,
     spec(
       "Gamble+",
       "common",
       2,
       [{ kind: "discard-hand", threshold: 3, draw: 4 }],
+      null,
       null,
     ),
   ),
@@ -246,18 +292,21 @@ export const SHOP_CATALOGUE: readonly CardSpec[] = [
     "uncommon",
     3,
     [{ kind: "draw", count: 2 }],
-    spec("Scout+", "uncommon", 3, [{ kind: "draw", count: 2 }], null),
+    null,
+    spec("Scout+", "uncommon", 3, [{ kind: "draw", count: 2 }], null, null),
   ),
   spec(
     "Insight",
     "rare",
     4,
     [{ kind: "draw-discard", draw: 3, discard: 1 }],
+    null,
     spec(
       "Insight+",
       "rare",
       4,
       [{ kind: "draw-discard", draw: 3, discard: 1 }],
+      null,
       null,
     ),
   ),
@@ -266,7 +315,8 @@ export const SHOP_CATALOGUE: readonly CardSpec[] = [
     "uncommon",
     3,
     [{ kind: "recover", count: 1 }],
-    spec("Recall+", "uncommon", 3, [{ kind: "recover", count: 1 }], null),
+    null,
+    spec("Recall+", "uncommon", 3, [{ kind: "recover", count: 1 }], null, null),
   ),
 
   // combat
@@ -275,25 +325,29 @@ export const SHOP_CATALOGUE: readonly CardSpec[] = [
     "common",
     3,
     [move("grass", 2), { kind: "attack", range: 0 }],
+    null,
     spec(
       "Ambush+",
       "common",
       3,
       [move("grass", 3), { kind: "attack", range: 0 }],
       null,
+      null,
     ),
   ),
-  spec("Volley", "common", 3, [{ kind: "attack", range: 3 }], null),
+  spec("Volley", "common", 3, [{ kind: "attack", range: 3 }], null, null),
   spec(
     "Charge",
     "uncommon",
     4,
     [move("grass", 5), { kind: "attack", range: 3 }],
+    null,
     spec(
       "Charge+",
       "uncommon",
       4,
       [move("grass", 6), { kind: "attack", range: 3 }],
+      null,
       null,
     ),
   ),
@@ -304,18 +358,21 @@ export const SHOP_CATALOGUE: readonly CardSpec[] = [
     "common",
     2,
     [{ kind: "currency", amount: 2 }],
-    spec("Trade+", "common", 2, [{ kind: "currency", amount: 3 }], null),
+    null,
+    spec("Trade+", "common", 2, [{ kind: "currency", amount: 3 }], null, null),
   ),
   spec(
     "Mine",
     "common",
     2,
-    [move("mountain", 1), { kind: "currency", amount: 1 }],
+    [move("mountain", 1)],
+    { kind: "currency", amount: 1 },
     spec(
       "Mine+",
       "common",
       2,
-      [move("mountain", 2), { kind: "currency", amount: 2 }],
+      [move("mountain", 2)],
+      { kind: "currency", amount: 2 },
       null,
     ),
   ),
@@ -326,7 +383,8 @@ function spec(
   rarity: Rarity,
   cost: number,
   modes: readonly CardMode[],
+  onDiscard: OnDiscard | null,
   upgradedForm: CardSpec | null,
 ): CardSpec {
-  return { name, image: "", cost, rarity, modes, upgradedForm };
+  return { name, image: "", cost, rarity, modes, onDiscard, upgradedForm };
 }

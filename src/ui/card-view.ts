@@ -1,5 +1,5 @@
-import type { Card, CardMode } from "../game/cards";
-import { describeMode, symbolNodes } from "./card-text";
+import type { Card, OnDiscard } from "../game/cards";
+import { describeOnDiscard, symbolNodes } from "./card-text";
 import { setChildren } from "./dom";
 
 export type CardFace = {
@@ -11,38 +11,13 @@ export type CardFace = {
 };
 
 /**
- * How a card's mode buttons behave in this context. The buttons are always
- * drawn — a card reads the same wherever it appears — and are simply disabled
- * when the card is not in the player's hand.
- */
-export type CardButtons = {
-  /** Whether the card is in the player's hand; buttons are disabled otherwise. */
-  inHand: boolean;
-  /** Whether a specific mode is playable right now. */
-  modeAvailable: (modeIndex: number) => boolean;
-  /** Play the given mode. */
-  onPlay: (modeIndex: number) => void;
-};
-
-/** Buttons for a card shown outside the hand: visible but disabled. */
-export const NOT_IN_HAND: CardButtons = {
-  inHand: false,
-  modeAvailable: () => false,
-  onPlay: () => {},
-};
-
-/**
- * A playing-card face: a symbol in the top-left, the name, the art placeholder,
- * and one button per mode. The buttons are always present so the card looks the
- * same wherever it is shown; they are disabled when the card is not in hand.
+ * A playing-card face: a symbol for every mode in the top-left, the name, the
+ * art placeholder, and — for cards with one — the on-discard effect as a footer
+ * line. The card itself is the button: the hand view wires up the clicks.
  *
- * A `div`, not a `button`, so the mode buttons can nest inside it.
+ * A `div`, not a `button`, so the hand view can add its own handlers.
  */
-export function cardFace(
-  card: Card,
-  face: CardFace,
-  buttons: CardButtons,
-): HTMLElement {
+export function cardFace(card: Card, face: CardFace): HTMLElement {
   const root = document.createElement("div");
   root.classList.add("card");
   if (face.viewOnly) {
@@ -70,25 +45,19 @@ export function cardFace(
     setChildren(art, [image]);
   }
 
-  const modes = card.modes.map((mode, modeIndex) =>
-    modeButton(mode, modeIndex, buttons),
-  );
-
-  setChildren(root, [symbol, name, art, ...modes]);
+  const nodes: Node[] = [symbol, name, art];
+  if (card.onDiscard !== null) {
+    nodes.push(onDiscardLine(card.onDiscard));
+  }
+  setChildren(root, nodes);
   return root;
 }
 
-function modeButton(
-  mode: CardMode,
-  index: number,
-  buttons: CardButtons,
-): HTMLElement {
-  const button = document.createElement("button");
-  button.classList.add("card-mode");
-  button.textContent = describeMode(mode);
-  button.disabled = !buttons.inHand || !buttons.modeAvailable(index);
-  button.addEventListener("click", () => buttons.onPlay(index));
-  return button;
+function onDiscardLine(onDiscard: OnDiscard): HTMLElement {
+  const line = document.createElement("div");
+  line.classList.add("card-on-discard");
+  line.textContent = describeOnDiscard(onDiscard);
+  return line;
 }
 
 /**
@@ -98,12 +67,11 @@ function modeButton(
 export function cardWithCaption(
   card: Card,
   face: CardFace,
-  buttons: CardButtons,
   caption: string | null,
 ): HTMLElement {
   const wrapper = document.createElement("div");
   wrapper.classList.add("card-caption");
-  const nodes: Node[] = [cardFace(card, face, buttons)];
+  const nodes: Node[] = [cardFace(card, face)];
   if (caption !== null) {
     const captionEl = document.createElement("div");
     captionEl.classList.add("card-caption-text");
