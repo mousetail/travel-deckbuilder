@@ -34,6 +34,8 @@ function modeSymbolNodes(mode: CardMode): Node[] {
       return [text(`^${mode.count}`)];
     case "currency":
       return [text(`$${mode.amount}`)];
+    case "sleep-card":
+      return [text(`zZ${mode.reshuffles}`)];
   }
 }
 
@@ -42,6 +44,8 @@ export function describeOnDiscard(onDiscard: OnDiscard): string {
   switch (onDiscard.kind) {
     case "currency":
       return `discard: +${onDiscard.amount}$`;
+    case "sleep-self":
+      return `discard: sleep ${onDiscard.reshuffles}`;
   }
 }
 

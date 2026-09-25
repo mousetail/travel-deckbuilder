@@ -1,7 +1,15 @@
 import type { Card, CardMode, MoveMode } from "./cards";
 import { gainCurrency } from "./currency";
 import type { Deck, DeckMutation } from "./deck";
-import { drawCards, drawUpTo, removeFromHand, toDiscard } from "./deck";
+import {
+  discardPlayed,
+  drawCards,
+  drawUpTo,
+  removeFromHand,
+  sleepFromHand,
+  sleepInDiscard,
+  toDiscard,
+} from "./deck";
 import {
   bountyFor,
   enemiesInRange,
@@ -65,10 +73,12 @@ export function applyHandMode(
       return drawCards(discarded, mode.draw, rng);
     }
     case "recover": {
-      const recovered = deck.discard.slice(-mode.count);
-      const remaining = deck.discard.slice(
-        0,
-        deck.discard.length - recovered.length,
+      // Sleeping cards are out of reach: recover the top-most awake cards.
+      const awake = deck.discard.filter((card) => card.sleeping <= 0);
+      const recovered = awake.slice(-mode.count);
+      const recoveredIds = new Set(recovered.map((card) => card.id));
+      const remaining = deck.discard.filter(
+        (card) => !recoveredIds.has(card.id),
       );
       return {
         deck: {
@@ -83,6 +93,7 @@ export function applyHandMode(
     case "move":
     case "attack":
     case "currency":
+    case "sleep-card":
       throw new Error(`not a hand mode: ${mode.kind}`);
   }
 }
@@ -115,8 +126,12 @@ function spent(
   };
 }
 
-/** Whether the player could usefully play `mode` right now. */
-export function modeIsAvailable(state: GameState, mode: CardMode): boolean {
+/** Whether the player could usefully play `mode` of `card` right now. */
+export function modeIsAvailable(
+  state: GameState,
+  card: Card,
+  mode: CardMode,
+): boolean {
   switch (mode.kind) {
     case "attack":
       return (
@@ -125,10 +140,16 @@ export function modeIsAvailable(state: GameState, mode: CardMode): boolean {
     case "discard-hand":
       return state.deck.hand.length >= mode.threshold;
     case "recover":
-      return state.deck.discard.length > 0;
+      return state.deck.discard.some((c) => c.sleeping <= 0);
+    case "sleep-card":
+      // Needs another card in hand to put to sleep.
+      return state.deck.hand.some((c) => c.id !== card.id);
     case "draw":
     case "draw-discard":
-      return state.deck.draw.length > 0 || state.deck.discard.length > 0;
+      return (
+        state.deck.draw.length > 0 ||
+        state.deck.discard.some((c) => c.sleeping <= 0)
+      );
     case "move": {
       const reachable = reachableHexes(
         state.map.player,
@@ -145,7 +166,7 @@ export function modeIsAvailable(state: GameState, mode: CardMode): boolean {
 
 /** Whether any of `card`'s modes could be played right now. */
 export function cardIsPlayable(state: GameState, card: Card): boolean {
-  return card.modes.some((mode) => modeIsAvailable(state, mode));
+  return card.modes.some((mode) => modeIsAvailable(state, card, mode));
 }
 
 /**
@@ -199,7 +220,7 @@ function playInstant(state: GameState, card: Card, mode: CardMode): Transition {
           : [];
       const played = spent(
         state,
-        discardFromHand(applied.deck, card),
+        discardPlayed(applied.deck, card),
         applied.rng,
         card,
         applied.drawn,
@@ -208,7 +229,7 @@ function playInstant(state: GameState, card: Card, mode: CardMode): Transition {
     }
     case "draw-discard": {
       const applied = applyHandMode(state.deck, mode, state.rng);
-      const deck = discardFromHand(applied.deck, card);
+      const deck = discardPlayed(applied.deck, card);
       const played = spent(state, deck, applied.rng, card, applied.drawn);
       if (mode.discard <= 0 || deck.hand.length === 0) {
         return still(played);
@@ -221,8 +242,21 @@ function playInstant(state: GameState, card: Card, mode: CardMode): Transition {
     case "currency": {
       const paid = gainCurrency(state, mode.amount);
       return still(
-        spent(paid, discardFromHand(paid.deck, card), state.rng, card, []),
+        spent(paid, discardPlayed(paid.deck, card), state.rng, card, []),
       );
+    }
+    case "sleep-card": {
+      const played = spent(
+        state,
+        discardPlayed(state.deck, card),
+        state.rng,
+        card,
+        [],
+      );
+      return still({
+        ...played,
+        phase: { kind: "pending-sleep", reshuffles: mode.reshuffles },
+      });
     }
     case "move":
     case "attack":
@@ -243,6 +277,13 @@ function applyOnDiscard(
     switch (card.onDiscard.kind) {
       case "currency":
         next = gainCurrency(next, card.onDiscard.amount);
+        break;
+      case "sleep-self":
+        next = {
+          ...next,
+          deck: sleepInDiscard(next.deck, card.id, card.onDiscard.reshuffles),
+        };
+        break;
     }
   }
   return next;
@@ -266,6 +307,22 @@ export function discardForChoice(state: GameState, card: Card): Transition {
   });
 }
 
+/** Put one chosen hand card to sleep, resolving a `sleep-card` play. */
+export function sleepForChoice(state: GameState, card: Card): Transition {
+  const phase = state.phase;
+  if (phase.kind !== "pending-sleep") {
+    return still(state);
+  }
+  if (!state.deck.hand.some((c) => c.id === card.id)) {
+    return still(state);
+  }
+  return still({
+    ...state,
+    deck: sleepFromHand(state.deck, card, phase.reshuffles),
+    phase: { kind: "playing" },
+  });
+}
+
 /** Kill one enemy in range and pay its bounty. */
 export function resolveAttack(state: GameState, enemyId: string): Transition {
   const phase = state.phase;
@@ -286,7 +343,7 @@ export function resolveAttack(state: GameState, enemyId: string): Transition {
     ...paid,
     stats: countPlay(countKill(paid.stats), card.id),
     enemies: killEnemy(paid.enemies, enemyId),
-    deck: discardFromHand(paid.deck, card),
+    deck: discardPlayed(paid.deck, card),
     phase: { kind: "playing" },
     turnState: {
       ...paid.turnState,
@@ -315,7 +372,7 @@ export function resolveMoveTo(state: GameState, to: HexCoord): Transition {
   const destination = path[path.length - 1];
   const moved: GameState = {
     ...state,
-    deck: discardFromHand(state.deck, phase.card),
+    deck: discardPlayed(state.deck, phase.card),
     stats: countPlay(state.stats, phase.card.id),
     map: { ...state.map, player: destination, previous: state.map.player },
     phase: { kind: "playing" },
@@ -349,6 +406,7 @@ export function cancelPending(state: GameState): Transition {
       return still({ ...state, phase: { kind: "playing" } });
     case "playing":
     case "pending-discard":
+    case "pending-sleep":
     case "pending-remove":
     case "pending-gain":
     case "shop":

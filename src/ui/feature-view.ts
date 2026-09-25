@@ -52,6 +52,7 @@ export class FeatureView {
       case "playing":
       case "pending-card":
       case "pending-discard":
+      case "pending-sleep":
         return null;
     }
   }

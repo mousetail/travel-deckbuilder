@@ -33,6 +33,7 @@ export type Phase =
       targets: Enemy[];
     }
   | { kind: "pending-discard"; count: number }
+  | { kind: "pending-sleep"; reshuffles: number }
   | { kind: "pending-remove" }
   | { kind: "pending-gain"; spec: CardSpec }
   | { kind: "shop"; stock: readonly Card[]; rerollCost: number }

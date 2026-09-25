@@ -16,10 +16,13 @@ export type CardMode =
   | { kind: "discard-hand"; threshold: number; draw: number }
   | { kind: "draw"; count: number }
   | { kind: "recover"; count: number }
-  | { kind: "currency"; amount: number };
+  | { kind: "currency"; amount: number }
+  | { kind: "sleep-card"; reshuffles: number };
 
 /** Effect applied when the card is discarded (right-click). */
-export type OnDiscard = { kind: "currency"; amount: number };
+export type OnDiscard =
+  | { kind: "currency"; amount: number }
+  | { kind: "sleep-self"; reshuffles: number };
 
 export type Rarity = "starting" | "common" | "uncommon" | "rare";
 
@@ -43,6 +46,12 @@ export type Card = {
   modes: readonly CardMode[];
   onDiscard: OnDiscard | null;
   upgradedForm: CardSpec | null;
+  /**
+   * Reshuffles left before this card returns to the draw pile. A sleeping card
+   * sits in the discard pile and is skipped by every reshuffle until the count
+   * runs out. 0 means awake.
+   */
+  sleeping: number;
 };
 
 export type CardSpec = {
@@ -75,7 +84,44 @@ export function instantiate(spec: CardSpec, id: string): Card {
     modes: spec.modes,
     onDiscard: spec.onDiscard,
     upgradedForm: spec.upgradedForm,
+    sleeping: 0,
   };
+}
+
+/**
+ * How many reshuffles a card sleeps for when played, from its own modes: a card
+ * that can draw two or more cards sleeps 2, and a combat card with a range above
+ * 0 sleeps 1. A card that qualifies for both sleeps for the longer of the two.
+ */
+export function sleepOnPlay(card: Card): number {
+  let sleep = 0;
+  for (const mode of card.modes) {
+    if (mode.kind === "attack" && mode.range > 0) {
+      sleep = Math.max(sleep, 1);
+    }
+    if (drawCount(mode) >= 2) {
+      sleep = Math.max(sleep, 2);
+    }
+  }
+  return sleep;
+}
+
+/** How many cards a mode draws, for the sleep-on-play rule. */
+function drawCount(mode: CardMode): number {
+  switch (mode.kind) {
+    case "draw":
+      return mode.count;
+    case "draw-discard":
+      return mode.draw;
+    case "discard-hand":
+      return mode.draw;
+    case "move":
+    case "attack":
+    case "recover":
+    case "currency":
+    case "sleep-card":
+      return 0;
+  }
 }
 
 const move = (terrain: Terrain, distance: number): CardMode => ({
@@ -263,14 +309,7 @@ export const SHOP_CATALOGUE: readonly CardSpec[] = [
     2,
     [{ kind: "draw-discard", draw: 3, discard: 2 }],
     null,
-    spec(
-      "Forage+",
-      "common",
-      2,
-      [{ kind: "draw-discard", draw: 3, discard: 2 }],
-      null,
-      null,
-    ),
+    null,
   ),
   spec(
     "Gamble",
@@ -278,14 +317,7 @@ export const SHOP_CATALOGUE: readonly CardSpec[] = [
     2,
     [{ kind: "discard-hand", threshold: 3, draw: 4 }],
     null,
-    spec(
-      "Gamble+",
-      "common",
-      2,
-      [{ kind: "discard-hand", threshold: 3, draw: 4 }],
-      null,
-      null,
-    ),
+    null,
   ),
   spec(
     "Scout",
@@ -293,7 +325,7 @@ export const SHOP_CATALOGUE: readonly CardSpec[] = [
     3,
     [{ kind: "draw", count: 2 }],
     null,
-    spec("Scout+", "uncommon", 3, [{ kind: "draw", count: 2 }], null, null),
+    null,
   ),
   spec(
     "Insight",
@@ -301,14 +333,7 @@ export const SHOP_CATALOGUE: readonly CardSpec[] = [
     4,
     [{ kind: "draw-discard", draw: 3, discard: 1 }],
     null,
-    spec(
-      "Insight+",
-      "rare",
-      4,
-      [{ kind: "draw-discard", draw: 3, discard: 1 }],
-      null,
-      null,
-    ),
+    null,
   ),
   spec(
     "Recall",
@@ -316,7 +341,15 @@ export const SHOP_CATALOGUE: readonly CardSpec[] = [
     3,
     [{ kind: "recover", count: 1 }],
     null,
-    spec("Recall+", "uncommon", 3, [{ kind: "recover", count: 1 }], null, null),
+    null,
+  ),
+  spec(
+    "Slumber",
+    "rare",
+    4,
+    [{ kind: "sleep-card", reshuffles: 4 }],
+    { kind: "sleep-self", reshuffles: 4 },
+    null,
   ),
 
   // combat

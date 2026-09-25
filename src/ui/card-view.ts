@@ -49,8 +49,19 @@ export function cardFace(card: Card, face: CardFace): HTMLElement {
   if (card.onDiscard !== null) {
     nodes.push(onDiscardLine(card.onDiscard));
   }
+  if (card.sleeping > 0) {
+    nodes.push(sleepBadge(card.sleeping));
+  }
   setChildren(root, nodes);
   return root;
+}
+
+/** How many reshuffles a sleeping card still has to sit out. */
+function sleepBadge(reshuffles: number): HTMLElement {
+  const badge = document.createElement("div");
+  badge.classList.add("card-sleep");
+  badge.textContent = `zZ ${reshuffles}`;
+  return badge;
 }
 
 function onDiscardLine(onDiscard: OnDiscard): HTMLElement {

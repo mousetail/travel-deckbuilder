@@ -48,7 +48,11 @@ export function deckDiff(prev: Deck, next: Deck): DeckDiff {
   return {
     drawn,
     discarded,
-    reshuffled: reshuffled ? prev.discard.length : 0,
+    // Only the cards that actually left the discard pile fly back; sleeping
+    // cards that stayed behind are not part of the shuffle.
+    reshuffled: reshuffled
+      ? Math.max(0, prev.discard.length - next.discard.length)
+      : 0,
   };
 }
 

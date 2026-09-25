@@ -2,11 +2,18 @@ import type { Card } from "../game/cards";
 import { cardFace } from "./card-view";
 import { setChildren } from "./dom";
 
+/** What clicking a hand card does right now. */
+export type HandMode =
+  | { kind: "play" }
+  | { kind: "discard" }
+  | { kind: "sleep" };
+
 /** The fanned hand: one card per held card; the card itself is the button. */
 export class HandView {
   private readonly layer: HTMLElement;
   private readonly onPlay: (card: Card) => void;
   private readonly onDiscard: (card: Card) => void;
+  private readonly onSleep: (card: Card) => void;
   private readonly playable: (card: Card) => boolean;
   private readonly onHover: (card: Card | null) => void;
 
@@ -14,12 +21,14 @@ export class HandView {
     layer: HTMLElement,
     onPlay: (card: Card) => void,
     onDiscard: (card: Card) => void,
+    onSleep: (card: Card) => void,
     playable: (card: Card) => boolean,
     onHover: (card: Card | null) => void,
   ) {
     this.layer = layer;
     this.onPlay = onPlay;
     this.onDiscard = onDiscard;
+    this.onSleep = onSleep;
     this.playable = playable;
     this.onHover = onHover;
   }
@@ -28,10 +37,10 @@ export class HandView {
     cards: readonly Card[],
     selectedId: string | null,
     hoveredId: string | null,
-    discarding: boolean,
+    mode: HandMode,
   ): void {
     const nodes = cards.map((card, index) =>
-      this.cardElement(card, index, cards.length, selectedId, hoveredId, discarding),
+      this.cardElement(card, index, cards.length, selectedId, hoveredId, mode),
     );
     setChildren(this.layer, nodes);
   }
@@ -42,14 +51,19 @@ export class HandView {
     count: number,
     selectedId: string | null,
     hoveredId: string | null,
-    discarding: boolean,
+    mode: HandMode,
   ): HTMLElement {
     const element = cardFace(card, { index, count, viewOnly: false });
 
-    // While choosing discards the whole card is the button, not its modes.
-    if (discarding) {
+    // While choosing a card the whole card is the button, not its modes.
+    if (mode.kind === "discard") {
       element.classList.add("discarding");
       element.addEventListener("click", () => this.onDiscard(card));
+      return element;
+    }
+    if (mode.kind === "sleep") {
+      element.classList.add("sleeping");
+      element.addEventListener("click", () => this.onSleep(card));
       return element;
     }
 

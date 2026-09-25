@@ -247,6 +247,7 @@ button {
 
 .card {
   box-sizing: border-box;
+  position: relative;
   display: grid;
   grid-template-rows: auto auto 1fr auto;
   gap: 2px;
@@ -268,6 +269,11 @@ button {
   &.discarding {
     background: #fee;
     border-color: #c00;
+  }
+
+  &.sleeping {
+    background: #eef;
+    border-color: #00c;
   }
 
   /* A card with no usable mode right now: clicking it does nothing. */
@@ -311,6 +317,18 @@ button {
   & .card-on-discard {
     font-size: 11px;
     border-top: 2px dashed var(--ui-fg);
+  }
+
+  /* A sleeping card's reshuffles-left counter, pinned to the top-right corner. */
+  & .card-sleep {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    padding: 0 3px;
+    font-size: 10px;
+    font-weight: bold;
+    background: #00c;
+    color: #fff;
   }
 }
 

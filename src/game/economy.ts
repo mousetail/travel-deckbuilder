@@ -169,7 +169,10 @@ export function rerollShop(state: GameState): GameState {
 
 /** Bump the first movement mode by 1; attack modes are never touched. */
 export function upgradeCard(card: Card): Card {
-  return card.upgradedForm ? instantiate(card.upgradedForm, card.id) : card;
+  if (card.upgradedForm === null) {
+    return card;
+  }
+  return { ...instantiate(card.upgradedForm, card.id), sleeping: card.sleeping };
 }
 
 function mapDeckCards(deck: Deck, fn: (card: Card) => Card): Deck {
@@ -247,6 +250,7 @@ export function leaveFeature(state: GameState): Transition {
     case "playing":
     case "pending-card":
     case "pending-discard":
+    case "pending-sleep":
     case "game-over":
       return still(state);
   }

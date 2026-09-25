@@ -1,6 +1,7 @@
 import { MapView } from "./map-view";
 import { Animator, prefersReducedMotion } from "./animator";
 import { HandView } from "./hand-view";
+import type { HandMode } from "./hand-view";
 import { Hud } from "./hud";
 import { FeatureView } from "./feature-view";
 import { pileButton, pileOverlay } from "./pile-view";
@@ -27,6 +28,7 @@ import {
   discardForChoice,
   resolveAttack,
   resolveMoveTo,
+  sleepForChoice,
 } from "../game/turn";
 import {
   bestAttackCard,
@@ -117,6 +119,7 @@ export class App {
       this.handLayer,
       (card) => this.handlePlay(card),
       (card) => this.handleDiscard(card),
+      (card) => this.handleSleep(card),
       (card) => this.cardPlayable(card),
       (card) => this.handleCardHover(card),
     );
@@ -282,8 +285,26 @@ export class App {
       this.state.deck.hand,
       this.selectedCardId(),
       this.hoveredCard?.id ?? null,
-      this.state.phase.kind === "pending-discard",
+      this.handMode(),
     );
+  }
+
+  /** What a hand click does, given the current phase. */
+  private handMode(): HandMode {
+    switch (this.state.phase.kind) {
+      case "pending-discard":
+        return { kind: "discard" };
+      case "pending-sleep":
+        return { kind: "sleep" };
+      case "playing":
+      case "pending-card":
+      case "pending-remove":
+      case "pending-gain":
+      case "shop":
+      case "smith":
+      case "game-over":
+        return { kind: "play" };
+    }
   }
 
   /** A modal phase takes over the middle band; otherwise a pile may be open. */
@@ -446,6 +467,13 @@ export class App {
     );
   }
 
+  private handleSleep(card: Card): void {
+    if (this.animating) {
+      return;
+    }
+    this.apply(sleepForChoice(this.state, card));
+  }
+
   private handleHexClick(coord: HexCoord): void {
     if (this.animating) {
       return;
@@ -528,6 +556,7 @@ function isModalPhase(phase: Phase): boolean {
     case "playing":
     case "pending-card":
     case "pending-discard":
+    case "pending-sleep":
       return false;
   }
 }

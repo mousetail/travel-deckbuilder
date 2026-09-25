@@ -90,6 +90,8 @@ function hintFor(state: GameState): string {
       return "Pick a destination or target (right-click to cancel)";
     case "pending-discard":
       return `Discard ${state.phase.count} card${state.phase.count === 1 ? "" : "s"}`;
+    case "pending-sleep":
+      return "Pick a card to put to sleep";
     case "playing":
       return "Click a card or reachable tile · right-click to discard";
     case "pending-remove":
