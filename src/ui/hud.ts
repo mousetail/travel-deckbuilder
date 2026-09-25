@@ -73,6 +73,8 @@ function endTurnLabel(action: EndTurnAction): string {
           return `${endTurnPrefix(action.bonus)} & Collect coin`;
         case "none":
           return endTurnPrefix(action.bonus);
+        case "random":
+          throw new Error("unresolved random feature");
       }
   }
 }

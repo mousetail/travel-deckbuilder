@@ -1,5 +1,5 @@
 /* Styles for the section editor only. The shared map/hex/card styles live in
-   style.css; the editor reuses `.hex`, `.hex-feature` and `.enemy-sniper`. */
+   style.css; the editor reuses `.hex`, `.hex-icon` and `.enemy-sniper`. */
 
 .editor {
   display: grid;
@@ -109,6 +109,12 @@
 .editor-palette {
   display: grid;
   gap: 6px;
+}
+
+/* The brush currently selected in the palette. */
+.editor-palette button.active {
+  background: #ffd700;
+  color: #000;
 }
 
 /* One palette group per layer, all shown at once. */

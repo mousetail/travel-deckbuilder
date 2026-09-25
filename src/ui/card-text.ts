@@ -1,14 +1,5 @@
 import type { Card, CardMode } from "../game/cards";
-import type { Terrain } from "../game/terrain";
-
-const TERRAIN_GLYPH: Record<Terrain, string> = {
-  grass: "G",
-  forest: "F",
-  water: "W",
-  mountain: "M",
-  dirt: "D",
-  impassible: "#",
-};
+import { ATTACK_ICON, TERRAIN_ICON } from "../game/terrain";
 
 export function describeMode(mode: CardMode): string {
   switch (mode.kind) {
@@ -34,26 +25,44 @@ export function describeModes(modes: readonly CardMode[]): string {
 }
 
 /** Compact "headline" for a card's first mode, shown in the top-left corner. */
-export function symbolText(card: Card): string {
+export function symbolNodes(card: Card): Node[] {
   const mode = card.modes[0];
-  return mode === undefined ? "?" : modeSymbol(mode);
+  return mode === undefined ? [text("?")] : modeSymbolNodes(mode);
 }
 
-function modeSymbol(mode: CardMode): string {
+function modeSymbolNodes(mode: CardMode): Node[] {
   switch (mode.kind) {
-    case "move":
-      return `${TERRAIN_GLYPH[mode.terrain]}${mode.distance}`;
+    case "move": {
+      const url = TERRAIN_ICON[mode.terrain];
+      if (url === null) {
+        return [text(`${mode.terrain[0].toUpperCase()}${mode.distance}`)];
+      }
+      return symbolIcon(url, `${mode.distance}`);
+    }
     case "attack":
-      return `*${mode.range}`;
+      return symbolIcon(ATTACK_ICON, `${mode.range}`);
     case "draw":
-      return `+${mode.count}`;
+      return [text(`+${mode.count}`)];
     case "draw-discard":
-      return `${mode.draw}/${mode.discard}`;
+      return [text(`${mode.draw}/${mode.discard}`)];
     case "discard-hand":
-      return `${mode.threshold}>${mode.draw}`;
+      return [text(`${mode.threshold}>${mode.draw}`)];
     case "recover":
-      return `^${mode.count}`;
+      return [text(`^${mode.count}`)];
     case "currency":
-      return `$${mode.amount}`;
+      return [text(`$${mode.amount}`)];
   }
+}
+
+/** An icon followed by its number, drawn as one inline unit. */
+function symbolIcon(url: string, label: string): Node[] {
+  const icon = document.createElement("img");
+  icon.classList.add("card-symbol-icon");
+  icon.src = url;
+  icon.alt = "";
+  return [icon, text(label)];
+}
+
+function text(content: string): Text {
+  return document.createTextNode(content);
 }

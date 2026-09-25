@@ -8,11 +8,11 @@ import {
   killEnemy,
   resolveEnemyPhase,
 } from "./enemies";
-import { hexKey, parseHexKey } from "./hex";
+import { equalsHex, hexKey } from "./hex";
 import type { HexCoord } from "./hex";
 import { leadingEdge, onPlayerMoved, visibleMap, visibleReach } from "./fog";
 import { reachableHexes, resolveMove } from "./movement";
-import type { TerrainLookup } from "./movement";
+import type { TileLookup } from "./movement";
 import type { Rng } from "./rng";
 import type { GameState, TurnState } from "./state";
 import { countDrawn, countKill, countPlay } from "./stats";
@@ -95,14 +95,11 @@ export function discardFromHand(deck: Deck, card: Card): Deck {
   return toDiscard(without, [card]);
 }
 
-function terrainAt(state: GameState): TerrainLookup {
+function tileAt(state: GameState): TileLookup {
   // Movement is confined to the visible window: the current section, the one
   // behind, and the fog sliver of the next. Removed sections are gone entirely.
   const visible = visibleMap(state).tiles;
-  return (coord) => {
-    const tile = visible.get(hexKey(coord));
-    return tile === undefined ? "impassible" : tile.terrain;
-  };
+  return (coord) => visible.get(hexKey(coord));
 }
 
 function spent(
@@ -144,11 +141,9 @@ export function modeIsAvailable(state: GameState, mode: CardMode): boolean {
         state.map.player,
         mode.distance,
         mode.terrain,
-        terrainAt(state),
+        tileAt(state),
       );
-      return [...reachable.keys()].some(
-        (key) => key !== hexKey(state.map.player),
-      );
+      return reachable.some((coord) => !equalsHex(coord, state.map.player));
     }
     case "currency":
       return true;
@@ -179,7 +174,7 @@ export function beginPlay(
         state.map.player,
         mode.distance,
         mode.terrain,
-        terrainAt(state),
+        tileAt(state),
       );
       return still({
         ...state,
@@ -187,7 +182,7 @@ export function beginPlay(
           kind: "pending-move",
           card,
           modeIndex,
-          reachable: [...reachable.keys()].map(parseHexKey),
+          reachable,
         },
       });
     }
@@ -295,7 +290,8 @@ export function resolveMoveTo(state: GameState, to: HexCoord): Transition {
     state.map.player,
     to,
     mode.terrain,
-    terrainAt(state),
+    tileAt(state),
+    mode.distance,
   );
   const destination = path[path.length - 1];
   const moved: GameState = {

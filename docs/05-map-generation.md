@@ -231,7 +231,8 @@ formula. The level editor paints these points and their delays.
 
 Note the delay is **relative** and `spawnTurn` starts at `-1`: a section is stamped
 well before the player reaches it (they are generated ahead, chapter 06), so its
-timers must not start yet. `spawnTurn` is armed when the player enters the section.
+timers must not start yet. `spawnTurn` — the turn the assassin appears — is armed
+when the player enters the section.
 
 ```ts
 export function armSection(

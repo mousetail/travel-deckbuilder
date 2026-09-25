@@ -8,12 +8,13 @@ import {
   pixelToHex,
 } from "../game/hex";
 import type { HexCoord } from "../game/hex";
-import { TERRAIN_TEXTURE, featureVisual } from "../game/terrain";
+import { TERRAIN_TEXTURE, tileIcons } from "../game/terrain";
 import type { Tile } from "../game/terrain";
 import type { Enemy } from "../game/enemies";
 import type { FogLevel } from "../game/fog";
 import type { Mover } from "../game/transition";
 import { setChildren } from "./dom";
+import { iconSlotElements } from "./tile-icons";
 
 export type MapViewState = {
   tiles: ReadonlyMap<string, Tile>;
@@ -161,28 +162,13 @@ export class MapView {
     if (fog !== undefined) {
       element.classList.add(`fog-${fog}`);
     }
-    element.style.backgroundImage = `url(${TERRAIN_TEXTURE[tile.terrain]})`;
+    element.style.backgroundImage = `url("${TERRAIN_TEXTURE[tile.terrain]}")`;
     element.dataset["hexKey"] = key;
     this.place(element, hexToPixel(parseHexKey(key)));
-
-    const visual = featureVisual(tile.feature);
-    switch (visual.kind) {
-      case "none":
-        break;
-      case "image": {
-        const icon = document.createElement("div");
-        icon.classList.add("hex-feature");
-        icon.style.backgroundImage = `url(${visual.url})`;
-        setChildren(element, [icon]);
-        break;
-      }
-      case "coin": {
-        const coin = document.createElement("div");
-        coin.classList.add("hex-feature-coin");
-        setChildren(element, [coin]);
-        break;
-      }
-    }
+    setChildren(
+      element,
+      iconSlotElements(tileIcons(tile.terrain, tile.cost, tile.feature)),
+    );
     return element;
   }
 
@@ -224,13 +210,15 @@ export class MapView {
     return element;
   }
 
-  /** Turns until an assassin spawns here, or null if none is due. */
+  /** Turns until an assassin appears here, or null if none is due. */
   private spawnBadge(
     key: string,
     tile: Tile,
     turn: number,
   ): HTMLElement | null {
-    if (tile.spawnTurn < 0 || tile.spawnTurn < turn) {
+    // The assassin is present from the start of turn `spawnTurn`, so the badge
+    // counts down to 1 and never shows 0.
+    if (tile.spawnTurn < 0 || tile.spawnTurn <= turn) {
       return null;
     }
     const element = document.createElement("div");

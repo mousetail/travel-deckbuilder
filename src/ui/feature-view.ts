@@ -154,7 +154,10 @@ export class FeatureView {
       this.smithPreviewCardId = null;
       return this.smithSelectionPanel(state);
     }
-    const upgradedCard = instantiate(originalCard.upgradedForm, originalCard.id);
+    const upgradedCard = instantiate(
+      originalCard.upgradedForm,
+      originalCard.id,
+    );
     const face = { index: 0, count: 1, viewOnly: false };
     const nodes: Node[] = [
       this.title("Upgrade preview"),
@@ -184,19 +187,14 @@ export class FeatureView {
     const cardNodes: HTMLElement[] = [];
     for (const card of allCards(state.deck)) {
       cardNodes.push(
-        this.cardChoice(
-          card,
-          "Remove",
-          false,
-          () => this.onAction({ kind: "remove", cardId: card.id }),
+        this.cardChoice(card, "Remove", false, () =>
+          this.onAction({ kind: "remove", cardId: card.id }),
         ),
       );
     }
     nodes.push(this.cardsContainer(cardNodes));
     nodes.push(
-      this.button("Do nothing", false, () =>
-        this.onAction({ kind: "leave" }),
-      ),
+      this.button("Do nothing", false, () => this.onAction({ kind: "leave" })),
     );
     return this.panelElement(nodes);
   }
@@ -206,11 +204,13 @@ export class FeatureView {
     const nodes: Node[] = [
       this.title("Gain a card"),
       this.cardsContainer([
-        cardFace(giftCard, { index: 0, count: 1, viewOnly: false }, NOT_IN_HAND),
+        cardFace(
+          giftCard,
+          { index: 0, count: 1, viewOnly: false },
+          NOT_IN_HAND,
+        ),
       ]),
-      this.button("Take it", false, () =>
-        this.onAction({ kind: "take-gift" }),
-      ),
+      this.button("Take it", false, () => this.onAction({ kind: "take-gift" })),
       this.button("Skip", false, () => this.onAction({ kind: "leave" })),
     ];
     return this.panelElement(nodes);

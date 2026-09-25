@@ -175,7 +175,12 @@ export function takeAssassinTurn(
   };
 }
 
-/** Spawn an assassin on every live tile whose timer has come up. */
+/**
+ * Spawn an assassin on every live tile whose timer has come up. The assassin is
+ * due at the start of turn `spawnTurn`, so it spawns in the enemy phase of the
+ * turn before — except a delay-0 tile, which is armed mid-turn and can only
+ * appear at the end of that same turn.
+ */
 export function spawnAssassins(
   tiles: ReadonlyMap<string, Tile>,
   currentTurn: number,
@@ -184,7 +189,10 @@ export function spawnAssassins(
 ): Assassin[] {
   const spawned: Assassin[] = [];
   for (const [key, tile] of tiles) {
-    if (tile.spawnTurn !== currentTurn) {
+    const due =
+      tile.spawnTurn === currentTurn + 1 ||
+      (tile.spawnDelay === 0 && tile.spawnTurn === currentTurn);
+    if (!due) {
       continue;
     }
     spawned.push({
@@ -227,11 +235,16 @@ export function bountyFor(enemy: Enemy): number {
   }
 }
 
-/** Terrain step cost for enemies, from the live tile map. */
+/**
+ * Terrain step cost for enemies, from the live tile map. Harder tiles cost
+ * more: the terrain's base cost times the tile's own cost.
+ */
 export function terrainCostAt(tiles: ReadonlyMap<string, Tile>): CostLookup {
   return (coord) => {
     const tile = tiles.get(hexKey(coord));
-    return tile === undefined ? Infinity : TERRAIN_MOVE_COST[tile.terrain];
+    return tile === undefined
+      ? Infinity
+      : TERRAIN_MOVE_COST[tile.terrain] * tile.cost;
   };
 }
 

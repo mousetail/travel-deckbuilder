@@ -179,8 +179,11 @@ assassins are not governed by the deck.
 Assassin spawn points are **authored per template** in the level editor: each
 `SectionTemplate` lists `{ q, r, delay }` points (chapter 05). Stamping marks those
 tiles with `spawnDelay`; entering the section arms each one with an absolute
-`spawnTurn = entryTurn + delay` (chapters 05–06). At the start of the enemy phase,
-spawn an assassin on every live tile whose `spawnTurn` equals the current turn:
+`spawnTurn = entryTurn + delay` (chapters 05–06) — the turn the assassin appears.
+The enemy phase spawns an assassin on every live tile due at the start of the next
+turn, so the assassin is already on the map when the countdown the player sees
+would reach 0, and the badge never shows 0. A delay-0 tile is armed mid-turn, so
+it can only appear at the end of that same turn:
 
 ```ts
 import type { Tile } from "./terrain";
@@ -194,7 +197,10 @@ export function spawnAssassins(
 ): Assassin[] {
   const spawned: Assassin[] = [];
   for (const [key, tile] of tiles) {
-    if (tile.spawnTurn !== currentTurn) {
+    const due =
+      tile.spawnTurn === currentTurn + 1 ||
+      (tile.spawnDelay === 0 && tile.spawnTurn === currentTurn);
+    if (!due) {
       continue;
     }
     const [q, r] = key.split(",");

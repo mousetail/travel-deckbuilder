@@ -119,6 +119,8 @@ export function useFeature(state: GameState): Transition {
         phase: { kind: "pending-gain", spec: rolled.spec },
       });
     }
+    case "random":
+      throw new Error("unresolved random feature");
   }
 }
 
@@ -167,7 +169,7 @@ export function rerollShop(state: GameState): GameState {
 
 /** Bump the first movement mode by 1; attack modes are never touched. */
 export function upgradeCard(card: Card): Card {
-  return card.upgradedForm ? instantiate(card.upgradedForm, card.id): card
+  return card.upgradedForm ? instantiate(card.upgradedForm, card.id) : card;
 }
 
 function mapDeckCards(deck: Deck, fn: (card: Card) => Card): Deck {

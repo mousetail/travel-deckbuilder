@@ -11,8 +11,9 @@ import {
 } from "../game/hex";
 import type { HexCoord } from "../game/hex";
 import { hexSide, hexSideCentre } from "../game/hexagon";
-import { TERRAIN_TEXTURE, featureVisual } from "../game/terrain";
+import { TERRAIN_TEXTURE, tileIcons } from "../game/terrain";
 import {
+  COST_BY_CHAR,
   FEATURE_BY_CHAR,
   SNIPER_CHAR,
   SNIPER_RADIUS,
@@ -23,6 +24,7 @@ import {
 import tiles from "../game/tiles.json";
 import type { SectionTemplate, SpawnPoint } from "../game/map";
 import { setChildren } from "./dom";
+import { iconSlotElements } from "./tile-icons";
 
 type Point = { x: number; y: number };
 
@@ -32,10 +34,12 @@ type Point = { x: number; y: number };
  */
 type Brush =
   | { type: "terrain"; value: string }
+  | { type: "cost"; value: string }
   | { type: "overlay"; value: string }
   | { type: "spawn"; value: "clear" | number };
 
 const TERRAIN_CHARS = Object.keys(TERRAIN_BY_CHAR);
+const COST_CHARS = Object.keys(COST_BY_CHAR);
 const OVERLAY_CHARS = Object.keys(FEATURE_BY_CHAR);
 const ALL_EDGES: readonly number[] = [0, 1, 2, 3, 4, 5];
 
@@ -62,6 +66,13 @@ const TERRAIN_LABEL: Record<string, string> = {
   "#": "impassible",
 };
 
+const COST_LABEL: Record<string, string> = {
+  "1": "1 point",
+  "2": "2 points",
+  "3": "3 points",
+  "4": "4 points",
+};
+
 const OVERLAY_LABEL: Record<string, string> = {
   ".": "none",
   S: "shop",
@@ -70,6 +81,9 @@ const OVERLAY_LABEL: Record<string, string> = {
   G: "gain",
   c: "coin",
   x: "sniper",
+  "1": "random common",
+  "2": "random uncommon",
+  "3": "random rare",
 };
 
 export class Editor {
@@ -212,13 +226,19 @@ export class Editor {
     template.terrain.forEach((row, index) => {
       const r = index - radius;
       const overlayRow = template.overlays[index];
+      const costRow = template.cost[index];
       for (let column = 0; column < row.length; column += 1) {
         const local = localCoord(radius, r, column);
         const pixel = hexToPixel(local);
-        const hex = this.hexElement(row[column], overlayRow[column], {
-          x: pixel.x + offset.x,
-          y: pixel.y + offset.y,
-        });
+        const hex = this.hexElement(
+          row[column],
+          costRow[column],
+          overlayRow[column],
+          {
+            x: pixel.x + offset.x,
+            y: pixel.y + offset.y,
+          },
+        );
         hex.addEventListener("click", () => this.paint(index, column));
         container.append(hex);
       }
@@ -253,22 +273,19 @@ export class Editor {
 
   private hexElement(
     terrainChar: string,
+    costChar: string,
     overlayChar: string,
     pixel: Point,
   ): HTMLElement {
     const terrain = TERRAIN_BY_CHAR[terrainChar];
     const hex = el("div", "hex");
     hex.classList.add(`terrain-${terrain}`);
-    hex.style.backgroundImage = `url(${TERRAIN_TEXTURE[terrain]})`;
+    hex.style.backgroundImage = `url("${TERRAIN_TEXTURE[terrain]}")`;
     place(hex, pixel);
-
-    const visual = featureVisual(FEATURE_BY_CHAR[overlayChar]);
-    if (visual.kind === "image") {
-      const icon = el("div", "hex-feature");
-      icon.style.backgroundImage = `url(${visual.url})`;
+    for (const icon of iconSlotElements(
+      tileIcons(terrain, COST_BY_CHAR[costChar], FEATURE_BY_CHAR[overlayChar]),
+    )) {
       hex.append(icon);
-    } else if (visual.kind === "coin") {
-      hex.append(el("div", "hex-feature-coin"));
     }
     return hex;
   }
@@ -343,10 +360,7 @@ export class Editor {
   private palette(): HTMLElement {
     const palette = el("div", "editor-palette");
     setChildren(palette, [
-      this.brushGroup("Terrain", TERRAIN_CHARS, TERRAIN_LABEL, (value) => ({
-        type: "terrain",
-        value,
-      })),
+      this.terrainGroup(),
       this.brushGroup("Overlay", OVERLAY_CHARS, OVERLAY_LABEL, (value) => ({
         type: "overlay",
         value,
@@ -354,6 +368,17 @@ export class Editor {
       this.spawnGroup(),
     ]);
     return palette;
+  }
+
+  /** Terrain and its cost are one layer, so they share a group. */
+  private terrainGroup(): HTMLElement {
+    const terrain = TERRAIN_CHARS.map((char) =>
+      this.brushButton(TERRAIN_LABEL[char], { type: "terrain", value: char }),
+    );
+    const cost = COST_CHARS.map((char) =>
+      this.brushButton(COST_LABEL[char], { type: "cost", value: char }),
+    );
+    return this.group("Terrain", [terrain, cost]);
   }
 
   /** One layer's brushes; clicking a brush makes it the active brush. */
@@ -364,26 +389,46 @@ export class Editor {
     make: (char: string) => Brush,
   ): HTMLElement {
     const brushes = chars.map((char) =>
-      button(labels[char], () => this.setBrush(make(char))),
+      this.brushButton(labels[char], make(char)),
     );
-    return this.group(label, brushes);
+    return this.group(label, [brushes]);
+  }
+
+  /** A brush button, highlighted while it is the active brush. */
+  private brushButton(label: string, brush: Brush): HTMLButtonElement {
+    const node = button(label, () => this.setBrush(brush));
+    if (this.isActive(brush)) {
+      node.classList.add("active");
+    }
+    return node;
+  }
+
+  private isActive(brush: Brush): boolean {
+    const current = this.brush;
+    return current.type === brush.type && current.value === brush.value;
   }
 
   private spawnGroup(): HTMLElement {
     return this.group("Spawn", [
-      this.spawnDelayInput(),
-      this.spawnClearButton(),
+      [this.spawnDelayInput(), this.spawnClearButton()],
     ]);
   }
 
-  /** A labelled palette group. */
-  private group(label: string, controls: readonly HTMLElement[]): HTMLElement {
+  /** A labelled palette group of one or more brush rows. */
+  private group(
+    label: string,
+    rows: readonly (readonly HTMLElement[])[],
+  ): HTMLElement {
     const header = el("div", "editor-group-header");
     header.textContent = label;
-    const row = el("div", "editor-row");
-    setChildren(row, controls);
+    const nodes: Node[] = [header];
+    for (const row of rows) {
+      const rowEl = el("div", "editor-row");
+      setChildren(rowEl, row);
+      nodes.push(rowEl);
+    }
     const group = el("div", "editor-group");
-    setChildren(group, [header, row]);
+    setChildren(group, nodes);
     return group;
   }
 
@@ -413,9 +458,13 @@ export class Editor {
 
   /** Select the spawn brush in its clearing mode. */
   private spawnClearButton(): HTMLButtonElement {
-    return button("Clear", () =>
+    const node = button("Clear", () =>
       this.setBrush({ type: "spawn", value: "clear" }),
     );
+    if (this.isActive({ type: "spawn", value: "clear" })) {
+      node.classList.add("active");
+    }
+    return node;
   }
 
   private fields(template: SectionTemplate): HTMLElement {
@@ -552,7 +601,11 @@ export class Editor {
       return;
     }
     const rows =
-      brush.type === "terrain" ? template.terrain : template.overlays;
+      brush.type === "terrain"
+        ? template.terrain
+        : brush.type === "overlay"
+          ? template.overlays
+          : template.cost;
     const row = rows[rowIndex];
     if (row === undefined) {
       return;
@@ -563,8 +616,10 @@ export class Editor {
     next[rowIndex] = chars.join("");
     if (brush.type === "terrain") {
       template.terrain = next;
-    } else {
+    } else if (brush.type === "overlay") {
       template.overlays = next;
+    } else {
+      template.cost = next;
     }
     this.render();
   }
@@ -601,8 +656,19 @@ export class Editor {
     if (clamped === template.radius) {
       return;
     }
-    template.terrain = resizeRows(template.terrain, template.radius, clamped);
-    template.overlays = resizeRows(template.overlays, template.radius, clamped);
+    template.terrain = resizeRows(
+      template.terrain,
+      template.radius,
+      clamped,
+      ".",
+    );
+    template.cost = resizeRows(template.cost, template.radius, clamped, "1");
+    template.overlays = resizeRows(
+      template.overlays,
+      template.radius,
+      clamped,
+      ".",
+    );
     template.spawns = template.spawns.filter(
       (spawn) =>
         hexDistance({ q: spawn.q, r: spawn.r }, { q: 0, r: 0 }) <= clamped,
@@ -646,8 +712,9 @@ export class Editor {
       id: this.uniqueId("template"),
       difficulty: 0,
       radius,
-      terrain: emptyRows(radius),
-      overlays: emptyRows(radius),
+      terrain: emptyRows(radius, "."),
+      cost: emptyRows(radius, "1"),
+      overlays: emptyRows(radius, "."),
       spawns: [],
       entryEdges: [...ALL_EDGES],
       exitEdges: [...ALL_EDGES],
@@ -737,6 +804,7 @@ function cloneTemplate(template: SectionTemplate): SectionTemplate {
     difficulty: template.difficulty,
     radius: template.radius,
     terrain: [...template.terrain],
+    cost: [...template.cost],
     overlays: [...template.overlays],
     spawns: template.spawns.map((spawn) => ({ ...spawn })),
     entryEdges: [...template.entryEdges],
@@ -744,10 +812,10 @@ function cloneTemplate(template: SectionTemplate): SectionTemplate {
   };
 }
 
-function emptyRows(radius: number): string[] {
+function emptyRows(radius: number, char: string): string[] {
   const rows: string[] = [];
   for (let r = -radius; r <= radius; r += 1) {
-    rows.push(".".repeat(radius * 2 + 1 - Math.abs(r)));
+    rows.push(char.repeat(radius * 2 + 1 - Math.abs(r)));
   }
   return rows;
 }
@@ -757,6 +825,7 @@ function resizeRows(
   rows: readonly string[],
   oldRadius: number,
   newRadius: number,
+  empty: string,
 ): string[] {
   const result: string[] = [];
   for (let r = -newRadius; r <= newRadius; r += 1) {
@@ -769,7 +838,7 @@ function resizeRows(
       const char =
         oldRow !== undefined && oldColumn >= 0 && oldColumn < oldRow.length
           ? oldRow[oldColumn]
-          : ".";
+          : empty;
       row.push(char);
     }
     result.push(row.join(""));

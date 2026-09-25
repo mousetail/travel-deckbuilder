@@ -120,7 +120,7 @@ export type Tile = {
    * here; -1 means never.
    */
   spawnDelay: number;
-  /** Absolute turn the armed timer fires; -1 until the section is entered. */
+  /** Absolute turn the assassin appears; -1 until the section is entered. */
   spawnTurn: number;
 };
 
@@ -169,7 +169,7 @@ export class MapView {
 
     const element = document.createElement("div");
     element.classList.add("hex", `terrain-${tile.terrain}`);
-    element.style.backgroundImage = `url(${TERRAIN_TEXTURE[tile.terrain]})`;
+    element.style.backgroundImage = `url("${TERRAIN_TEXTURE[tile.terrain]}"")`;
     element.dataset["hexKey"] = key;
     element.style.transform = `translate(${pixel.x}px, ${pixel.y}px)`;
     return element;

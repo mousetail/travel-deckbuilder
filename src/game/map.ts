@@ -29,6 +29,8 @@ export type SectionTemplate = {
   difficulty: number;
   radius: number;
   terrain: readonly string[];
+  /** Movement cost of each hex, one char ('1'-'4') per hex. */
+  cost: readonly string[];
   overlays: readonly string[];
   spawns: readonly SpawnPoint[];
   entryEdges: readonly number[];
@@ -66,6 +68,33 @@ export const FEATURE_BY_CHAR: Record<string, TileFeature> = {
   G: { kind: "gain-card" },
   c: { kind: "coin", value: 3 },
   x: { kind: "none" },
+  // Random upgrades roll one of their options when the section is placed.
+  "1": {
+    kind: "random",
+    tier: "common",
+    options: [
+      { kind: "coin", value: 3 },
+      { kind: "shop", stock: [], rerollCost: 2 },
+    ],
+  },
+  "2": {
+    kind: "random",
+    tier: "uncommon",
+    options: [{ kind: "smith" }, { kind: "gain-card" }],
+  },
+  "3": {
+    kind: "random",
+    tier: "rare",
+    options: [{ kind: "remove-card" }],
+  },
+};
+
+/** Cost layer: movement points to cross, one char per hex. */
+export const COST_BY_CHAR: Record<string, number> = {
+  "1": 1,
+  "2": 2,
+  "3": 3,
+  "4": 4,
 };
 
 /** Overlay char marking a fixed sniper post. */
@@ -76,8 +105,16 @@ const SNIPER_MIN_DISTANCE = 5;
 
 export function validateTemplate(template: SectionTemplate): void {
   validateRows(template.id, "terrain", template.terrain, template.radius);
+  validateRows(template.id, "cost", template.cost, template.radius);
   validateRows(template.id, "overlays", template.overlays, template.radius);
   validateSpawns(template);
+  for (const row of template.cost) {
+    for (const char of row) {
+      if (COST_BY_CHAR[char] === undefined) {
+        throw new Error(`template ${template.id}: bad cost char '${char}'`);
+      }
+    }
+  }
 }
 
 /** Every spawn point must sit on a hex of the template, with a sane delay. */
@@ -147,6 +184,7 @@ export function stampSection(
   template.terrain.forEach((row, index) => {
     const r = index - template.radius;
     const overlayRow = template.overlays[index];
+    const costRow = template.cost[index];
     for (let column = 0; column < row.length; column += 1) {
       const rotated = rotateTimes(
         localCoord(template.radius, r, column),
@@ -160,6 +198,7 @@ export function stampSection(
       const overlay = overlayRow[column];
       tiles.set(hexKey(world), {
         terrain,
+        cost: COST_BY_CHAR[costRow[column]],
         feature: FEATURE_BY_CHAR[overlay],
         spawnDelay: -1,
         spawnTurn: -1,
@@ -194,6 +233,7 @@ function mirrorTemplate(template: SectionTemplate): SectionTemplate {
     difficulty: template.difficulty,
     radius: template.radius,
     terrain: template.terrain.toReversed(),
+    cost: template.cost.toReversed(),
     overlays: template.overlays.toReversed(),
     spawns: template.spawns.toReversed(),
     entryEdges: template.entryEdges.map(mirrorEdge),
@@ -569,7 +609,13 @@ function placeSection(
     const origin = chosen.origin;
 
     for (const [key, tile] of sectionTiles) {
-      if (tile.feature.kind === "shop") {
+      let feature = tile.feature;
+      if (feature.kind === "random") {
+        const rolled = pick(currentRng, feature.options);
+        currentRng = rolled.rng;
+        feature = rolled.item;
+      }
+      if (feature.kind === "shop") {
         // Stock is part of the tile, so leaving and returning shows the same cards.
         const rolled = rollShopStock(
           SHOP_CATALOGUE,
@@ -583,11 +629,11 @@ function placeSection(
           feature: {
             kind: "shop",
             stock: rolled.stock,
-            rerollCost: tile.feature.rerollCost,
+            rerollCost: feature.rerollCost,
           },
         });
       } else {
-        tiles.set(key, tile);
+        tiles.set(key, { ...tile, feature });
       }
     }
 
@@ -729,9 +775,9 @@ export function generateMap(
 
 /**
  * Start a section's assassin timers: the player has just entered it, so every
- * armed tile gets an absolute `spawnTurn` counted from `turn`. Tiles keep their
- * relative `spawnDelay`, and the `spawnTurn` guard means a section is armed only
- * once.
+ * armed tile gets an absolute `spawnTurn` — the turn the assassin appears —
+ * counted from `turn`. Tiles keep their relative `spawnDelay`, and the
+ * `spawnTurn` guard means a section is armed only once.
  */
 export function armSection(
   tiles: ReadonlyMap<string, Tile>,

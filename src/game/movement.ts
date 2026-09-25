@@ -1,53 +1,46 @@
-import { findPath, hexKey, neighbours } from "./hex";
+import { findPathByCost, hexesWithinCost } from "./hex";
 import type { HexCoord } from "./hex";
 import { canEnter } from "./terrain";
-import type { Terrain } from "./terrain";
+import type { Terrain, Tile } from "./terrain";
 
-export type TerrainLookup = (coord: HexCoord) => Terrain;
+/** The tile at a world coord, or undefined outside the visible window. */
+export type TileLookup = (coord: HexCoord) => Tile | undefined;
 
-/** Map from hex key to the number of steps needed to reach it. */
+/** Cost of entering a hex for this card: its cost, or Infinity if not enterable. */
+function cardCostAt(cardTerrain: Terrain, tileAt: TileLookup) {
+  return (coord: HexCoord): number => {
+    const tile = tileAt(coord);
+    if (tile === undefined || !canEnter(tile.terrain, cardTerrain)) {
+      return Infinity;
+    }
+    return tile.cost;
+  };
+}
+
+/**
+ * Every hex reachable from `start` within `distance` movement points. Each tile
+ * costs its own cost to enter, so a 2-cost tile needs a card with at least 2
+ * movement points — two separate 1-point cards cannot combine.
+ */
 export function reachableHexes(
   start: HexCoord,
   distance: number,
   cardTerrain: Terrain,
-  terrainAt: TerrainLookup,
-): Map<string, number> {
-  const steps = new Map<string, number>();
-  steps.set(hexKey(start), 0);
-
-  let frontier: HexCoord[] = [start];
-  for (let step = 1; step <= distance; step += 1) {
-    const nextFrontier: HexCoord[] = [];
-    for (const current of frontier) {
-      for (const candidate of neighbours(current)) {
-        const key = hexKey(candidate);
-        if (steps.has(key)) {
-          continue;
-        }
-        if (!canEnter(terrainAt(candidate), cardTerrain)) {
-          continue;
-        }
-        steps.set(key, step);
-        nextFrontier.push(candidate);
-      }
-    }
-    frontier = nextFrontier;
-  }
-
-  return steps;
+  tileAt: TileLookup,
+): HexCoord[] {
+  return hexesWithinCost(start, distance, cardCostAt(cardTerrain, tileAt));
 }
 
 export function resolveMove(
   from: HexCoord,
   to: HexCoord,
   cardTerrain: Terrain,
-  terrainAt: TerrainLookup,
+  tileAt: TileLookup,
+  distance: number,
 ): HexCoord[] {
-  const passable = (coord: HexCoord): boolean =>
-    canEnter(terrainAt(coord), cardTerrain);
-  const path = findPath(from, to, passable);
-  if (path.length === 0) {
+  const path = findPathByCost(from, to, cardCostAt(cardTerrain, tileAt));
+  if (path === null || path.cost > distance) {
     throw new Error("unreachable destination");
   }
-  return path;
+  return path.path;
 }

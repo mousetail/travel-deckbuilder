@@ -14,7 +14,8 @@ body {
 
 img.pixel,
 .hex,
-.hex-feature,
+.hex-icon,
+.card-symbol-icon,
 .spawn-badge {
   image-rendering: pixelated;
 }
@@ -233,6 +234,13 @@ button {
   & .card-symbol {
     font-size: 18px;
     font-weight: bold;
+
+    /* Inline, not grid, so the icon and its number sit flush as one unit. */
+    & .card-symbol-icon {
+      width: 16px;
+      height: 16px;
+      vertical-align: middle;
+    }
   }
 
   & .card-name {
@@ -433,32 +441,66 @@ button {
   }
 }
 
-/* Feature overlay, drawn over the terrain and above the reachable tint. */
-.hex-feature {
+/* Up to four icons per tile, in a 2×2 grid that never overlaps. The terrain's
+   cost icon comes first, then the feature's. */
+.hex-icon {
   position: absolute;
-  inset: 0;
-  z-index: 1;
+  width: 16px;
+  height: 16px;
   background-repeat: no-repeat;
-  background-position: center;
-  background-size: 55%; /* ≈30px at HEX_SIZE=32, inside the hex's shoulders */
+  background-size: 16px 16px;
+  z-index: 1;
   pointer-events: none;
 }
 
-.hex-feature-coin {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
+.hex-icon-slot-0 {
+  left: 21%;
+  top: 25%;
+}
+
+.hex-icon-slot-1 {
+  left: 50%;
+  top: 25%;
+}
+
+.hex-icon-slot-2 {
+  left: 21%;
+  top: 50%;
+}
+
+.hex-icon-slot-3 {
+  left: 50%;
+  top: 50%;
+}
+
+.hex-icon-coin {
+  background: #ffd700;
+  border: 2px solid #000;
+}
+
+/* A random upgrade, shown in the editor until the section is placed. The
+   badge colour is the upgrade tier: green common, gold uncommon, red rare. */
+.hex-icon-random {
   display: grid;
   place-items: center;
-  pointer-events: none;
+  border: 2px solid #000;
+  font-size: 12px;
+  font-weight: bold;
+}
 
-  &::before {
-    content: "";
-    width: 14px;
-    height: 14px;
-    background: #ffd700;
-    border: 2px solid #000;
-  }
+.hex-icon-random-common {
+  background: #0f0;
+  color: #000;
+}
+
+.hex-icon-random-uncommon {
+  background: #ffd700;
+  color: #000;
+}
+
+.hex-icon-random-rare {
+  background: #c00;
+  color: #fff;
 }
 
 .player-marker {

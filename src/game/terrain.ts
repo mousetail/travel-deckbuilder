@@ -9,6 +9,12 @@ import shopUrl from "../images/shop.png";
 import smithUrl from "../images/smith.png";
 import removeCardUrl from "../images/remove-card.png";
 import gainCardUrl from "../images/gain-card.png";
+import grassIconUrl from "../images/terrain-icons/grass.svg";
+import treeUrl from "../images/terrain-icons/tree.svg";
+import dropUrl from "../images/terrain-icons/drop.svg";
+import rockUrl from "../images/terrain-icons/rock.png";
+import houseUrl from "../images/terrain-icons/house.png";
+import targetUrl from "../images/terrain-icons/target.png";
 
 export type Terrain =
   "grass" | "forest" | "water" | "mountain" | "dirt" | "impassible";
@@ -31,6 +37,23 @@ export const TERRAIN_TEXTURE: Record<Terrain, string> = {
 };
 
 /**
+ * The icon for each terrain, drawn on the tile and on movement cards.
+ * Impassible has none: an icon shows the cost of crossing, and impassible
+ * cannot be crossed at any cost.
+ */
+export const TERRAIN_ICON: Record<Terrain, string | null> = {
+  grass: grassIconUrl,
+  forest: treeUrl,
+  water: dropUrl,
+  mountain: rockUrl,
+  dirt: houseUrl,
+  impassible: null,
+};
+
+/** Icon for attack cards: the target reticle. */
+export const ATTACK_ICON = targetUrl;
+
+/**
  * A movement card printed with `cardTerrain` may enter `terrain`.
  * Dirt is universally passable; impassible never is.
  */
@@ -50,10 +73,17 @@ export type TileFeature =
   | { kind: "smith" }
   | { kind: "remove-card" }
   | { kind: "gain-card" }
-  | { kind: "coin"; value: number };
+  | { kind: "coin"; value: number }
+  /** Rolled into one of `options` when the section is placed; never in play. */
+  | { kind: "random"; tier: UpgradeTier; options: readonly TileFeature[] };
+
+/** The difficulty tier of a random upgrade. */
+export type UpgradeTier = "common" | "uncommon" | "rare";
 
 export type Tile = {
   terrain: Terrain;
+  /** Movement points to cross this tile; also the number of icons shown. */
+  cost: number;
   feature: TileFeature;
   /**
    * Turns after the player enters this tile's section that an assassin spawns
@@ -61,17 +91,26 @@ export type Tile = {
    * the section is entered (chapter 05).
    */
   spawnDelay: number;
-  /** Absolute turn the armed timer fires; -1 until the section is entered. */
+  /** Absolute turn the assassin appears; -1 until the section is entered. */
   spawnTurn: number;
 };
 
 export function emptyTile(terrain: Terrain, spawnDelay: number): Tile {
-  return { terrain, feature: { kind: "none" }, spawnDelay, spawnTurn: -1 };
+  return {
+    terrain,
+    cost: 1,
+    feature: { kind: "none" },
+    spawnDelay,
+    spawnTurn: -1,
+  };
 }
 
 /** How a feature is drawn over its hex. */
 export type FeatureVisual =
-  { kind: "none" } | { kind: "image"; url: string } | { kind: "coin" };
+  | { kind: "none" }
+  | { kind: "image"; url: string }
+  | { kind: "coin" }
+  | { kind: "random"; tier: UpgradeTier };
 
 /**
  * The overlay for a tile feature. There is no `coin.png`, so the coin is drawn
@@ -91,5 +130,46 @@ export function featureVisual(feature: TileFeature): FeatureVisual {
       return { kind: "image", url: removeCardUrl };
     case "gain-card":
       return { kind: "image", url: gainCardUrl };
+    case "random":
+      return { kind: "random", tier: feature.tier };
   }
+}
+
+/** One icon drawn on a tile. A coin has no art of its own, so it is a badge. */
+export type TileIcon =
+  | { kind: "image"; url: string }
+  | { kind: "coin" }
+  | { kind: "random"; tier: UpgradeTier };
+
+/**
+ * The icons of a tile: `cost` copies of the terrain's cost icon, then the
+ * feature's. A list so a tile can later carry several icons (harder terrain).
+ */
+export function tileIcons(
+  terrain: Terrain,
+  cost: number,
+  feature: TileFeature,
+): readonly TileIcon[] {
+  const icons: TileIcon[] = [];
+  const terrainIcon = TERRAIN_ICON[terrain];
+  if (terrainIcon !== null) {
+    for (let i = 0; i < cost; i += 1) {
+      icons.push({ kind: "image", url: terrainIcon });
+    }
+  }
+  const visual = featureVisual(feature);
+  switch (visual.kind) {
+    case "none":
+      break;
+    case "image":
+      icons.push({ kind: "image", url: visual.url });
+      break;
+    case "coin":
+      icons.push({ kind: "coin" });
+      break;
+    case "random":
+      icons.push({ kind: "random", tier: visual.tier });
+      break;
+  }
+  return icons;
 }

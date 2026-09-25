@@ -1,5 +1,5 @@
 import type { Card, CardMode } from "../game/cards";
-import { describeMode, symbolText } from "./card-text";
+import { describeMode, symbolNodes } from "./card-text";
 import { setChildren } from "./dom";
 
 export type CardFace = {
@@ -54,7 +54,7 @@ export function cardFace(
 
   const symbol = document.createElement("div");
   symbol.classList.add("card-symbol");
-  symbol.textContent = symbolText(card);
+  setChildren(symbol, symbolNodes(card));
 
   const name = document.createElement("div");
   name.classList.add("card-name");
