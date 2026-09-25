@@ -4,14 +4,16 @@ import { HandView } from "./hand-view";
 import { Hud } from "./hud";
 import { FeatureView } from "./feature-view";
 import { pileButton, pileOverlay } from "./pile-view";
+import { CardAnimator, deckDiff, RESHUFFLE_DRAW_DELAY_MS } from "./card-animations";
+import type { DeckDiff } from "./card-animations";
 import { setChildren } from "./dom";
 import { hexKey, hexToPixel } from "../game/hex";
 import type { HexCoord } from "../game/hex";
 import type { Card } from "../game/cards";
-import type { GameState, Phase } from "../game/state";
+import type { Deck, GameState, Phase } from "../game/state";
 import type { MovePath, Transition } from "../game/transition";
 import { visibleMap } from "../game/fog";
-import { dangerZone } from "../game/enemies";
+import { dangerZone, enemyDangerZones } from "../game/enemies";
 import { applyFeatureAction, useFeature } from "../game/economy";
 import type { FeatureAction } from "../game/economy";
 import { runScores } from "../game/stats";
@@ -47,9 +49,13 @@ export class App {
   private readonly hud: Hud;
   private readonly featureView: FeatureView;
   private readonly middle: HTMLElement;
+  private readonly handLayer: HTMLElement;
   private readonly drawSlot: HTMLElement;
   private readonly discardSlot: HTMLElement;
   private readonly actionSlot: HTMLElement;
+  private readonly cardAnimator: CardAnimator;
+  /** The deck as of the last render, so card movements can be animated. */
+  private previousDeck: Deck;
   private openPile: Pile | null = null;
   /** True while a movement animation plays; input is ignored until it ends. */
   private animating = false;
@@ -65,9 +71,15 @@ export class App {
   private previousHistory: History;
   private state: GameState;
 
-  constructor(root: HTMLElement, state: GameState, restart: () => void) {
+  constructor(
+    root: HTMLElement,
+    state: GameState,
+    restart: () => void,
+    previousDeck: Deck,
+  ) {
     this.root = root;
     this.state = state;
+    this.previousDeck = previousDeck;
     this.history = loadHistory();
     this.previousHistory = this.history;
 
@@ -76,21 +88,23 @@ export class App {
     const topBar = element("div", "hud-top");
     this.middle = element("div", "hud-middle");
     const bottomBar = element("div", "hud-bottom");
-    const handLayer = element("div", "hand");
+    this.handLayer = element("div", "hand");
     this.drawSlot = element("div", "pile-slot");
     this.discardSlot = element("div", "pile-slot");
     this.actionSlot = element("div", "hud-action");
 
     setChildren(bottomBar, [
       this.drawSlot,
-      handLayer,
+      this.handLayer,
       this.discardSlot,
       this.actionSlot,
     ]);
     setChildren(hudLayer, [topBar, this.middle, bottomBar]);
 
     this.shell = element("div", "app");
-    setChildren(this.shell, [mapLayer, hudLayer]);
+    const animationLayer = element("div", "card-animation-layer");
+    setChildren(this.shell, [mapLayer, hudLayer, animationLayer]);
+    this.cardAnimator = new CardAnimator(animationLayer);
 
     this.mapView = new MapView(
       mapLayer,
@@ -100,7 +114,7 @@ export class App {
     );
     this.animator = new Animator(this.mapView);
     this.handView = new HandView(
-      handLayer,
+      this.handLayer,
       (card) => this.handlePlay(card),
       (card) => this.handleDiscard(card),
       (card) => this.cardPlayable(card),
@@ -180,6 +194,7 @@ export class App {
 
   private render(): void {
     this.bestCardCache.clear();
+    const oldHand = this.handCardRects();
     const visible = visibleMap(this.state);
     this.mapView.render({
       tiles: visible.tiles,
@@ -187,6 +202,7 @@ export class App {
       player: this.state.map.player,
       enemies: this.state.enemies,
       danger: dangerZone(this.state),
+      enemyDanger: enemyDangerZones(this.state),
       turn: this.state.turn,
       highlights: this.highlightGroups(),
       activeHighlight: this.activeHighlightKey(),
@@ -210,6 +226,55 @@ export class App {
       ),
     ]);
     this.renderMiddle();
+
+    if (!prefersReducedMotion()) {
+      this.animateDeck(deckDiff(this.previousDeck, this.state.deck), oldHand);
+    }
+    this.previousDeck = this.state.deck;
+  }
+
+  /** Every hand card's screen rect, keyed by card id. */
+  private handCardRects(): Map<string, DOMRect> {
+    const rects = new Map<string, DOMRect>();
+    for (const node of this.handLayer.querySelectorAll(".card")) {
+      const id = node.getAttribute("data-card-id");
+      if (id !== null) {
+        rects.set(id, node.getBoundingClientRect());
+      }
+    }
+    return rects;
+  }
+
+  /** Fly ghosts for every card that moved between the piles and the hand. */
+  private animateDeck(
+    diff: DeckDiff,
+    oldHand: ReadonlyMap<string, DOMRect>,
+  ): void {
+    const drawRect = this.drawSlot.getBoundingClientRect();
+    const discardRect = this.discardSlot.getBoundingClientRect();
+
+    if (diff.reshuffled > 0) {
+      this.cardAnimator.reshuffle(discardRect, drawRect, diff.reshuffled);
+    }
+
+    const newHand = this.handCardRects();
+    const drawDelay = diff.reshuffled > 0 ? RESHUFFLE_DRAW_DELAY_MS : 0;
+    for (const { card, from } of diff.drawn) {
+      const to = newHand.get(card.id);
+      if (to !== undefined) {
+        this.cardAnimator.drawCard(
+          from === "draw" ? drawRect : discardRect,
+          to,
+          drawDelay,
+        );
+      }
+    }
+    for (const card of diff.discarded) {
+      const from = oldHand.get(card.id);
+      if (from !== undefined) {
+        this.cardAnimator.discardCard(card, from, discardRect);
+      }
+    }
   }
 
   private renderHand(): void {

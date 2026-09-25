@@ -12,7 +12,7 @@ import gainCardUrl from "../images/gain-card.png";
 import grassIconUrl from "../images/terrain-icons/grass.svg";
 import treeUrl from "../images/terrain-icons/tree.svg";
 import dropUrl from "../images/terrain-icons/drop.svg";
-import rockUrl from "../images/terrain-icons/rock.png";
+import rockUrl from "../images/terrain-icons/rock.svg";
 import houseUrl from "../images/terrain-icons/house.png";
 import targetUrl from "../images/terrain-icons/target.png";
 

@@ -249,26 +249,50 @@ export function terrainCostAt(tiles: ReadonlyMap<string, Tile>): CostLookup {
 }
 
 /**
- * Every hex an enemy could strike at the end of this turn: an assassin's reach
- * within its movement, a sniper's lethal radius. Standing here when the turn
- * ends is fatal.
+ * Every hex one enemy could strike at the end of this turn: an assassin's reach
+ * within its movement, a sniper's lethal radius.
+ */
+function enemyDanger(enemy: Enemy, costAt: CostLookup): Set<string> {
+  const zone = new Set<string>();
+  if (enemy.kind === "sniper") {
+    for (const coord of hexesInRange(enemy.position, enemy.radius)) {
+      zone.add(hexKey(coord));
+    }
+  } else {
+    for (const coord of hexesWithinCost(
+      enemy.position,
+      enemy.movement,
+      costAt,
+    )) {
+      zone.add(hexKey(coord));
+    }
+  }
+  return zone;
+}
+
+/**
+ * Every hex an enemy could strike at the end of this turn, keyed by enemy id.
+ * The map uses it to show which enemies threaten the tile under the cursor.
+ */
+export function enemyDangerZones(state: GameState): Map<string, Set<string>> {
+  const costAt = terrainCostAt(state.map.tiles);
+  const zones = new Map<string, Set<string>>();
+  for (const enemy of state.enemies) {
+    zones.set(enemy.id, enemyDanger(enemy, costAt));
+  }
+  return zones;
+}
+
+/**
+ * Every hex an enemy could strike at the end of this turn, across the whole
+ * field. Standing here when the turn ends is fatal.
  */
 export function dangerZone(state: GameState): Set<string> {
   const costAt = terrainCostAt(state.map.tiles);
   const zone = new Set<string>();
   for (const enemy of state.enemies) {
-    if (enemy.kind === "sniper") {
-      for (const coord of hexesInRange(enemy.position, enemy.radius)) {
-        zone.add(hexKey(coord));
-      }
-    } else {
-      for (const coord of hexesWithinCost(
-        enemy.position,
-        enemy.movement,
-        costAt,
-      )) {
-        zone.add(hexKey(coord));
-      }
+    for (const key of enemyDanger(enemy, costAt)) {
+      zone.add(key);
     }
   }
   return zone;

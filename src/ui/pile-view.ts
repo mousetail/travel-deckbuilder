@@ -3,9 +3,10 @@ import { cardFace } from "./card-view";
 import { setChildren } from "./dom";
 
 /**
- * A pile, drawn as a stack of cards rather than a button: two cards peeking out
- * behind the top one, which carries the count. An empty pile is a single flat,
- * greyed card, so "nothing left here" reads at a glance.
+ * A pile, drawn as a stack of card backs the same size as a hand card: two
+ * backs peeking out behind the top one, which carries the count and the label.
+ * An empty pile is a single flat, greyed card, so "nothing left here" reads at
+ * a glance.
  */
 export function pileButton(
   label: string,
@@ -30,22 +31,28 @@ export function pileButton(
   const number = document.createElement("span");
   number.classList.add("pile-count");
   number.textContent = `${count}`;
-  setChildren(top, [number]);
+  const caption = document.createElement("span");
+  caption.classList.add("pile-label");
+  caption.textContent = label;
+  setChildren(top, [number, caption]);
   layers.push(top);
   setChildren(stack, layers);
 
-  const caption = document.createElement("div");
-  caption.classList.add("pile-label");
-  caption.textContent = label;
-
-  setChildren(button, [stack, caption]);
+  setChildren(button, [stack]);
   button.addEventListener("click", onClick);
   return button;
 }
 
 function pileCard(className: string): HTMLElement {
+  const card = cardBack();
+  card.classList.add(className);
+  return card;
+}
+
+/** A card back, shared by the piles and the flying-card animations. */
+export function cardBack(): HTMLElement {
   const card = document.createElement("div");
-  card.classList.add("pile-card", className);
+  card.classList.add("card-back");
   return card;
 }
 

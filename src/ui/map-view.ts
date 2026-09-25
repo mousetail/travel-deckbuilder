@@ -35,6 +35,8 @@ export type MapViewState = {
   enemies: readonly Enemy[];
   /** Hexes an enemy could strike at the end of this turn. */
   danger: ReadonlySet<string>;
+  /** Every hex each enemy could strike, keyed by enemy id. */
+  enemyDanger: ReadonlyMap<string, ReadonlySet<string>>;
   turn: number;
   /** Every possible highlight, pre-computed so hover can just show/hide. */
   highlights: readonly HighlightGroup[];
@@ -114,6 +116,7 @@ export class MapView {
   private playerNode: HTMLElement | null = null;
   private readonly enemyNodes = new Map<string, HTMLElement>();
   private readonly enemyHex = new Map<string, string>();
+  private enemyDanger = new Map<string, ReadonlySet<string>>();
   private readonly highlightGroups = new Map<string, HighlightNodes>();
   private activeHighlight: string | null = null;
 
@@ -152,6 +155,7 @@ export class MapView {
         this.hoveredKey = key;
         this.onHexHover(coord);
         this.updateHoverCursor();
+        this.applyThreats();
       }
     });
     layer.addEventListener("mouseleave", () => {
@@ -159,6 +163,7 @@ export class MapView {
         this.hoveredKey = null;
         this.onHexHover(null);
         this.updateHoverCursor();
+        this.applyThreats();
       }
     });
     layer.addEventListener("contextmenu", (event) => {
@@ -190,6 +195,7 @@ export class MapView {
       this.enemyHex.set(enemy.id, hexKey(enemy.position));
       nodes.push(node);
     }
+    this.enemyDanger = new Map(view.enemyDanger);
     this.playerNode = this.markerElement(view.player);
     nodes.push(this.playerNode);
 
@@ -203,6 +209,7 @@ export class MapView {
     }
     this.activeHighlight = view.activeHighlight;
     this.applyHighlight();
+    this.applyThreats();
 
     setChildren(this.world, nodes);
   }
@@ -392,6 +399,22 @@ export class MapView {
 
   private place(element: HTMLElement, pixel: Point): void {
     element.style.transform = `translate(${pixel.x}px, ${pixel.y}px) translate(-50%, -50%)`;
+  }
+
+  /**
+   * Highlight the enemies that could strike the tile under the cursor, so the
+   * player can tell at a glance how many enemies threaten a tile they are
+   * thinking of moving to.
+   */
+  private applyThreats(): void {
+    for (const [id, node] of this.enemyNodes) {
+      const zone = this.enemyDanger.get(id);
+      const threatens =
+        zone !== undefined &&
+        this.hoveredKey !== null &&
+        zone.has(this.hoveredKey);
+      node.classList.toggle("threat", threatens);
+    }
   }
 
   /** Show the active highlight's outline and targets, hide the rest. */

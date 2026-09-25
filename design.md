@@ -17,6 +17,8 @@ Cards can move over terrain of their type. There is a hexagonical grid.
 
 There terrain types are given in order of difficulty. Cards that can cross grass is more common and typically have higher numbers than those that can cross the more difficult terrain types.
 
+Each terrain has a cost from 1 to 4, shown as that many icons on the tile. A tile costs that many movement points to cross: entering it needs a card with at least that many movement points, and the whole move's path may not cost more than the card's distance. Two separate cards cannot combine to cross a single tile.
+
 At the start, you can only cross grass and forest.
 
 There's also "dirt" which can be passed by any movement card and impassible which is never passable.

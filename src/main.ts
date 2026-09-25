@@ -16,7 +16,7 @@ const root = requireElementById("app", HTMLDivElement);
 
 function startGame(): void {
   const ids = counterIds("id");
-  const generated = generateMap(1, 3, 1, ids);
+  const generated = generateMap(Math.random() * 1000 | 0, 3, 1, ids);
   const deck = buildDeck(STARTING_DECK, ids, generated.cursor.rng);
   const startSection = generated.records[0];
 
@@ -40,7 +40,7 @@ function startGame(): void {
     stats: startingStats(allCards(deck), startSection.id, 1),
   };
 
-  const app = new App(root, ensureAhead(startTurn(state)), startGame);
+  const app = new App(root, ensureAhead(startTurn(state)), startGame, state.deck);
   app.mount();
 }
 

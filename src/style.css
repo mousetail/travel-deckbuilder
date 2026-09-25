@@ -2,6 +2,9 @@
   --ui-fg: #000;
   --ui-bg: #fff;
   --ui-border: 3px;
+  /* Outer card size, border and padding included. */
+  --card-w: 114px;
+  --card-h: 168px;
 }
 
 html,
@@ -114,12 +117,12 @@ button {
 
 /* --- piles -------------------------------------------------------------- */
 
-/* A pile reads as a stack of cards rather than a button. */
+/* A pile reads as a stack of card backs, the same size as a hand card. */
 .pile {
-  display: grid;
-  gap: 4px;
-  justify-items: center;
-  padding: 4px;
+  position: relative;
+  width: var(--card-w);
+  height: var(--card-h);
+  padding: 0;
   background: transparent;
   border: none;
 
@@ -129,39 +132,42 @@ button {
   }
 
   &:hover .pile-stack {
-    transform: translateY(-3px);
+    transform: translateY(-4px);
   }
 }
 
 .pile-stack {
-  position: relative;
-  width: 40px;
-  height: 52px;
+  position: absolute;
+  inset: 0;
+  transition: transform 120ms;
 }
 
 .pile-card {
   position: absolute;
   top: 0;
   left: 0;
-  width: 34px;
-  height: 46px;
-  background: var(--ui-bg);
-  border: 3px solid var(--ui-fg);
+  width: var(--card-w);
+  height: var(--card-h);
 }
 
-/* Two cards peeking out behind the top one give the pile its depth. */
+/* Two card backs peeking out behind the top one give the pile its depth. */
+.pile-card-back {
+  transform: translate(4px, 4px);
+}
+
 .pile-card-middle {
-  transform: translate(3px, 3px);
+  transform: translate(2px, 2px);
 }
 
 .pile-card-top {
   display: grid;
+  grid-template-rows: 1fr auto;
   place-items: center;
-  transform: translate(6px, 6px);
+  padding: 10px;
 }
 
 .pile-count {
-  font-size: 14px;
+  font-size: 28px;
   font-weight: bold;
 }
 
@@ -170,10 +176,34 @@ button {
 }
 
 /* An empty pile is one flat, greyed card. */
-.pile-empty .pile-card-top {
+.pile-empty .pile-card {
   background: #eee;
   color: #999;
   border-color: #999;
+}
+
+/* The back of a card: the piles' face and the flying-card ghosts. */
+.card-back {
+  box-sizing: border-box;
+  width: var(--card-w);
+  height: var(--card-h);
+  background: repeating-linear-gradient(45deg, #fff 0 5px, #ddd 5px 10px);
+  border: var(--ui-border) solid #000;
+}
+
+/* --- card animations ---------------------------------------------------- */
+
+/* Ghost cards fly between the piles and the hand, above the whole UI. */
+.card-animation-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1000;
+}
+
+.card-ghost {
+  position: fixed;
+  pointer-events: none;
 }
 
 /* --- the hand fan ------------------------------------------------------- */
@@ -216,11 +246,12 @@ button {
 /* --- cards -------------------------------------------------------------- */
 
 .card {
+  box-sizing: border-box;
   display: grid;
   grid-template-rows: auto auto 1fr auto;
   gap: 2px;
-  width: 96px;
-  height: 150px;
+  width: var(--card-w);
+  height: var(--card-h);
   padding: 6px;
   background: var(--ui-bg);
   color: var(--ui-fg);
@@ -555,6 +586,13 @@ button {
 
 .enemy.target {
   outline: 3px solid #ffd700;
+  outline-offset: 2px;
+}
+
+/* The enemy could strike the tile under the cursor. Drawn after the target
+   ring so it wins when both apply: the threat is the point of hovering. */
+.enemy.threat {
+  outline: 3px solid #f00;
   outline-offset: 2px;
 }
 
