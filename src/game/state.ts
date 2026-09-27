@@ -34,6 +34,7 @@ export type Phase =
     }
   | { kind: "pending-discard"; count: number }
   | { kind: "pending-sleep"; reshuffles: number }
+  | { kind: "pending-search"; count: number }
   | { kind: "pending-remove" }
   | { kind: "pending-gain"; card: Card | null }
   | { kind: "shop"; stock: readonly (Card | null)[]; rerollCost: number }
@@ -66,4 +67,6 @@ export type GameState = {
   ids: IdFactory;
   turnState: TurnState;
   stats: RunStats;
+  /** Turns left (including this one) that every tile costs 1 to enter. */
+  terrainTrivialTurns: number;
 };

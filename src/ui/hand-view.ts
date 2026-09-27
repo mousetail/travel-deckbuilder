@@ -6,7 +6,8 @@ import { setChildren } from "./dom";
 export type HandMode =
   | { kind: "play" }
   | { kind: "discard" }
-  | { kind: "sleep" };
+  | { kind: "sleep" }
+  | { kind: "none" };
 
 /** The fanned hand: one card per held card; the card itself is the button. */
 export class HandView {
@@ -54,6 +55,12 @@ export class HandView {
     mode: HandMode,
   ): HTMLElement {
     const element = cardFace(card, { index, count, viewOnly: false });
+
+    // A phase that owns the choice (a draw-pile search) leaves the hand inert.
+    if (mode.kind === "none") {
+      element.classList.add("card-inert");
+      return element;
+    }
 
     // While choosing a card the whole card is the button, not its modes.
     if (mode.kind === "discard") {

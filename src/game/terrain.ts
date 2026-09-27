@@ -142,6 +142,7 @@ export function featureVisual(feature: TileFeature): FeatureVisual {
 /** One icon drawn on a tile. A coin has no art of its own, so it is a badge. */
 export type TileIcon =
   | { kind: "image"; url: string }
+  | { kind: "terrain"; url: string }
   | { kind: "coin" }
   | { kind: "random"; tier: UpgradeTier };
 
@@ -158,7 +159,7 @@ export function tileIcons(
   const terrainIcon = TERRAIN_ICON[terrain];
   if (terrainIcon !== null) {
     for (let i = 0; i < cost; i += 1) {
-      icons.push({ kind: "image", url: terrainIcon });
+      icons.push({ kind: "terrain", url: terrainIcon });
     }
   }
   const visual = featureVisual(feature);

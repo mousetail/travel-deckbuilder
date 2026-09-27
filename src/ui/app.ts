@@ -4,7 +4,7 @@ import { HandView } from "./hand-view";
 import type { HandMode } from "./hand-view";
 import { Hud } from "./hud";
 import { FeatureView } from "./feature-view";
-import { pileButton, pileOverlay } from "./pile-view";
+import { pileButton, pileOverlay, searchOverlay } from "./pile-view";
 import { CardAnimator, deckDiff, RESHUFFLE_DRAW_DELAY_MS } from "./card-animations";
 import type { DeckDiff } from "./card-animations";
 import { setChildren } from "./dom";
@@ -28,6 +28,7 @@ import {
   discardForChoice,
   resolveAttack,
   resolveMoveTo,
+  searchForChoice,
   sleepForChoice,
 } from "../game/turn";
 import {
@@ -213,6 +214,7 @@ export class App {
       danger: dangerZone(this.state),
       enemyDanger: enemyDangerZones(this.state),
       turn: this.state.turn,
+      trivialTerrain: this.state.terrainTrivialTurns > 0,
       highlights: this.highlightGroups(),
       activeHighlight: this.activeHighlightKey(),
     });
@@ -302,6 +304,8 @@ export class App {
         return { kind: "discard" };
       case "pending-sleep":
         return { kind: "sleep" };
+      case "pending-search":
+        return { kind: "none" };
       case "playing":
       case "pending-card":
       case "pending-remove":
@@ -319,6 +323,15 @@ export class App {
     // shown only after the assassin has actually reached the player.
     if (this.animating) {
       setChildren(this.middle, []);
+      return;
+    }
+    if (this.state.phase.kind === "pending-search") {
+      this.openPile = null;
+      setChildren(this.middle, [
+        searchOverlay(this.state.deck.draw, (card) =>
+          this.handleSearchChoice(card),
+        ),
+      ]);
       return;
     }
     if (isModalPhase(this.state.phase)) {
@@ -503,6 +516,13 @@ export class App {
     this.apply(sleepForChoice(this.state, card));
   }
 
+  private handleSearchChoice(card: Card): void {
+    if (this.animating) {
+      return;
+    }
+    this.apply(searchForChoice(this.state, card));
+  }
+
   private handleHexClick(coord: HexCoord): void {
     if (this.animating) {
       return;
@@ -586,6 +606,7 @@ function isModalPhase(phase: Phase): boolean {
     case "pending-card":
     case "pending-discard":
     case "pending-sleep":
+    case "pending-search":
       return false;
   }
 }

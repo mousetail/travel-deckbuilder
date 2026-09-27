@@ -16,6 +16,9 @@ export function iconSlotElements(icons: readonly TileIcon[]): HTMLElement[] {
       slot.classList.add("hex-icon-random", `hex-icon-random-${icon.tier}`);
       slot.textContent = "?";
     } else {
+      if (icon.kind === "terrain") {
+        slot.classList.add("hex-icon-terrain");
+      }
       slot.style.backgroundImage = `url("${icon.url}")`;
     }
     nodes.push(slot);

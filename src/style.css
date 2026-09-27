@@ -240,6 +240,13 @@ button {
       z-index: 0;
       transform: rotate(calc((var(--i) - (var(--n) - 1) / 2) * 7deg));
     }
+
+    /* A hand card during a phase that owns the choice: shown, but inert. */
+    &.card-inert {
+      z-index: 0;
+      transform: rotate(calc((var(--i) - (var(--n) - 1) / 2) * 7deg));
+      pointer-events: none;
+    }
   }
 }
 
@@ -280,6 +287,20 @@ button {
   &.card-unplayable {
     background: #8e8e8e;
     cursor: default;
+  }
+
+  /* A hand card during a phase that owns the choice: inert, but still shown. */
+  &.card-inert {
+    cursor: default;
+  }
+
+  /* A draw-pile card offered by a search: clickable to move it to the hand. */
+  &.searchable {
+    cursor: pointer;
+
+    &:hover {
+      background: #ffe;
+    }
   }
 
   /* Viewer cards must not become clickable via the inherited `auto` of the
@@ -352,6 +373,23 @@ button {
     font-size: 10px;
     font-weight: bold;
     background: #00c;
+    color: #fff;
+
+    & .card-symbol-icon {
+      width: 10px;
+      height: 10px;
+    }
+  }
+
+  /* The sigil marking a temporary upgrade, pinned to the top-right corner. */
+  & .card-temporary {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    display: flex;
+    align-items: center;
+    padding: 1px 3px;
+    background: #a0f;
     color: #fff;
 
     & .card-symbol-icon {
@@ -591,6 +629,12 @@ button {
 .hex-icon-coin {
   background: #ffd700;
   border: 2px solid #000;
+}
+
+/* While Scout's effect is live every tile costs 1, so the printed cost icons are
+   dimmed to show they no longer apply. */
+.hex.trivial-terrain .hex-icon-terrain {
+  opacity: 0.5;
 }
 
 /* A random upgrade, shown in the editor until the section is placed. The

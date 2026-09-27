@@ -1,6 +1,8 @@
 import type { Terrain } from "./terrain";
 
-export type MoveMode = { kind: "move"; terrain: Terrain; distance: number };
+export type MoveMode =
+  | { kind: "move"; terrain: Terrain; distance: number }
+  | { kind: "teleport"; range: number };
 export type AttackMode = { kind: "attack"; range: number };
 
 /**
@@ -17,7 +19,10 @@ export type CardMode =
   | { kind: "draw"; count: number }
   | { kind: "recover"; count: number }
   | { kind: "currency"; amount: number }
-  | { kind: "sleep-card"; reshuffles: number };
+  | { kind: "sleep-card"; reshuffles: number }
+  | { kind: "search"; count: number }
+  | { kind: "trivial-terrain"; turns: number }
+  | { kind: "upgrade-hand" };
 
 /**
  * A side effect that fires as part of a card's action. Sleeping is an effect of
@@ -26,7 +31,10 @@ export type CardMode =
  */
 export type CardEffect =
   | { kind: "currency"; amount: number }
-  | { kind: "sleep"; reshuffles: number };
+  | { kind: "sleep"; reshuffles: number }
+  | { kind: "pay"; amount: number }
+  | { kind: "double-cost" }
+  | { kind: "halve-cost" };
 
 export type Rarity = "starting" | "common" | "uncommon" | "rare";
 
@@ -53,6 +61,10 @@ export type Card = {
   /** Effects that fire when the card is discarded by hand. */
   onDiscard: readonly CardEffect[];
   upgradedForm: CardSpec | null;
+  /** The permanent form, used to undo a temporary upgrade. */
+  baseSpec: CardSpec;
+  /** True while an Upgrader upgrade is applied. */
+  temporaryUpgrade: boolean;
   /**
    * Reshuffles left before this card returns to the draw pile. A sleeping card
    * sits in the discard pile and is skipped by every reshuffle until the count
@@ -93,8 +105,81 @@ export function instantiate(spec: CardSpec, id: string): Card {
     onPlay: spec.onPlay,
     onDiscard: spec.onDiscard,
     upgradedForm: spec.upgradedForm,
+    baseSpec: spec,
+    temporaryUpgrade: false,
     sleeping: 0,
   };
+}
+
+/** The coin cost of playing `card`, from the `pay` effects in its play line. */
+export function playCost(card: Card): number {
+  let total = 0;
+  for (const effect of card.onPlay) {
+    if (effect.kind === "pay") {
+      total += effect.amount;
+    }
+  }
+  return total;
+}
+
+/** The movement value of a move mode: distance for a walk, range for a jump. */
+export function moveModeValue(mode: MoveMode): number {
+  return mode.kind === "move" ? mode.distance : mode.range;
+}
+
+/**
+ * Swap in the upgraded form as a temporary upgrade, remembering the permanent
+ * form so it can be reverted when the card leaves the hand. A card with no
+ * upgraded form is returned unchanged.
+ */
+export function temporaryUpgradeCard(card: Card): Card {
+  if (card.upgradedForm === null) {
+    return card;
+  }
+  return {
+    ...instantiate(card.upgradedForm, card.id),
+    baseSpec: card.baseSpec,
+    temporaryUpgrade: true,
+    sleeping: card.sleeping,
+  };
+}
+
+/** Rebuild a temporarily upgraded card from its permanent form. */
+export function revertTemporary(card: Card): Card {
+  if (!card.temporaryUpgrade) {
+    return card;
+  }
+  return {
+    ...instantiate(card.baseSpec, card.id),
+    sleeping: card.sleeping,
+  };
+}
+
+function scalePay(card: Card, scale: (amount: number) => number): Card {
+  return {
+    ...card,
+    onPlay: card.onPlay.map((effect) =>
+      effect.kind === "pay"
+        ? { kind: "pay", amount: scale(effect.amount) }
+        : effect,
+    ),
+  };
+}
+
+/** Double the play cost of a card whose play line says `double-cost`. */
+export function applyPlayCostScaling(card: Card): Card {
+  if (!card.onPlay.some((effect) => effect.kind === "double-cost")) {
+    return card;
+  }
+  return scalePay(card, (amount) => amount * 2);
+}
+
+/** Halve the play cost of a card whose discard line says `halve-cost`, min 1. */
+export function applyDiscardCostScaling(card: Card): Card {
+  if (!card.onDiscard.some((effect) => effect.kind === "halve-cost")) {
+    return card;
+  }
+  return scalePay(card, (amount) => Math.max(1, Math.floor(amount / 2)));
 }
 
 /** How many reshuffles a card sleeps for when played, from its play effects. */
@@ -127,6 +212,23 @@ const currency = (amount: number): CardEffect => ({
   kind: "currency",
   amount,
 });
+
+const pay = (amount: number): CardEffect => ({ kind: "pay", amount });
+
+const doubleCost: CardEffect = { kind: "double-cost" };
+
+const halveCost: CardEffect = { kind: "halve-cost" };
+
+const search = (count: number): CardMode => ({ kind: "search", count });
+
+const trivialTerrain = (turns: number): CardMode => ({
+  kind: "trivial-terrain",
+  turns,
+});
+
+const upgradeHand: CardMode = { kind: "upgrade-hand" };
+
+const teleport = (range: number): CardMode => ({ kind: "teleport", range });
 
 export const STARTING_DECK: readonly CardSpec[] = [
   spec(
@@ -365,7 +467,7 @@ export const SHOP_CATALOGUE: readonly CardSpec[] = [
     null,
   ),
   spec(
-    "Scout",
+    "Survey",
     "uncommon",
     3,
     [{ kind: "draw", count: 2 }],
@@ -400,6 +502,59 @@ export const SHOP_CATALOGUE: readonly CardSpec[] = [
     [sleep(4)],
     null,
   ),
+  spec(
+    "Millionaire",
+    "rare",
+    4,
+    [{ kind: "draw", count: 3 }],
+    [pay(1), doubleCost],
+    [halveCost],
+    spec(
+      "Millionaire+",
+      "rare",
+      4,
+      [{ kind: "draw", count: 4 }],
+      [pay(1), doubleCost],
+      [halveCost],
+      null,
+    ),
+  ),
+  spec(
+    "Foresight",
+    "uncommon",
+    3,
+    [search(1)],
+    [sleep(1)],
+    [],
+    spec("Foresight+", "uncommon", 3, [search(1)], [], [], null),
+  ),
+  spec(
+    "Scout",
+    "uncommon",
+    3,
+    [trivialTerrain(1)],
+    [],
+    [],
+    spec(
+      "Scout+",
+      "uncommon",
+      3,
+      [trivialTerrain(2)],
+      [sleep(1)],
+      [],
+      null,
+    ),
+  ),
+  spec(
+    "Hookshot",
+    "rare",
+    5,
+    [teleport(8)],
+    [sleep(2)],
+    [],
+    spec("Hookshot+", "rare", 5, [teleport(8)], [sleep(1)], [], null),
+  ),
+  spec("Upgrader", "uncommon", 3, [upgradeHand], [], [], null),
 
   // combat
   spec(

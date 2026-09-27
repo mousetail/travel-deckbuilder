@@ -1,5 +1,10 @@
 import type { Card, IdFactory } from "./cards";
-import { instantiate, sleepOnPlay } from "./cards";
+import {
+  applyPlayCostScaling,
+  instantiate,
+  revertTemporary,
+  sleepOnPlay,
+} from "./cards";
 import type { CardSpec } from "./cards";
 import type { Rng } from "./rng";
 import { nextRng } from "./rng";
@@ -89,7 +94,7 @@ export function toDiscard(deck: Deck, cards: readonly Card[]): Deck {
   return {
     draw: deck.draw,
     hand: deck.hand,
-    discard: [...deck.discard, ...cards],
+    discard: [...deck.discard, ...cards.map(revertTemporary)],
   };
 }
 
@@ -100,9 +105,14 @@ export function removeFromHand(deck: Deck, card: Card): Deck {
 /** Move a played card to the discard pile, asleep if its own rules say so. */
 export function discardPlayed(deck: Deck, card: Card): Deck {
   const sleep = sleepOnPlay(card);
+  // The permanent form is what returns to the discard pile, so a temporary
+  // upgrade is dropped here; its cost scaling still applies to that form.
+  const scaled = applyPlayCostScaling(revertTemporary(card));
   if (deck.hand.some((c) => c.id === card.id)) {
     const without = removeFromHand(deck, card);
-    return toDiscard(without, [sleep > 0 ? { ...card, sleeping: sleep } : card]);
+    return toDiscard(without, [
+      sleep > 0 ? { ...scaled, sleeping: sleep } : scaled,
+    ]);
   }
   // A `discard-hand` play clears the hand first, so the card is already in the
   // discard pile by the time it is marked as played.

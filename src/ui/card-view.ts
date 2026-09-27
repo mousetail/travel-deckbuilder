@@ -1,5 +1,6 @@
 import type { Card, CardEffect } from "../game/cards";
 import { describeEffect, effectNodes, sleepNodes, symbolNodes } from "./card-text";
+import { TEMPORARY_ICON } from "./card-icons";
 import { setChildren } from "./dom";
 
 export type CardFace = {
@@ -51,6 +52,9 @@ export function cardFace(card: Card, face: CardFace): HTMLElement {
   if (card.sleeping > 0) {
     nodes.push(sleepBadge(card.sleeping));
   }
+  if (card.temporaryUpgrade) {
+    nodes.push(temporaryBadge());
+  }
   setChildren(root, nodes);
   return root;
 }
@@ -78,6 +82,18 @@ function sleepBadge(reshuffles: number): HTMLElement {
   const badge = document.createElement("div");
   badge.classList.add("card-sleeping");
   badge.append(...sleepNodes(reshuffles));
+  return badge;
+}
+
+/** The sigil marking an upgrade that only lasts while the card stays in hand. */
+function temporaryBadge(): HTMLElement {
+  const badge = document.createElement("div");
+  badge.classList.add("card-temporary");
+  const icon = document.createElement("img");
+  icon.classList.add("card-symbol-icon");
+  icon.src = TEMPORARY_ICON;
+  icon.alt = "temporary upgrade";
+  badge.append(icon);
   return badge;
 }
 

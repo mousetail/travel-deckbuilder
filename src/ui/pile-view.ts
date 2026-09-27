@@ -85,3 +85,34 @@ export function pileOverlay(
   setChildren(overlay, [heading, list, close]);
   return overlay;
 }
+
+/**
+ * The draw pile shown face up for a search: every card is a button that moves
+ * it to the hand. There is no close button; the search is not cancellable.
+ */
+export function searchOverlay(
+  cards: readonly Card[],
+  onChoose: (card: Card) => void,
+): HTMLElement {
+  const overlay = document.createElement("div");
+  overlay.classList.add("overlay");
+
+  const heading = document.createElement("div");
+  heading.classList.add("overlay-title");
+  heading.textContent = `Choose a card from your draw pile (${cards.length})`;
+
+  const list = document.createElement("div");
+  list.classList.add("overlay-cards");
+  setChildren(
+    list,
+    cards.map((card, index) => {
+      const face = cardFace(card, { index, count: cards.length, viewOnly: false });
+      face.classList.add("searchable");
+      face.addEventListener("click", () => onChoose(card));
+      return face;
+    }),
+  );
+
+  setChildren(overlay, [heading, list]);
+  return overlay;
+}

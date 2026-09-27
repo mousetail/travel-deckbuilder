@@ -53,6 +53,7 @@ export class FeatureView {
       case "pending-card":
       case "pending-discard":
       case "pending-sleep":
+      case "pending-search":
         return null;
     }
   }

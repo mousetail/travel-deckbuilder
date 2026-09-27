@@ -1,7 +1,8 @@
 import type { AttackMode, Card, MoveMode } from "./cards";
+import { moveModeValue, playCost } from "./cards";
 import { enemiesInRange, terrainCostAt } from "./enemies";
 import type { Enemy } from "./enemies";
-import { equalsHex, findPathByCost, hexKey } from "./hex";
+import { equalsHex, findPathByCost, hexDistance, hexKey } from "./hex";
 import type { HexCoord } from "./hex";
 import { visibleMap } from "./fog";
 import { cardCostAt, reachableHexes } from "./movement";
@@ -14,6 +15,36 @@ export function tileAt(state: GameState): TileLookup {
   // behind, and the fog sliver of the next. Removed sections are gone entirely.
   const visible = visibleMap(state).tiles;
   return (coord) => visible.get(hexKey(coord));
+}
+
+/**
+ * The tile lookup player movement uses. While Scout's effect is live every tile
+ * costs 1 to enter; terrain-type passability is untouched.
+ */
+export function movementTileAt(state: GameState): TileLookup {
+  const base = tileAt(state);
+  if (state.terrainTrivialTurns <= 0) {
+    return base;
+  }
+  return (coord) => {
+    const tile = base(coord);
+    return tile === undefined ? undefined : { ...tile, cost: 1 };
+  };
+}
+
+/**
+ * The hexes a teleport mode can jump to: every visible enemy within `range`,
+ * ignoring terrain and obstacles.
+ */
+export function teleportTargets(state: GameState, range: number): HexCoord[] {
+  const visible = tileAt(state);
+  return state.enemies
+    .filter(
+      (enemy) =>
+        hexDistance(enemy.position, state.map.player) <= range &&
+        visible(enemy.position) !== undefined,
+    )
+    .map((enemy) => enemy.position);
 }
 
 export type MoveReach = {
@@ -46,9 +77,12 @@ export function cardReach(state: GameState, card: Card): CardReach {
             state.map.player,
             mode.distance,
             mode.terrain,
-            tileAt(state),
+            movementTileAt(state),
           ).filter((coord) => !equalsHex(coord, state.map.player)),
         });
+        break;
+      case "teleport":
+        moves.push({ mode, reachable: teleportTargets(state, mode.range) });
         break;
       case "attack":
         attacks.push({
@@ -120,11 +154,14 @@ export function bestMove(state: GameState, to: HexCoord): MovePlan | null {
   let best: MovePlan | null = null;
   let bestValue = Infinity;
   for (const card of state.deck.hand) {
+    if (state.currency < playCost(card)) {
+      continue;
+    }
     for (const move of cardReach(state, card).moves) {
       if (!move.reachable.some((coord) => equalsHex(coord, to))) {
         continue;
       }
-      const value = move.mode.distance;
+      const value = moveModeValue(move.mode);
       if (best === null || isBetter(card, value, best.card, bestValue)) {
         best = { card, mode: move.mode };
         bestValue = value;
@@ -158,6 +195,9 @@ export function bestAttackCard(state: GameState, enemyId: string): Card | null {
   let best: Card | null = null;
   let bestValue = Infinity;
   for (const card of state.deck.hand) {
+    if (state.currency < playCost(card)) {
+      continue;
+    }
     const value = attackValueTo(state, card, enemyId);
     if (value === null) {
       continue;
@@ -240,18 +280,23 @@ export function hoverPaths(state: GameState, to: HexCoord): HoverPath[] {
 
 /** The path the player would walk to `to`, or null if they cannot reach it. */
 function playerPathTo(state: GameState, to: HexCoord): HexCoord[] | null {
-  // Standing on an enemy is never a move: clicking it attacks instead.
-  if (state.enemies.some((enemy) => equalsHex(enemy.position, to))) {
-    return null;
-  }
   const mode = playerMoveMode(state, to);
   if (mode === null) {
+    return null;
+  }
+  // A teleport jumps straight to the enemy, so it previews as a direct line and
+  // is allowed to land on an enemy hex.
+  if (mode.kind === "teleport") {
+    return [state.map.player, to];
+  }
+  // Standing on an enemy is never a move: clicking it attacks instead.
+  if (state.enemies.some((enemy) => equalsHex(enemy.position, to))) {
     return null;
   }
   const found = findPathByCost(
     state.map.player,
     to,
-    cardCostAt(mode.terrain, tileAt(state)),
+    cardCostAt(mode.terrain, movementTileAt(state)),
   );
   return found === null ? null : found.path;
 }

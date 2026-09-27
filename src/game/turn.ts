@@ -1,5 +1,10 @@
 import type { Card, CardMode } from "./cards";
-import { gainCurrency } from "./currency";
+import {
+  applyDiscardCostScaling,
+  playCost,
+  temporaryUpgradeCard,
+} from "./cards";
+import { gainCurrency, spendCurrency } from "./currency";
 import type { Deck, DeckMutation } from "./deck";
 import {
   discardPlayed,
@@ -20,7 +25,12 @@ import { equalsHex } from "./hex";
 import type { HexCoord } from "./hex";
 import { onPlayerMoved, visibleReach } from "./fog";
 import { reachableHexes, resolveMove } from "./movement";
-import { cardReach, moveModeTo, tileAt } from "./reach";
+import {
+  cardReach,
+  moveModeTo,
+  movementTileAt,
+  teleportTargets,
+} from "./reach";
 import type { Rng } from "./rng";
 import type { GameState, TurnState } from "./state";
 import { countDrawn, countKill, countPlay } from "./stats";
@@ -92,8 +102,12 @@ export function applyHandMode(
     }
     case "move":
     case "attack":
+    case "teleport":
     case "currency":
     case "sleep-card":
+    case "search":
+    case "trivial-terrain":
+    case "upgrade-hand":
       throw new Error(`not a hand mode: ${mode.kind}`);
   }
 }
@@ -113,17 +127,24 @@ function spent(
   card: Card,
   drawn: readonly Card[],
 ): GameState {
-  const stats = countPlay(countDrawn(state.stats, drawn), card.id);
+  const paid = payForPlay(state, card);
+  const stats = countPlay(countDrawn(paid.stats, drawn), card.id);
   return {
-    ...state,
+    ...paid,
     deck,
     rng,
     stats,
     turnState: {
-      ...state.turnState,
-      cardsPlayedThisTurn: state.turnState.cardsPlayedThisTurn + 1,
+      ...paid.turnState,
+      cardsPlayedThisTurn: paid.turnState.cardsPlayedThisTurn + 1,
     },
   };
+}
+
+/** Spend a card's play cost, if it has one. */
+function payForPlay(state: GameState, card: Card): GameState {
+  const cost = playCost(card);
+  return cost > 0 ? spendCurrency(state, cost) : state;
 }
 
 /** Whether the player could usefully play `mode` of `card` right now. */
@@ -155,10 +176,21 @@ export function modeIsAvailable(
         state.map.player,
         mode.distance,
         mode.terrain,
-        tileAt(state),
+        movementTileAt(state),
       );
       return reachable.some((coord) => !equalsHex(coord, state.map.player));
     }
+    case "teleport":
+      return teleportTargets(state, mode.range).length > 0;
+    case "search":
+      return state.deck.draw.length > 0;
+    case "trivial-terrain":
+      return true;
+    case "upgrade-hand":
+      return state.deck.hand.some(
+        (c) =>
+          c.id !== card.id && c.upgradedForm !== null && !c.temporaryUpgrade,
+      );
     case "currency":
       return true;
   }
@@ -166,6 +198,9 @@ export function modeIsAvailable(
 
 /** Whether any of `card`'s modes could be played right now. */
 export function cardIsPlayable(state: GameState, card: Card): boolean {
+  if (state.currency < playCost(card)) {
+    return false;
+  }
   return card.modes.some((mode) => modeIsAvailable(state, card, mode));
 }
 
@@ -258,10 +293,60 @@ function playInstant(state: GameState, card: Card, mode: CardMode): Transition {
         phase: { kind: "pending-sleep", reshuffles: mode.reshuffles },
       });
     }
+    case "search": {
+      const played = spent(
+        state,
+        discardPlayed(state.deck, card),
+        state.rng,
+        card,
+        [],
+      );
+      return still({
+        ...played,
+        phase: { kind: "pending-search", count: mode.count },
+      });
+    }
+    case "trivial-terrain": {
+      const played = spent(
+        state,
+        discardPlayed(state.deck, card),
+        state.rng,
+        card,
+        [],
+      );
+      return still({
+        ...played,
+        terrainTrivialTurns: Math.max(played.terrainTrivialTurns, mode.turns),
+      });
+    }
+    case "upgrade-hand": {
+      const upgraded = upgradeHand(state.deck, card);
+      const played = spent(
+        state,
+        discardPlayed(upgraded, card),
+        state.rng,
+        card,
+        [],
+      );
+      return still(played);
+    }
     case "move":
     case "attack":
+    case "teleport":
       throw new Error(`not an instant mode: ${mode.kind}`);
   }
+}
+
+/** Temporarily upgrade every other upgradable card in the hand. */
+function upgradeHand(deck: Deck, card: Card): Deck {
+  return {
+    ...deck,
+    hand: deck.hand.map((c) =>
+      c.id !== card.id && c.upgradedForm !== null && !c.temporaryUpgrade
+        ? temporaryUpgradeCard(c)
+        : c,
+    ),
+  };
 }
 
 /** Apply every discarded card's on-discard effects. */
@@ -281,6 +366,20 @@ function applyOnDiscard(
             ...next,
             deck: sleepInDiscard(next.deck, card.id, effect.reshuffles),
           };
+          break;
+        case "halve-cost":
+          next = {
+            ...next,
+            deck: {
+              ...next.deck,
+              discard: next.deck.discard.map((c) =>
+                c.id === card.id ? applyDiscardCostScaling(c) : c,
+              ),
+            },
+          };
+          break;
+        case "pay":
+        case "double-cost":
           break;
       }
     }
@@ -322,6 +421,35 @@ export function sleepForChoice(state: GameState, card: Card): Transition {
   });
 }
 
+/** Move one chosen card from the draw pile to the hand, resolving a search. */
+export function searchForChoice(state: GameState, card: Card): Transition {
+  const phase = state.phase;
+  if (phase.kind !== "pending-search") {
+    return still(state);
+  }
+  const index = state.deck.draw.findIndex((c) => c.id === card.id);
+  if (index === -1) {
+    return still(state);
+  }
+  const draw = [...state.deck.draw];
+  const [chosen] = draw.splice(index, 1);
+  if (chosen === undefined) {
+    return still(state);
+  }
+  const deck = { ...state.deck, draw, hand: [...state.deck.hand, chosen] };
+  const stats = countDrawn(state.stats, [chosen]);
+  const remaining = phase.count - 1;
+  if (remaining <= 0 || draw.length === 0) {
+    return still({ ...state, deck, stats, phase: { kind: "playing" } });
+  }
+  return still({
+    ...state,
+    deck,
+    stats,
+    phase: { kind: "pending-search", count: remaining },
+  });
+}
+
 /** Kill one enemy in range and pay its bounty. */
 export function resolveAttack(state: GameState, enemyId: string): Transition {
   const phase = state.phase;
@@ -337,7 +465,7 @@ export function resolveAttack(state: GameState, enemyId: string): Transition {
   ) {
     return still(state);
   }
-  const paid = gainCurrency(state, bountyFor(target));
+  const paid = payForPlay(gainCurrency(state, bountyFor(target)), card);
   return still({
     ...paid,
     stats: countPlay(countKill(paid.stats), card.id),
@@ -361,27 +489,35 @@ export function resolveMoveTo(state: GameState, to: HexCoord): Transition {
     return still(state);
   }
 
-  const path = resolveMove(
-    state.map.player,
-    to,
-    mode.terrain,
-    tileAt(state),
-    mode.distance,
-  );
+  const path =
+    mode.kind === "teleport"
+      ? [state.map.player, to]
+      : resolveMove(
+          state.map.player,
+          to,
+          mode.terrain,
+          movementTileAt(state),
+          mode.distance,
+        );
   const destination = path[path.length - 1];
+  const paid = payForPlay(state, phase.card);
   const moved: GameState = {
-    ...state,
-    deck: discardPlayed(state.deck, phase.card),
-    stats: countPlay(state.stats, phase.card.id),
-    map: { ...state.map, player: destination, previous: state.map.player },
+    ...paid,
+    deck: discardPlayed(paid.deck, phase.card),
+    stats: countPlay(paid.stats, phase.card.id),
+    map: { ...paid.map, player: destination, previous: paid.map.player },
     phase: { kind: "playing" },
     turnState: {
-      ...state.turnState,
-      cardsPlayedThisTurn: state.turnState.cardsPlayedThisTurn + 1,
+      ...paid.turnState,
+      cardsPlayedThisTurn: paid.turnState.cardsPlayedThisTurn + 1,
     },
   };
   // Crossing into a new section streams the map, but never ends the turn.
   const next = onPlayerMoved(moved);
+  // A teleport jumps instantly; a walk is shown hex by hex.
+  if (mode.kind === "teleport") {
+    return still(next);
+  }
   return moving(next, [{ mover: { kind: "player" }, path }]);
 }
 
@@ -392,6 +528,7 @@ export function cancelPending(state: GameState): Transition {
     case "playing":
     case "pending-discard":
     case "pending-sleep":
+    case "pending-search":
     case "pending-remove":
     case "pending-gain":
     case "shop":
@@ -417,6 +554,7 @@ export function startTurn(state: GameState): GameState {
     deck: drawn.deck,
     rng: drawn.rng,
     stats: countDrawn(state.stats, drawn.drawn),
+    terrainTrivialTurns: Math.max(0, state.terrainTrivialTurns - 1),
     turnState: { cardsPlayedThisTurn: 0, skipBonusTaken: false },
   };
 }

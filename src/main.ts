@@ -38,6 +38,7 @@ function startGame(): void {
     ids,
     turnState: { cardsPlayedThisTurn: 0, skipBonusTaken: false },
     stats: startingStats(allCards(deck), startSection.id, 1),
+    terrainTrivialTurns: 0,
   };
 
   const app = new App(root, ensureAhead(startTurn(state)), startGame, state.deck);

@@ -40,6 +40,8 @@ export type MapViewState = {
   /** Every hex each enemy could strike, keyed by enemy id. */
   enemyDanger: ReadonlyMap<string, ReadonlySet<string>>;
   turn: number;
+  /** True while Scout's effect makes every tile cost 1; dims terrain icons. */
+  trivialTerrain: boolean;
   /** Every possible highlight, pre-computed so hover can just show/hide. */
   highlights: readonly HighlightGroup[];
   /** Which highlight is visible right now, or null for none. */
@@ -397,7 +399,7 @@ export class MapView {
   render(view: MapViewState): void {
     const nodes: Node[] = [];
     for (const [key, tile] of view.tiles) {
-      nodes.push(this.hexElement(key, tile, view.fog.get(key)));
+      nodes.push(this.hexElement(key, tile, view.fog.get(key), view.trivialTerrain));
     }
 
     this.dangerOutline = outlineSvg(
@@ -571,11 +573,15 @@ export class MapView {
     key: string,
     tile: Tile,
     fog: FogLevel | undefined,
+    trivialTerrain: boolean,
   ): HTMLElement {
     const element = document.createElement("div");
     element.classList.add("hex", `terrain-${tile.terrain}`);
     if (fog !== undefined) {
       element.classList.add(`fog-${fog}`);
+    }
+    if (trivialTerrain) {
+      element.classList.add("trivial-terrain");
     }
     element.style.backgroundImage = `url("${TERRAIN_TEXTURE[tile.terrain]}")`;
     element.dataset["hexKey"] = key;

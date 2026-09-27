@@ -1,5 +1,12 @@
 import type { Card, CardEffect, CardMode } from "../game/cards";
 import { ATTACK_ICON, SLEEP_ICON, TERRAIN_ICON } from "../game/terrain";
+import {
+  COIN_ICON,
+  SCOUT_ICON,
+  SEARCH_ICON,
+  TELEPORT_ICON,
+  UPGRADE_ICON,
+} from "./card-icons";
 
 /**
  * Compact "headline" for a card's modes, shown in the top-left corner: one
@@ -36,6 +43,14 @@ function modeSymbolNodes(mode: CardMode): Node[] {
       return [text(`$${mode.amount}`)];
     case "sleep-card":
       return sleepNodes(mode.reshuffles);
+    case "search":
+      return symbolIcon(SEARCH_ICON, `${mode.count}`);
+    case "trivial-terrain":
+      return symbolIcon(SCOUT_ICON, `${mode.turns}`);
+    case "upgrade-hand":
+      return symbolIcon(UPGRADE_ICON, "");
+    case "teleport":
+      return symbolIcon(TELEPORT_ICON, `${mode.range}`);
   }
 }
 
@@ -46,6 +61,12 @@ export function effectNodes(effect: CardEffect): Node[] {
       return [text(`+${effect.amount}$`)];
     case "sleep":
       return sleepNodes(effect.reshuffles);
+    case "pay":
+      return symbolIcon(COIN_ICON, `${effect.amount}`);
+    case "double-cost":
+      return [text("×2")];
+    case "halve-cost":
+      return [text("½")];
   }
 }
 
@@ -61,6 +82,12 @@ export function describeEffect(effect: CardEffect): string {
       return `+${effect.amount}$`;
     case "sleep":
       return `sleep for ${effect.reshuffles} reshuffles`;
+    case "pay":
+      return `pay ${effect.amount} coin`;
+    case "double-cost":
+      return "double this card's cost";
+    case "halve-cost":
+      return "halve this card's cost";
   }
 }
 
