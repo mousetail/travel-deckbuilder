@@ -27,8 +27,6 @@ const MAX_FRAME_MS = 50;
  */
 export class Animator {
   private readonly map: MapView;
-  /** World pixel at the viewport's top-left. */
-  private camera: Point = { x: 0, y: 0 };
   /** World pixel the camera is easing toward centring. */
   private focus: Point = { x: 0, y: 0 };
   private lastFrame = 0;
@@ -40,8 +38,7 @@ export class Animator {
   /** Centre the camera on `point` with no animation. */
   snap(point: Point): void {
     this.focus = point;
-    this.camera = this.centredOn(point);
-    this.map.setCamera(this.camera);
+    this.map.setCamera(this.centredOn(point));
   }
 
   /**
@@ -114,8 +111,7 @@ export class Animator {
     for (;;) {
       elapsed += await this.tick();
       if (this.cameraSettled() || elapsed >= SETTLE_MAX_MS) {
-        this.camera = this.centredOn(this.focus);
-        this.map.setCamera(this.camera);
+        this.map.setCamera(this.centredOn(this.focus));
         return;
       }
     }
@@ -134,24 +130,29 @@ export class Animator {
   private advanceCamera(dtMs: number): void {
     const k = 1 - Math.exp(-(dtMs / 1000) * CAMERA_RATE);
     const desired = this.centredOn(this.focus);
-    this.camera = {
-      x: this.camera.x + (desired.x - this.camera.x) * k,
-      y: this.camera.y + (desired.y - this.camera.y) * k,
-    };
-    this.map.setCamera(this.camera);
+    const camera = this.map.getCamera();
+    this.map.setCamera({
+      x: camera.x + (desired.x - camera.x) * k,
+      y: camera.y + (desired.y - camera.y) * k,
+    });
   }
 
   private cameraSettled(): boolean {
     const desired = this.centredOn(this.focus);
+    const camera = this.map.getCamera();
     return (
-      Math.abs(desired.x - this.camera.x) < SETTLE_PX &&
-      Math.abs(desired.y - this.camera.y) < SETTLE_PX
+      Math.abs(desired.x - camera.x) < SETTLE_PX &&
+      Math.abs(desired.y - camera.y) < SETTLE_PX
     );
   }
 
   private centredOn(point: Point): Point {
     const size = this.map.viewportSize();
-    return { x: point.x - size.width / 2, y: point.y - size.height / 2 };
+    const zoom = this.map.zoomLevel();
+    return {
+      x: point.x - size.width / (2 * zoom),
+      y: point.y - size.height / (2 * zoom),
+    };
   }
 }
 

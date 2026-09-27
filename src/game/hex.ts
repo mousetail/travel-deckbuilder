@@ -171,7 +171,7 @@ function reconstructPath(
 export function hexesWithinCost(
   start: HexCoord,
   budget: number,
-  costAt: CostLookup,
+  stepCost: StepCost,
 ): HexCoord[] {
   const best = new Map<string, number>();
   best.set(hexKey(start), 0);
@@ -194,7 +194,7 @@ export function hexesWithinCost(
     }
     const currentCost = best.get(hexKey(current)) ?? Infinity;
     for (const next of neighbours(current)) {
-      const step = costAt(next);
+      const step = stepCost(current, next);
       if (!Number.isFinite(step)) {
         continue;
       }
@@ -212,20 +212,20 @@ export function hexesWithinCost(
   return [...reached.values()];
 }
 
-export type CostLookup = (coord: HexCoord) => number;
+export type StepCost = (from: HexCoord, to: HexCoord) => number;
 
 export type CostPath = { path: HexCoord[]; cost: number };
 
 /**
  * Dijkstra over a per-step cost function, for movers that pay different costs
- * for different terrain (chapter 07's assassins). `costAt` returning a
- * non-finite value means the hex cannot be entered. Returns null if `goal` is
- * unreachable.
+ * for different terrain (chapter 07's assassins). `stepCost` returning a
+ * non-finite value means the destination cannot be entered. Returns null if
+ * `goal` is unreachable.
  */
 export function findPathByCost(
   start: HexCoord,
   goal: HexCoord,
-  costAt: CostLookup,
+  stepCost: StepCost,
 ): CostPath | null {
   const best = new Map<string, number>();
   best.set(hexKey(start), 0);
@@ -253,7 +253,7 @@ export function findPathByCost(
       };
     }
     for (const next of neighbours(current)) {
-      const step = costAt(next);
+      const step = stepCost(current, next);
       if (!Number.isFinite(step)) {
         continue;
       }

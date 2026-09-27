@@ -7,7 +7,7 @@ import {
   hexesWithinCost,
   parseHexKey,
 } from "./hex";
-import type { CostLookup, HexCoord } from "./hex";
+import type { HexCoord, StepCost } from "./hex";
 import type { GameState } from "./state";
 import type { Terrain, Tile } from "./terrain";
 import { moving } from "./transition";
@@ -33,20 +33,29 @@ export type Enemy = Assassin | Sniper;
 
 /**
  * Per-step cost for an assassin. Unlike the player, enemies ignore the deck:
- * they cross anything but impassible terrain, just slower over hard ground.
+ * they cross anything but impassible terrain. Terrain types differ only
+ * slightly, so hard ground never walls an assassin off entirely.
  */
 export const TERRAIN_MOVE_COST: Record<Terrain, number> = {
   dirt: 1,
   grass: 1,
-  forest: 2,
-  water: 3,
-  mountain: 3,
+  forest: 1.25,
+  water: 1.5,
+  mountain: 1.5,
   impassible: Infinity,
 };
 
+/**
+ * Extra cost for stepping from one terrain type onto another. The real price of
+ * movement is switching terrain, mirroring the player needing a fresh card for
+ * each terrain they cross, so crossing several types is dearer than covering
+ * the same distance on one.
+ */
+export const TERRAIN_BOUNDARY_COST = 2;
+
 /** Assassins get faster the deeper the player is. */
 export function assassinMovementFor(turn: number): number {
-  return 2 + Math.floor(turn / 6);
+  return 2 + Math.floor(turn / 8);
 }
 
 /**
@@ -62,7 +71,7 @@ export const ASSASSIN_SPACING = 2;
 export function advanceAlongPath(
   path: readonly HexCoord[],
   budget: number,
-  costAt: CostLookup,
+  stepCost: StepCost,
 ): { position: HexCoord; spent: number; path: HexCoord[] } {
   const start = path[0];
   if (start === undefined) {
@@ -72,7 +81,7 @@ export function advanceAlongPath(
   let spent = 0;
   let reached = 0;
   for (let i = 1; i < path.length; i += 1) {
-    const step = costAt(path[i]);
+    const step = stepCost(path[i - 1], path[i]);
     if (spent + step > budget) {
       break;
     }
@@ -136,16 +145,50 @@ export type AssassinTurn = {
 };
 
 /**
+ * The hex an assassin aims for when it cannot reach the player this turn: the
+ * spot nearest to the player that is not on or within `ASSASSIN_SPACING` of a
+ * peer, so chasers do not pile onto the same approach. Ties break toward the
+ * assassin, so it does not cross the map for an equally close spot. Falls back
+ * to the player's own hex if every spot nearby is crowded.
+ */
+function chaseTarget(
+  player: HexCoord,
+  from: HexCoord,
+  peers: readonly HexCoord[],
+  maxDistance: number,
+): HexCoord {
+  let best = player;
+  let bestToPlayer = Infinity;
+  let bestToFrom = Infinity;
+  for (const coord of hexesInRange(player, maxDistance)) {
+    if (peers.some((peer) => hexDistance(coord, peer) <= ASSASSIN_SPACING)) {
+      continue;
+    }
+    const toPlayer = hexDistance(coord, player);
+    const toFrom = hexDistance(coord, from);
+    if (
+      toPlayer < bestToPlayer ||
+      (toPlayer === bestToPlayer && toFrom < bestToFrom)
+    ) {
+      best = coord;
+      bestToPlayer = toPlayer;
+      bestToFrom = toFrom;
+    }
+  }
+  return best;
+}
+
+/**
  * One assassin's move. If it can reach the player this turn the player dies;
- * otherwise it heads for the leading edge to cut the player off. Either way it
- * stays within `maxDistance` of the player — the furthest tile the player can
- * see — and never ends its move within `ASSASSIN_SPACING` of a peer.
+ * otherwise it chases the spot nearest the player that is clear of its peers.
+ * Either way it stays within `maxDistance` of the player — the furthest tile
+ * the player can see — and never ends its move within `ASSASSIN_SPACING` of a
+ * peer.
  */
 export function takeAssassinTurn(
   assassin: Assassin,
   player: HexCoord,
-  leadingEdge: HexCoord,
-  costAt: CostLookup,
+  costAt: StepCost,
   maxDistance: number,
   peers: readonly HexCoord[],
 ): AssassinTurn {
@@ -158,11 +201,17 @@ export function takeAssassinTurn(
     };
   }
 
-  const toEdge = findPathByCost(assassin.position, leadingEdge, costAt);
-  if (toEdge === null) {
+  const target = chaseTarget(player, assassin.position, peers, maxDistance);
+  let toTarget = findPathByCost(assassin.position, target, costAt);
+  if (toTarget === null) {
+    // The nearest clear spot may sit across impassible ground; fall back to the
+    // player so the assassin still closes in and lets the crowd rule stop it.
+    toTarget = findPathByCost(assassin.position, player, costAt);
+  }
+  if (toTarget === null) {
     return { assassin, killedPlayer: false, path: [assassin.position] };
   }
-  const inSight = clampToReach(toEdge.path, player, maxDistance);
+  const inSight = clampToReach(toTarget.path, player, maxDistance);
   const advanced = advanceAlongPath(inSight, assassin.movement, costAt);
   const path = retreatFromPeers(advanced.path, peers);
   return {
@@ -226,6 +275,15 @@ export function killEnemy(
   return enemies.filter((enemy) => enemy.id !== targetId);
 }
 
+export function enemyName(enemy: Enemy): string {
+  switch (enemy.kind) {
+    case "assassin":
+      return "Assassin";
+    case "sniper":
+      return "Sniper";
+  }
+}
+
 export function bountyFor(enemy: Enemy): number {
   switch (enemy.kind) {
     case "assassin":
@@ -236,15 +294,34 @@ export function bountyFor(enemy: Enemy): number {
 }
 
 /**
- * Terrain step cost for enemies, from the live tile map. Harder tiles cost
- * more: the terrain's base cost times the tile's own cost.
+ * Step cost for enemies, from the live tile map. Terrain types differ only
+ * slightly; crossing onto a different terrain type adds a boundary surcharge,
+ * so switching terrain costs more than covering distance on one type. The first
+ * step out of `start` is free, so an assassin boxed in by hard ground can always
+ * take at least one step.
  */
-export function terrainCostAt(tiles: ReadonlyMap<string, Tile>): CostLookup {
-  return (coord) => {
-    const tile = tiles.get(hexKey(coord));
-    return tile === undefined
-      ? Infinity
-      : TERRAIN_MOVE_COST[tile.terrain] * tile.cost;
+export function terrainCostAt(
+  tiles: ReadonlyMap<string, Tile>,
+  start: HexCoord,
+): StepCost {
+  const startKey = hexKey(start);
+  return (from, to) => {
+    const tile = tiles.get(hexKey(to));
+    if (tile === undefined) {
+      return Infinity;
+    }
+    const base = TERRAIN_MOVE_COST[tile.terrain] * tile.cost;
+    if (!Number.isFinite(base)) {
+      return Infinity;
+    }
+    if (hexKey(from) === startKey) {
+      return 0;
+    }
+    const fromTile = tiles.get(hexKey(from));
+    if (fromTile !== undefined && fromTile.terrain !== tile.terrain) {
+      return base + TERRAIN_BOUNDARY_COST;
+    }
+    return base;
   };
 }
 
@@ -252,7 +329,10 @@ export function terrainCostAt(tiles: ReadonlyMap<string, Tile>): CostLookup {
  * Every hex one enemy could strike at the end of this turn: an assassin's reach
  * within its movement, a sniper's lethal radius.
  */
-function enemyDanger(enemy: Enemy, costAt: CostLookup): Set<string> {
+function enemyDanger(
+  enemy: Enemy,
+  tiles: ReadonlyMap<string, Tile>,
+): Set<string> {
   const zone = new Set<string>();
   if (enemy.kind === "sniper") {
     for (const coord of hexesInRange(enemy.position, enemy.radius)) {
@@ -262,7 +342,7 @@ function enemyDanger(enemy: Enemy, costAt: CostLookup): Set<string> {
     for (const coord of hexesWithinCost(
       enemy.position,
       enemy.movement,
-      costAt,
+      terrainCostAt(tiles, enemy.position),
     )) {
       zone.add(hexKey(coord));
     }
@@ -275,10 +355,9 @@ function enemyDanger(enemy: Enemy, costAt: CostLookup): Set<string> {
  * The map uses it to show which enemies threaten the tile under the cursor.
  */
 export function enemyDangerZones(state: GameState): Map<string, Set<string>> {
-  const costAt = terrainCostAt(state.map.tiles);
   const zones = new Map<string, Set<string>>();
   for (const enemy of state.enemies) {
-    zones.set(enemy.id, enemyDanger(enemy, costAt));
+    zones.set(enemy.id, enemyDanger(enemy, state.map.tiles));
   }
   return zones;
 }
@@ -288,10 +367,9 @@ export function enemyDangerZones(state: GameState): Map<string, Set<string>> {
  * field. Standing here when the turn ends is fatal.
  */
 export function dangerZone(state: GameState): Set<string> {
-  const costAt = terrainCostAt(state.map.tiles);
   const zone = new Set<string>();
   for (const enemy of state.enemies) {
-    for (const key of enemyDanger(enemy, costAt)) {
+    for (const key of enemyDanger(enemy, state.map.tiles)) {
       zone.add(key);
     }
   }
@@ -305,11 +383,8 @@ export function dangerZone(state: GameState): Set<string> {
  */
 export function resolveEnemyPhase(
   state: GameState,
-  leadingEdge: HexCoord,
   maxDistance: number,
 ): Transition {
-  const costAt = terrainCostAt(state.map.tiles);
-
   const spawned = spawnAssassins(
     state.map.tiles,
     state.turn,
@@ -347,8 +422,7 @@ export function resolveEnemyPhase(
     const turn = takeAssassinTurn(
       enemy,
       state.map.player,
-      leadingEdge,
-      costAt,
+      terrainCostAt(state.map.tiles, enemy.position),
       maxDistance,
       peers,
     );

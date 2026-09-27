@@ -40,7 +40,7 @@ fine.
 | `deck.ts` | Total card count is conserved by `drawCards`/`toDiscard`/`addPurchase`; reshuffle happens exactly when draw empties; a purchase never appears before a reshuffle; `drawUpTo` never draws past the deck. |
 | `movement.ts` | Reachable set honours the distance budget; it excludes impassible and unenterable hexes; a `distance: 0`-style card reaches nothing new. |
 | `map.ts` | Same seed ⇒ identical map; footprints never overlap; every generated section has an entry→exit path for grass+forest. |
-| `enemies.ts` | An assassin within budget of the player reports `killedPlayer`; one out of budget moves toward the leading edge by at most its movement; `sniperKills` is true exactly inside the radius; impassible terrain blocks a path. |
+| `enemies.ts` | An assassin within budget of the player reports `killedPlayer`; one out of budget moves toward the player by at most its movement; `sniperKills` is true exactly inside the radius; impassible terrain blocks a path. |
 | `economy.ts` | Buying deducts currency and lands in discard; `upgradeCard` bumps movement and leaves attack range alone; `removeCardFromDeck` clears the id from all three zones; weighted picks never return a `starting` spec. |
 
 A representative test, to show the style (pure in, pure out):
@@ -113,7 +113,7 @@ export const BALANCE = {
   shopStock: 3,
   shopRerollCost: 2,
   assassinBaseMovement: 2,
-  assassinMovementPerTurns: 6,   // +1 movement every this many turns
+  assassinMovementPerTurns: 8,   // +1 movement every this many turns
   sniperRadius: 3,
   difficultyPerSection: 1,
 } as const;

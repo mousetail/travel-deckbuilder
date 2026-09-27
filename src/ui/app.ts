@@ -34,7 +34,9 @@ import {
   bestAttackCard,
   bestMoveCard,
   handReach,
+  hoverPaths,
 } from "../game/reach";
+import type { HoverPath } from "../game/reach";
 import type { HighlightGroup } from "./map-view";
 
 type Pile = "draw" | "discard";
@@ -65,6 +67,8 @@ export class App {
   private hoveredCard: Card | null = null;
   /** Best card per hovered tile, valid until the next state change. */
   private readonly bestCardCache = new Map<string, Card | null>();
+  /** Paths per hovered tile, valid until the next state change. */
+  private readonly hoverPathCache = new Map<string, HoverPath[]>();
   /** The finished run is folded into saved history exactly once. */
   private recordedGameOver = false;
   /** Saved records, updated as runs finish. */
@@ -197,6 +201,8 @@ export class App {
 
   private render(): void {
     this.bestCardCache.clear();
+    this.hoverPathCache.clear();
+    this.mapView.setHoverPaths([]);
     const oldHand = this.handCardRects();
     const visible = visibleMap(this.state);
     this.mapView.render({
@@ -404,6 +410,29 @@ export class App {
 
   private handleHexHover(coord: HexCoord | null): void {
     this.setHoveredCard(this.bestCardFor(coord));
+    this.updateHoverPaths(coord);
+  }
+
+  /** Show the paths the hovered tile would be reached by, or none. */
+  private updateHoverPaths(coord: HexCoord | null): void {
+    const phase = this.state.phase;
+    if (
+      this.animating ||
+      coord === null ||
+      (phase.kind !== "playing" && phase.kind !== "pending-card")
+    ) {
+      this.mapView.setHoverPaths([]);
+      return;
+    }
+    const key = hexKey(coord);
+    const cached = this.hoverPathCache.get(key);
+    if (cached !== undefined) {
+      this.mapView.setHoverPaths(cached);
+      return;
+    }
+    const paths = hoverPaths(this.state, coord);
+    this.hoverPathCache.set(key, paths);
+    this.mapView.setHoverPaths(paths);
   }
 
   /** The card that would be auto-played for `coord`, or null. */

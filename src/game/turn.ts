@@ -1,4 +1,4 @@
-import type { Card, CardMode, MoveMode } from "./cards";
+import type { Card, CardMode } from "./cards";
 import { gainCurrency } from "./currency";
 import type { Deck, DeckMutation } from "./deck";
 import {
@@ -18,9 +18,9 @@ import {
 } from "./enemies";
 import { equalsHex } from "./hex";
 import type { HexCoord } from "./hex";
-import { leadingEdge, onPlayerMoved, visibleReach } from "./fog";
+import { onPlayerMoved, visibleReach } from "./fog";
 import { reachableHexes, resolveMove } from "./movement";
-import { cardReach, tileAt } from "./reach";
+import { cardReach, moveModeTo, tileAt } from "./reach";
 import type { Rng } from "./rng";
 import type { GameState, TurnState } from "./state";
 import { countDrawn, countKill, countPlay } from "./stats";
@@ -356,7 +356,7 @@ export function resolveMoveTo(state: GameState, to: HexCoord): Transition {
   if (phase.kind !== "pending-card") {
     return still(state);
   }
-  const mode = moveModeReaching(state, phase.card, to);
+  const mode = moveModeTo(state, phase.card, to);
   if (mode === null) {
     return still(state);
   }
@@ -383,20 +383,6 @@ export function resolveMoveTo(state: GameState, to: HexCoord): Transition {
   // Crossing into a new section streams the map, but never ends the turn.
   const next = onPlayerMoved(moved);
   return moving(next, [{ mover: { kind: "player" }, path }]);
-}
-
-/** The first move mode of `card` that can reach `to`, or null. */
-function moveModeReaching(
-  state: GameState,
-  card: Card,
-  to: HexCoord,
-): MoveMode | null {
-  for (const move of cardReach(state, card).moves) {
-    if (move.reachable.some((coord) => equalsHex(coord, to))) {
-      return move.mode;
-    }
-  }
-  return null;
 }
 
 export function cancelPending(state: GameState): Transition {
@@ -440,11 +426,7 @@ export function endTurn(state: GameState): Transition {
     return still(state);
   }
   const paid = takeSkipBonus(state);
-  const resolved = resolveEnemyPhase(
-    paid,
-    leadingEdge(paid),
-    visibleReach(paid),
-  );
+  const resolved = resolveEnemyPhase(paid, visibleReach(paid));
   if (resolved.state.phase.kind === "game-over") {
     return resolved;
   }

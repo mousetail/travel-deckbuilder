@@ -649,29 +649,86 @@ button {
   z-index: 3;
 }
 
-/* Outline of the hexes an enemy could strike at the end of this turn. */
-.danger-edge {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 32px; /* HEX_SIZE */
-  height: 3px;
-  background: #f00;
-  pointer-events: none;
-}
-
-/* The reachable region as one green outline, drawn in the same style as the
-   danger zone. One SVG per highlight, hidden unless it is the active one. */
-.reachable-outline {
+/* Outlines of a set of hexes, one SVG per region so each gets a single
+   continuous border. The enemy range sits above the player's, and the union
+   danger zone below it. */
+.map-outline {
   position: absolute;
   top: 0;
   left: 0;
   pointer-events: none;
 
   & line {
-    stroke: #0f0;
     stroke-width: 3;
   }
+}
+
+.outline-danger {
+  & line {
+    stroke: #f00;
+  }
+}
+
+.outline-reachable {
+  z-index: 2;
+
+  & line {
+    stroke: #0f0;
+  }
+}
+
+.outline-enemy {
+  z-index: 3;
+
+  & line {
+    stroke: #f00;
+  }
+}
+
+/* The path a hovered tile would be reached by, one polyline per mover. */
+.path-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.map-path {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+
+  & polyline {
+    fill: none;
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  & .path-player {
+    stroke: #0f0;
+  }
+
+  & .path-enemy {
+    stroke: #f00;
+  }
+}
+
+/* The name of the enemy under the cursor, above its marker. */
+.enemy-tooltip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding: 2px 6px;
+  background: #000;
+  color: #fff;
+  border: 2px solid #fff;
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 5;
 }
 
 .hidden {

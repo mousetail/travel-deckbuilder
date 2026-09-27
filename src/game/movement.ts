@@ -1,15 +1,18 @@
 import { findPathByCost, hexesWithinCost } from "./hex";
-import type { HexCoord } from "./hex";
+import type { HexCoord, StepCost } from "./hex";
 import { canEnter } from "./terrain";
 import type { Terrain, Tile } from "./terrain";
 
 /** The tile at a world coord, or undefined outside the visible window. */
 export type TileLookup = (coord: HexCoord) => Tile | undefined;
 
-/** Cost of entering a hex for this card: its cost, or Infinity if not enterable. */
-function cardCostAt(cardTerrain: Terrain, tileAt: TileLookup) {
-  return (coord: HexCoord): number => {
-    const tile = tileAt(coord);
+/**
+ * Cost of entering a hex for this card: its cost, or Infinity if not enterable.
+ * The card ignores where the step came from — it is bound to one terrain.
+ */
+export function cardCostAt(cardTerrain: Terrain, tileAt: TileLookup): StepCost {
+  return (_from, to) => {
+    const tile = tileAt(to);
     if (tile === undefined || !canEnter(tile.terrain, cardTerrain)) {
       return Infinity;
     }

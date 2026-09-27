@@ -42,15 +42,21 @@ import type { Terrain } from "./terrain";
 export const TERRAIN_MOVE_COST: Record<Terrain, number> = {
   dirt: 1,
   grass: 1,
-  forest: 2,
-  water: 3,
-  mountain: 3,
+  forest: 1.25,
+  water: 1.5,
+  mountain: 1.5,
   impassible: Infinity,
 };
+
+/** Extra cost for stepping from one terrain type onto another. */
+export const TERRAIN_BOUNDARY_COST = 2;
 ```
 
-Assassins can therefore cross water and mountains, but slowly — which is what makes
-the player's forest/water shortcuts less safe than they first look.
+Terrain types differ only slightly, so hard ground never walls an assassin off
+entirely. The real price of movement is *switching* terrain: crossing onto a
+different type adds `TERRAIN_BOUNDARY_COST`, mirroring the player needing a fresh
+card for each terrain they cross. The first step out of an assassin's own tile is
+free, so one boxed in by mountains can always take at least one step.
 
 ## 3. Cost-aware pathfinding
 
@@ -60,14 +66,15 @@ Keep it generic by passing a cost function (same pattern as `findPath`):
 ```ts
 import { equalsHex, hexKey, neighbours } from "./hex";
 
-export type CostLookup = (coord: HexCoord) => number;
+/** Cost of stepping from one hex to an adjacent one; non-finite = blocked. */
+export type StepCost = (from: HexCoord, to: HexCoord) => number;
 
 export type CostPath = { path: HexCoord[]; cost: number };
 
 export function findPathByCost(
   start: HexCoord,
   goal: HexCoord,
-  costAt: CostLookup,
+  stepCost: StepCost,
 ): CostPath | null {
   const best = new Map<string, number>();
   best.set(hexKey(start), 0);
@@ -92,7 +99,7 @@ export function findPathByCost(
       return { path: reconstruct(cameFrom, start, goal), cost: currentCost };
     }
     for (const next of neighbours(current)) {
-      const step = costAt(next);
+      const step = stepCost(current, next);
       if (!Number.isFinite(step)) {
         continue;
       }
@@ -116,15 +123,14 @@ fine at map sizes here; swap in a binary heap only if profiling says so.
 The design's rule, restated precisely:
 
 - If an assassin can reach the player this turn → the player dies.
-- Otherwise it paths toward the **leading edge** to cut the player off.
-- If it has terrain to consider, it spends its movement points along the cheapest
-  path, one step at a time.
+- Otherwise it chases the spot nearest the player that is clear of its peers.
+- It spends its movement points along the cheapest path, one step at a time.
 
 ```ts
 export function advanceAlongPath(
   path: readonly HexCoord[],
   budget: number,
-  costAt: CostLookup,
+  stepCost: StepCost,
 ): { position: HexCoord; spent: number } {
   if (path.length === 0) {
     throw new Error("empty path");
@@ -132,7 +138,7 @@ export function advanceAlongPath(
   let position = path[0];
   let spent = 0;
   for (let i = 1; i < path.length; i += 1) {
-    const step = costAt(path[i]);
+    const step = stepCost(path[i - 1], path[i]);
     if (spent + step > budget) {
       break;
     }
@@ -147,32 +153,33 @@ export type AssassinTurn = { assassin: Assassin; killedPlayer: boolean };
 export function takeAssassinTurn(
   assassin: Assassin,
   player: HexCoord,
-  leadingEdge: HexCoord,
-  costAt: CostLookup,
+  stepCost: StepCost,
+  peers: readonly HexCoord[],
 ): AssassinTurn {
-  const toPlayer = findPathByCost(assassin.position, player, costAt);
+  const toPlayer = findPathByCost(assassin.position, player, stepCost);
   if (toPlayer !== null && toPlayer.cost <= assassin.movement) {
     return { assassin: { ...assassin, position: player }, killedPlayer: true };
   }
 
-  const toEdge = findPathByCost(assassin.position, leadingEdge, costAt);
-  if (toEdge === null) {
+  const target = chaseTarget(player, assassin.position, peers);
+  const toTarget = findPathByCost(assassin.position, target, stepCost);
+  if (toTarget === null) {
     return { assassin, killedPlayer: false };
   }
-  const advanced = advanceAlongPath(toEdge.path, assassin.movement, costAt);
+  const advanced = advanceAlongPath(toTarget.path, assassin.movement, stepCost);
   return { assassin: { ...assassin, position: advanced.position }, killedPlayer: false };
 }
 ```
 
-`costAt` here reads `TERRAIN_MOVE_COST[tile.terrain]`, ignoring the player's cards —
-assassins are not governed by the deck.
+`stepCost` here reads `TERRAIN_MOVE_COST[tile.terrain] * tile.cost` plus the
+boundary surcharge, ignoring the player's cards — assassins are not governed by the
+deck. `chaseTarget` returns the hex nearest the player that is not on or within
+`ASSASSIN_SPACING` of a peer, so chasers do not pile onto the same approach; ties
+break toward the assassin.
 
-> Design interpretation to confirm: "if they can not reach the player they will
-> pathfind towards the leading edge" is implemented literally — assassins head for
-> the escape front rather than tailing the player. This makes them interceptors that
-> threaten the *route ahead*. If you actually want them to chase, swap `leadingEdge`
-> for `player` in the second branch. Both are one-line changes; pick the feel you
-> want.
+> The design's "pathfind towards the leading edge" is deliberately not implemented:
+> assassins chase the player instead. `leadingEdge` is still exported from `fog.ts`
+> if you want to switch back.
 
 ## 5. Spawning from tile timers
 
@@ -221,7 +228,7 @@ and by `movementFor`, e.g.:
 
 ```ts
 export function assassinMovementFor(turn: number): number {
-  return 2 + Math.floor(turn / 6);
+  return 2 + Math.floor(turn / 8);
 }
 ```
 
@@ -251,12 +258,7 @@ One function drives the whole end-of-turn enemy step. It returns a new state who
 `phase` may be `game-over`; it never throws:
 
 ```ts
-export function resolveEnemyPhase(state: GameState, leadingEdge: HexCoord): GameState {
-  const costAt: CostLookup = (coord) => {
-    const tile = state.map.tiles.get(hexKey(coord));
-    return tile === undefined ? Infinity : TERRAIN_MOVE_COST[tile.terrain];
-  };
-
+export function resolveEnemyPhase(state: GameState, maxDistance: number): GameState {
   const spawned = spawnAssassins(
     state.map.tiles,
     state.turn,
@@ -277,7 +279,16 @@ export function resolveEnemyPhase(state: GameState, leadingEdge: HexCoord): Game
     if (enemy.kind !== "assassin") {
       continue;
     }
-    const turn = takeAssassinTurn(enemy, state.map.player, leadingEdge, costAt);
+    const peers = enemies
+      .filter((e): e is Assassin => e.kind === "assassin" && e.id !== enemy.id)
+      .map((e) => e.position);
+    const turn = takeAssassinTurn(
+      enemy,
+      state.map.player,
+      terrainCostAt(state.map.tiles, enemy.position),
+      maxDistance,
+      peers,
+    );
     if (turn.killedPlayer) {
       return { ...state, phase: { kind: "game-over", reason: { kind: "assassin" } } };
     }
@@ -336,10 +347,10 @@ export function bountyFor(enemy: Enemy): number {
 Two extra constraints keep assassins readable instead of letting them pile up or
 creep in from the dark:
 
-- An assassin never **ends** its move on or within `ASSASSIN_SPACING` (2) hexes of
-  a peer. It may walk straight through one; only the resting spot matters. The
-  walked path is trimmed back to the furthest step that clears the crowd, or the
-  assassin stays put if no step does.
+- An assassin never **targets** or **ends** its move on or within
+  `ASSASSIN_SPACING` (2) hexes of a peer. `chaseTarget` picks the spot nearest the
+  player that clears the crowd, and the walked path is trimmed back to the furthest
+  step that clears it, or the assassin stays put if no step does.
 - An assassin never advances past the furthest tile the player can see. The
   frontier is `visibleReach` (chapter 06): the far row of the fog sliver in the
   section ahead. `takeAssassinTurn` clamps the path to hexes within that many
@@ -349,7 +360,7 @@ Both are passed into `takeAssassinTurn` as `maxDistance` and `peers`, and
 `resolveEnemyPhase` takes the `maxDistance` its caller computed:
 
 ```ts
-const resolved = resolveEnemyPhase(paid, leadingEdge(paid), visibleReach(paid));
+const resolved = resolveEnemyPhase(paid, visibleReach(paid));
 ```
 
 ## 11. Milestone
@@ -357,10 +368,10 @@ const resolved = resolveEnemyPhase(paid, leadingEdge(paid), visibleReach(paid));
 - Tiles spawn assassins on their `spawnTurn`; multiple can appear on the same turn.
   A section's timers only start once the player enters it, so an assassin never
   pops up in a section the player has not reached (and so cannot see).
-- An assassin that can reach you ends the game; one that cannot heads toward the
-  leading edge.
-- Assassins cross grass quickly and water/mountains slowly, and cannot cross
-  impassible hexes.
+- An assassin that can reach you ends the game; one that cannot chases the spot
+  nearest you that is clear of its peers.
+- Assassins cross grass quickly and water/mountains slowly, pay extra to switch
+  terrain type, and cannot cross impassible hexes.
 - Ending your turn inside a sniper's radius ends the game.
 - Assassins never end a move crowded next to a peer, and never move past the
   furthest tile the player can see.

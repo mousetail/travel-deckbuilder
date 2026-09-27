@@ -1,10 +1,10 @@
 import type { AttackMode, Card, MoveMode } from "./cards";
-import { enemiesInRange } from "./enemies";
+import { enemiesInRange, terrainCostAt } from "./enemies";
 import type { Enemy } from "./enemies";
-import { equalsHex, hexKey } from "./hex";
+import { equalsHex, findPathByCost, hexKey } from "./hex";
 import type { HexCoord } from "./hex";
 import { visibleMap } from "./fog";
-import { reachableHexes } from "./movement";
+import { cardCostAt, reachableHexes } from "./movement";
 import type { TileLookup } from "./movement";
 import type { GameState } from "./state";
 
@@ -103,30 +103,54 @@ export function handReach(state: GameState): HandReach {
   return { cards, reachable, targets };
 }
 
+/** A card and the move mode that would be used to walk somewhere. */
+export type MovePlan = { card: Card; mode: MoveMode };
+
 /**
  * The best card in hand to move to `to`, or null if none can reach it. "Best"
  * is the card whose move mode reaches `to` with the lowest distance, preferring
  * cards with fewer modes so their other effects are preserved.
  */
-export function bestMoveCard(state: GameState, to: HexCoord): Card | null {
+export function bestMove(state: GameState, to: HexCoord): MovePlan | null {
   // Movement is confined to the visible window, so an off-map tile is never
   // reachable; this also skips the per-card pathfinding for stray hovers.
   if (tileAt(state)(to) === undefined) {
     return null;
   }
-  let best: Card | null = null;
+  let best: MovePlan | null = null;
   let bestValue = Infinity;
   for (const card of state.deck.hand) {
-    const value = moveValueTo(state, card, to);
-    if (value === null) {
-      continue;
-    }
-    if (best === null || isBetter(card, value, best, bestValue)) {
-      best = card;
-      bestValue = value;
+    for (const move of cardReach(state, card).moves) {
+      if (!move.reachable.some((coord) => equalsHex(coord, to))) {
+        continue;
+      }
+      const value = move.mode.distance;
+      if (best === null || isBetter(card, value, best.card, bestValue)) {
+        best = { card, mode: move.mode };
+        bestValue = value;
+      }
     }
   }
   return best;
+}
+
+export function bestMoveCard(state: GameState, to: HexCoord): Card | null {
+  const plan = bestMove(state, to);
+  return plan === null ? null : plan.card;
+}
+
+/** The first move mode of `card` that can reach `to`, or null. */
+export function moveModeTo(
+  state: GameState,
+  card: Card,
+  to: HexCoord,
+): MoveMode | null {
+  for (const move of cardReach(state, card).moves) {
+    if (move.reachable.some((coord) => equalsHex(coord, to))) {
+      return move.mode;
+    }
+  }
+  return null;
 }
 
 /** The best card in hand to attack `enemyId`, or null if none can. */
@@ -141,24 +165,6 @@ export function bestAttackCard(state: GameState, enemyId: string): Card | null {
     if (best === null || isBetter(card, value, best, bestValue)) {
       best = card;
       bestValue = value;
-    }
-  }
-  return best;
-}
-
-/** The lowest distance among `card`'s move modes that reach `to`, or null. */
-function moveValueTo(
-  state: GameState,
-  card: Card,
-  to: HexCoord,
-): number | null {
-  let best: number | null = null;
-  for (const move of cardReach(state, card).moves) {
-    if (!move.reachable.some((coord) => equalsHex(coord, to))) {
-      continue;
-    }
-    if (best === null || move.mode.distance < best) {
-      best = move.mode.distance;
     }
   }
   return best;
@@ -196,4 +202,65 @@ function isBetter(
     return value < bestValue;
   }
   return card.modes.length < best.modes.length;
+}
+
+/** One path a hovered tile could be reached by, and who would walk it. */
+export type HoverPath = {
+  kind: "player" | "enemy";
+  path: readonly HexCoord[];
+};
+
+/**
+ * The paths a hovered tile would be reached by: the player's auto-played card,
+ * then every assassin that could walk there this turn. Empty when nothing can
+ * reach it, so the map draws no line.
+ */
+export function hoverPaths(state: GameState, to: HexCoord): HoverPath[] {
+  const paths: HoverPath[] = [];
+  const player = playerPathTo(state, to);
+  if (player !== null) {
+    paths.push({ kind: "player", path: player });
+  }
+  for (const enemy of state.enemies) {
+    if (enemy.kind !== "assassin") {
+      continue;
+    }
+    const found = findPathByCost(
+      enemy.position,
+      to,
+      terrainCostAt(state.map.tiles, enemy.position),
+    );
+    if (found === null || found.cost > enemy.movement || found.path.length < 2) {
+      continue;
+    }
+    paths.push({ kind: "enemy", path: found.path });
+  }
+  return paths;
+}
+
+/** The path the player would walk to `to`, or null if they cannot reach it. */
+function playerPathTo(state: GameState, to: HexCoord): HexCoord[] | null {
+  // Standing on an enemy is never a move: clicking it attacks instead.
+  if (state.enemies.some((enemy) => equalsHex(enemy.position, to))) {
+    return null;
+  }
+  const mode = playerMoveMode(state, to);
+  if (mode === null) {
+    return null;
+  }
+  const found = findPathByCost(
+    state.map.player,
+    to,
+    cardCostAt(mode.terrain, tileAt(state)),
+  );
+  return found === null ? null : found.path;
+}
+
+/** The move mode the player would use for `to`: the selected card, or the best. */
+function playerMoveMode(state: GameState, to: HexCoord): MoveMode | null {
+  if (state.phase.kind === "pending-card") {
+    return moveModeTo(state, state.phase.card, to);
+  }
+  const card = bestMoveCard(state, to);
+  return card === null ? null : moveModeTo(state, card, to);
 }

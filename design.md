@@ -62,6 +62,7 @@ Each card can only be used as one of the slash seperated options in a turn.
 - Draw 2 cards (uncommon)
 - Draw 3 cards, discard 1 (rare)
 - Take 1 card from your discard pile (uncommon)
+- Put a card from your hand to sleep for 4 reshuffles (rare)
 
 ## Combat
 
@@ -83,6 +84,20 @@ At the start of your turn, you draw up to 4 cards.
 When you buy a card, it gets added to your discard pile. Your discard pile is only reshuffled after your draw pile runs out.
 
 You may freely discard any number of cards you like without playing them. Or you may choose to keep them for next turn. UI for this should be inituitive.
+
+## Sleeping
+
+A card can be asleep for N reshuffles. A sleeping card sits in the discard pile but is skipped by every reshuffle; each reshuffle ticks its counter down by one, and once it reaches 0 the card wakes and rejoins the draw pile. Sleeping cards are shown in the discard pile with the number of reshuffles they still have to sit out.
+
+Sleeping is an effect of a card's action, not a fixed property: a card can sleep itself when played (a drawback on hand-cycling and long-range combat cards) or when discarded. The amount is set per card so it can be balanced individually, and it is shown on the card face as a play or discard line with a moon icon and the count.
+
+- Hand-cycling cards (Forage, Gamble, Scout, Insight) sleep 2 when played.
+- Long-range combat cards (Volley, Charge) sleep 1 when played.
+- Discarding a card by hand never puts it to sleep unless the card's discard action says so.
+
+The rare "put a card to sleep" card is the exception: it puts a chosen card from your hand to sleep for 4 reshuffles, and if you discard the card itself it goes to sleep for 4 reshuffles instead. This lets a player park an unwanted card without spending a rare deck-removal site.
+
+The "Take 1 card from your discard pile" card cannot recover a sleeping card; it recovers the top-most awake card instead.
 
 # Combat
 
