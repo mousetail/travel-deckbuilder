@@ -342,21 +342,19 @@ export function bountyFor(enemy: Enemy): number {
 }
 ```
 
-## 10. Crowding and line of sight
+## 10. Crowding
 
-Two extra constraints keep assassins readable instead of letting them pile up or
-creep in from the dark:
+One constraint keeps assassins readable instead of letting them pile up:
 
 - An assassin never **targets** or **ends** its move on or within
   `ASSASSIN_SPACING` (2) hexes of a peer. `chaseTarget` picks the spot nearest the
   player that clears the crowd, and the walked path is trimmed back to the furthest
   step that clears it, or the assassin stays put if no step does.
-- An assassin never advances past the furthest tile the player can see. The
-  frontier is `visibleReach` (chapter 06): the far row of the fog sliver in the
-  section ahead. `takeAssassinTurn` clamps the path to hexes within that many
-  steps of the player, so an assassin already out of sight cannot move at all.
+- `chaseTarget` only looks `maxDistance` steps out from the player — the furthest
+  tile the player can see (`visibleReach`, chapter 06) — keeping that search cheap.
+  A chaser beyond that range still walks toward the target rather than freezing.
 
-Both are passed into `takeAssassinTurn` as `maxDistance` and `peers`, and
+`maxDistance` and `peers` are passed into `takeAssassinTurn`, and
 `resolveEnemyPhase` takes the `maxDistance` its caller computed:
 
 ```ts
@@ -373,8 +371,7 @@ const resolved = resolveEnemyPhase(paid, visibleReach(paid));
 - Assassins cross grass quickly and water/mountains slowly, pay extra to switch
   terrain type, and cannot cross impassible hexes.
 - Ending your turn inside a sniper's radius ends the game.
-- Assassins never end a move crowded next to a peer, and never move past the
-  furthest tile the player can see.
+- Assassins never end a move crowded next to a peer.
 - A combat card kills a target within range and pays the bounty; a
   `range: 0` attack only works when you share the enemy's hex.
 - Enemies on a removed trailing section are gone.
