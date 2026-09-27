@@ -51,11 +51,11 @@ export const TERRAIN_MOVE_COST: Record<Terrain, number> = {
  * each terrain they cross, so crossing several types is dearer than covering
  * the same distance on one.
  */
-export const TERRAIN_BOUNDARY_COST = 2;
+export const TERRAIN_BOUNDARY_COST = 4;
 
 /** Assassins get faster the deeper the player is. */
 export function assassinMovementFor(turn: number): number {
-  return 2 + Math.floor(turn / 8);
+  return 1 + Math.floor(turn / 8);
 }
 
 /**
@@ -90,30 +90,6 @@ export function advanceAlongPath(
     reached = i;
   }
   return { position, spent, path: path.slice(0, reached + 1) };
-}
-
-/**
- * Trim a path so it never steps further than `maxDistance` from the player — the
- * furthest tile the player can see. An assassin already beyond that line cannot
- * advance, so it never slips further into the dark.
- */
-function clampToReach(
-  path: readonly HexCoord[],
-  player: HexCoord,
-  maxDistance: number,
-): HexCoord[] {
-  const start = path[0];
-  if (start === undefined) {
-    throw new Error("empty path");
-  }
-  const kept = [start];
-  for (let i = 1; i < path.length; i += 1) {
-    if (hexDistance(path[i], player) > maxDistance) {
-      break;
-    }
-    kept.push(path[i]);
-  }
-  return kept;
 }
 
 /**
@@ -181,9 +157,7 @@ function chaseTarget(
 /**
  * One assassin's move. If it can reach the player this turn the player dies;
  * otherwise it chases the spot nearest the player that is clear of its peers.
- * Either way it stays within `maxDistance` of the player — the furthest tile
- * the player can see — and never ends its move within `ASSASSIN_SPACING` of a
- * peer.
+ * It never ends its move within `ASSASSIN_SPACING` of a peer.
  */
 export function takeAssassinTurn(
   assassin: Assassin,
@@ -211,8 +185,7 @@ export function takeAssassinTurn(
   if (toTarget === null) {
     return { assassin, killedPlayer: false, path: [assassin.position] };
   }
-  const inSight = clampToReach(toTarget.path, player, maxDistance);
-  const advanced = advanceAlongPath(inSight, assassin.movement, costAt);
+  const advanced = advanceAlongPath(toTarget.path, assassin.movement, costAt);
   const path = retreatFromPeers(advanced.path, peers);
   return {
     assassin: {

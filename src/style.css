@@ -375,10 +375,29 @@ button {
 }
 
 /* A card offered as a choice: the card with a full-width action button
-   underneath. */
+   underneath. The size is fixed so swapping a card for an empty slot (or a
+   longer button label) never resizes the overlay. */
 .card-choice {
   display: grid;
+  grid-template-rows: var(--card-h) 1fr;
   gap: 4px;
+  width: var(--card-w);
+  min-height: calc(var(--card-h) + 4px + 32px);
+
+  & button {
+    padding: 6px 4px;
+    font-size: 12px;
+    overflow-wrap: anywhere;
+  }
+}
+
+/* The gap left by a card that has already been taken from a shop or gift. */
+.card-slot-empty {
+  box-sizing: border-box;
+  width: var(--card-w);
+  height: var(--card-h);
+  border: var(--ui-border) dashed var(--ui-fg);
+  opacity: 0.4;
 }
 
 /* --- piles and overlays ------------------------------------------------- */

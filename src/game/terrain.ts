@@ -73,10 +73,10 @@ export function canEnter(terrain: Terrain, cardTerrain: Terrain): boolean {
 
 export type TileFeature =
   | { kind: "none" }
-  | { kind: "shop"; stock: readonly Card[]; rerollCost: number }
+  | { kind: "shop"; stock: readonly (Card | null)[]; rerollCost: number }
   | { kind: "smith" }
   | { kind: "remove-card" }
-  | { kind: "gain-card" }
+  | { kind: "gain-card"; card: Card | null }
   | { kind: "coin"; value: number }
   /** Rolled into one of `options` when the section is placed; never in play. */
   | { kind: "random"; tier: UpgradeTier; options: readonly TileFeature[] };

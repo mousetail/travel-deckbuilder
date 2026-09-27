@@ -1,4 +1,4 @@
-import type { Card, CardSpec, IdFactory } from "./cards";
+import type { Card, IdFactory } from "./cards";
 import type { Deck } from "./deck";
 import type { HexCoord } from "./hex";
 import type { Tile } from "./terrain";
@@ -35,8 +35,8 @@ export type Phase =
   | { kind: "pending-discard"; count: number }
   | { kind: "pending-sleep"; reshuffles: number }
   | { kind: "pending-remove" }
-  | { kind: "pending-gain"; spec: CardSpec }
-  | { kind: "shop"; stock: readonly Card[]; rerollCost: number }
+  | { kind: "pending-gain"; card: Card | null }
+  | { kind: "shop"; stock: readonly (Card | null)[]; rerollCost: number }
   | { kind: "smith" }
   | { kind: "game-over"; reason: GameOverReason };
 

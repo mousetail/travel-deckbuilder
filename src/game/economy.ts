@@ -5,7 +5,7 @@ import type { Deck } from "./deck";
 import { addPurchase } from "./deck";
 import { hexKey } from "./hex";
 import type { HexCoord } from "./hex";
-import { SHOP_STOCK_SIZE, rollGift, rollShopStock } from "./shop";
+import { SHOP_STOCK_SIZE, rollShopStock } from "./shop";
 import type { GameState } from "./state";
 import { acquireCard, countSite } from "./stats";
 import type { TileFeature } from "./terrain";
@@ -52,7 +52,10 @@ function consumeFeatureAt(state: GameState, coord: HexCoord): GameState {
 }
 
 /** Write a shop's stock back to its tile so it survives leaving and returning. */
-function withShopStock(state: GameState, stock: readonly Card[]): GameState {
+function withShopStock(
+  state: GameState,
+  stock: readonly (Card | null)[],
+): GameState {
   const key = hexKey(state.map.player);
   const tile = state.map.tiles.get(key);
   if (tile === undefined || tile.feature.kind !== "shop") {
@@ -111,14 +114,11 @@ export function useFeature(state: GameState): Transition {
         ...takeSkipBonus(site),
         phase: { kind: "pending-remove" },
       });
-    case "gain-card": {
-      const rolled = rollGift(SHOP_CATALOGUE, site.rng);
+    case "gain-card":
       return still({
         ...takeSkipBonus(site),
-        rng: rolled.rng,
-        phase: { kind: "pending-gain", spec: rolled.spec },
+        phase: { kind: "pending-gain", card: feature.card },
       });
-    }
     case "random":
       throw new Error("unresolved random feature");
   }
@@ -129,7 +129,9 @@ export function buyCard(state: GameState, card: Card): GameState {
     return state;
   }
   const paid = spendCurrency(state, card.cost);
-  const stock = state.phase.stock.filter((c) => c.id !== card.id);
+  const stock = state.phase.stock.map((slot) =>
+    slot !== null && slot.id === card.id ? null : slot,
+  );
   const next: GameState = {
     ...paid,
     deck: addPurchase(paid.deck, card),
@@ -172,7 +174,10 @@ export function upgradeCard(card: Card): Card {
   if (card.upgradedForm === null) {
     return card;
   }
-  return { ...instantiate(card.upgradedForm, card.id), sleeping: card.sleeping };
+  return {
+    ...instantiate(card.upgradedForm, card.id),
+    sleeping: card.sleeping,
+  };
 }
 
 function mapDeckCards(deck: Deck, fn: (card: Card) => Card): Deck {
@@ -260,31 +265,48 @@ export function chooseSmithCard(state: GameState, cardId: string): Transition {
   if (state.phase.kind !== "smith") {
     return still(state);
   }
-  return finishFeature({
+  const upgraded = {
     ...state,
     deck: upgradeCardInDeck(state.deck, cardId),
-  });
+  };
+  return finishFeature(consumeFeatureAt(upgraded, upgraded.map.player));
 }
 
 export function chooseRemoveCard(state: GameState, cardId: string): Transition {
   if (state.phase.kind !== "pending-remove") {
     return still(state);
   }
-  return finishFeature({
+  const removed = {
     ...state,
     deck: removeCardFromDeck(state.deck, cardId),
-  });
+  };
+  return finishFeature(consumeFeatureAt(removed, removed.map.player));
+}
+
+/** Empty a gain-card slot, leaving the feature in place as a blank slot. */
+function clearGainCard(state: GameState, coord: HexCoord): GameState {
+  const key = hexKey(coord);
+  const tile = state.map.tiles.get(key);
+  if (tile === undefined || tile.feature.kind !== "gain-card") {
+    return state;
+  }
+  const tiles = new Map(state.map.tiles);
+  tiles.set(key, { ...tile, feature: { kind: "gain-card", card: null } });
+  return { ...state, map: { ...state.map, tiles } };
 }
 
 export function takeGift(state: GameState): Transition {
   if (state.phase.kind !== "pending-gain") {
     return still(state);
   }
-  const card = instantiate(state.phase.spec, state.ids());
+  const card = state.phase.card;
+  if (card === null) {
+    return still(state);
+  }
   const withCard = {
     ...state,
     deck: addPurchase(state.deck, card),
     stats: acquireCard(state.stats, card, { kind: "gift" }, state.turn),
   };
-  return finishFeature(consumeFeatureAt(withCard, withCard.map.player));
+  return finishFeature(clearGainCard(withCard, withCard.map.player));
 }

@@ -1,4 +1,4 @@
-import type { Card, CardSpec } from "../game/cards";
+import type { Card } from "../game/cards";
 import { allCards } from "../game/deck";
 import { instantiate } from "../game/cards";
 import type { FeatureAction } from "../game/economy";
@@ -46,7 +46,7 @@ export class FeatureView {
       case "pending-remove":
         return this.removePanel(state);
       case "pending-gain":
-        return this.giftPanel(phase.spec);
+        return this.giftPanel(phase.card);
       case "game-over":
         return gameOverPanel(phase.reason, state, history, this.onRestart);
       case "playing":
@@ -84,18 +84,22 @@ export class FeatureView {
 
   private shopPanel(
     state: GameState,
-    stock: readonly Card[],
+    stock: readonly (Card | null)[],
     rerollCost: number,
   ): HTMLElement {
     const nodes: Node[] = [this.title("Shop")];
     const cardNodes: HTMLElement[] = [];
-    for (const card of stock) {
+    for (const slot of stock) {
+      if (slot === null) {
+        cardNodes.push(this.emptySlot());
+        continue;
+      }
       cardNodes.push(
         this.cardChoice(
-          card,
-          `Buy — Cost: ${card.cost}`,
-          card.cost > state.currency,
-          () => this.onAction({ kind: "buy", card }),
+          slot,
+          `Buy — Cost: ${slot.cost}`,
+          slot.cost > state.currency,
+          () => this.onAction({ kind: "buy", card: slot }),
         ),
       );
     }
@@ -195,17 +199,37 @@ export class FeatureView {
     return this.panelElement(nodes);
   }
 
-  private giftPanel(spec: CardSpec): HTMLElement {
-    const giftCard = instantiate(spec, "gift-preview");
-    const nodes: Node[] = [
-      this.title("Gain a card"),
+  private giftPanel(card: Card | null): HTMLElement {
+    const nodes: Node[] = [this.title("Gain a card")];
+    if (card === null) {
+      nodes.push(this.cardsContainer([this.emptySlot()]));
+      nodes.push(
+        this.button("Leave", false, () => this.onAction({ kind: "leave" })),
+      );
+      return this.panelElement(nodes);
+    }
+    nodes.push(
       this.cardsContainer([
-        cardFace(giftCard, { index: 0, count: 1, viewOnly: false }),
+        cardFace(card, { index: 0, count: 1, viewOnly: false }),
       ]),
+    );
+    nodes.push(
       this.button("Take it", false, () => this.onAction({ kind: "take-gift" })),
+    );
+    nodes.push(
       this.button("Skip", false, () => this.onAction({ kind: "leave" })),
-    ];
+    );
     return this.panelElement(nodes);
+  }
+
+  /** A gap left by a card that has already been taken. */
+  private emptySlot(): HTMLElement {
+    const wrapper = document.createElement("div");
+    wrapper.classList.add("card-choice");
+    const slot = document.createElement("div");
+    slot.classList.add("card-slot-empty");
+    setChildren(wrapper, [slot]);
+    return wrapper;
   }
 
   private button(

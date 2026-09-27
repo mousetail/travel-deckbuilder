@@ -68,7 +68,9 @@ function endTurnLabel(action: EndTurnAction): string {
         case "remove-card":
           return `${endTurnPrefix(action.bonus)} & Remove a card`;
         case "gain-card":
-          return `${endTurnPrefix(action.bonus)} & Take a card`;
+          return action.feature.card === null
+            ? `${endTurnPrefix(action.bonus)} & Enter`
+            : `${endTurnPrefix(action.bonus)} & Take a card`;
         case "coin":
           return `${endTurnPrefix(action.bonus)} & Collect coin`;
         case "none":

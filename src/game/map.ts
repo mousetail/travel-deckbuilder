@@ -3,11 +3,11 @@ import type { HexCoord } from "./hex";
 import { hexesInHexagon, hexSide, rotateTimes } from "./hexagon";
 import type { Terrain, Tile, TileFeature } from "./terrain";
 import type { IdFactory } from "./cards";
-import { SHOP_CATALOGUE } from "./cards";
+import { SHOP_CATALOGUE, instantiate } from "./cards";
 import type { Sniper } from "./enemies";
 import type { Rng } from "./rng";
 import { pick, shuffle } from "./rng";
-import { SHOP_STOCK_SIZE, rollShopStock } from "./shop";
+import { SHOP_STOCK_SIZE, rollGift, rollShopStock } from "./shop";
 import type { MapIndex } from "./state";
 import tiles from "./tiles.json";
 
@@ -65,7 +65,7 @@ export const FEATURE_BY_CHAR: Record<string, TileFeature> = {
   S: { kind: "shop", stock: [], rerollCost: 2 },
   T: { kind: "smith" },
   R: { kind: "remove-card" },
-  G: { kind: "gain-card" },
+  G: { kind: "gain-card", card: null },
   c: { kind: "coin", value: 3 },
   x: { kind: "none" },
   // Random upgrades roll one of their options when the section is placed.
@@ -80,7 +80,7 @@ export const FEATURE_BY_CHAR: Record<string, TileFeature> = {
   "2": {
     kind: "random",
     tier: "uncommon",
-    options: [{ kind: "smith" }, { kind: "gain-card" }],
+    options: [{ kind: "smith" }, { kind: "gain-card", card: null }],
   },
   "3": {
     kind: "random",
@@ -631,6 +631,14 @@ function placeSection(
             stock: rolled.stock,
             rerollCost: feature.rerollCost,
           },
+        });
+      } else if (feature.kind === "gain-card") {
+        // The gift is part of the tile, so a skipped card is still there later.
+        const rolled = rollGift(SHOP_CATALOGUE, currentRng);
+        currentRng = rolled.rng;
+        tiles.set(key, {
+          ...tile,
+          feature: { kind: "gain-card", card: instantiate(rolled.spec, ids()) },
         });
       } else {
         tiles.set(key, { ...tile, feature });
