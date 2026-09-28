@@ -303,11 +303,10 @@ button {
     }
   }
 
-  /* Viewer cards must not become clickable via the inherited `auto` of the
-     overlay they sit in. */
+  /* Viewer cards are dimmed and non-interactive: they carry no click handler,
+     so they only need to stay hoverable for their tooltip. */
   &.card-view-only {
     opacity: 0.6;
-    pointer-events: none;
     cursor: default;
   }
 
@@ -396,6 +395,46 @@ button {
       width: 10px;
       height: 10px;
     }
+  }
+}
+
+/* The symbol legend shown above a card on hover. A fixed layer on the body, so
+   no overlay's scroll or the hand fan's rotation can clip or tilt it. */
+.card-tooltip {
+  position: fixed;
+  z-index: 2000;
+  width: calc(var(--card-w) * 2);
+  display: grid;
+  gap: 4px;
+  padding: 6px 8px;
+  background: #fff;
+  color: #000;
+  border: 2px solid #000;
+  font: 12px monospace;
+  pointer-events: none;
+  transform: translate(-50%, -100%);
+
+  &.hidden {
+    display: none;
+  }
+}
+
+.card-tooltip-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 6px;
+}
+
+.card-tooltip-symbol {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-weight: bold;
+
+  & .card-symbol-icon {
+    width: 16px;
+    height: 16px;
   }
 }
 
@@ -631,9 +670,9 @@ button {
   border: 2px solid #000;
 }
 
-/* While Scout's effect is live every tile costs 1, so the printed cost icons are
-   dimmed to show they no longer apply. */
-.hex.trivial-terrain .hex-icon-terrain {
+/* While Scout's effect is live every tile costs 1, so only the first printed
+   cost icon still applies; the rest are dimmed. */
+.hex.trivial-terrain .hex-icon-terrain ~ .hex-icon-terrain {
   opacity: 0.5;
 }
 

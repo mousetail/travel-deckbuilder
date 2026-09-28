@@ -1,5 +1,7 @@
 import type { Card, CardEffect, CardMode } from "../game/cards";
+import type { Terrain } from "../game/terrain";
 import { ATTACK_ICON, SLEEP_ICON, TERRAIN_ICON } from "../game/terrain";
+import { setChildren } from "./dom";
 import {
   COIN_ICON,
   SCOUT_ICON,
@@ -18,6 +20,43 @@ export function symbolNodes(card: Card): Node[] {
     nodes.push(...modeSymbolNodes(mode));
   }
   return nodes;
+}
+
+/**
+ * Every tooltip line for a card: one per mode, then one per play/discard
+ * effect. Each line draws the same symbol the card shows, then spells it out.
+ */
+export function cardTooltipRows(card: Card): HTMLElement[] {
+  const rows = card.modes.map((mode) =>
+    tooltipRow(modeSymbolNodes(mode), describeMode(mode)),
+  );
+  for (const effect of card.onPlay) {
+    rows.push(
+      tooltipRow(effectNodes(effect), describeEffect(effect)),
+    );
+  }
+  for (const effect of card.onDiscard) {
+    rows.push(
+      tooltipRow(
+        effectNodes(effect),
+        `When discarded: ${describeEffect(effect)}`,
+      ),
+    );
+  }
+  return rows;
+}
+
+function tooltipRow(symbolContent: Node[], description: string): HTMLElement {
+  const row = document.createElement("div");
+  row.classList.add("card-tooltip-row");
+  const symbol = document.createElement("span");
+  symbol.classList.add("card-tooltip-symbol");
+  setChildren(symbol, symbolContent);
+  const text = document.createElement("span");
+  text.classList.add("card-tooltip-text");
+  text.textContent = description;
+  setChildren(row, [symbol, text]);
+  return row;
 }
 
 function modeSymbolNodes(mode: CardMode): Node[] {
@@ -73,6 +112,51 @@ export function effectNodes(effect: CardEffect): Node[] {
 /** A moon and a reshuffle count, used wherever a sleep amount is shown. */
 export function sleepNodes(reshuffles: number): Node[] {
   return symbolIcon(SLEEP_ICON, `${reshuffles}`);
+}
+
+const TERRAIN_NAME: Record<Terrain, string> = {
+  grass: "Grass",
+  forest: "Forest",
+  water: "Water",
+  mountain: "Mountain",
+  dirt: "Dirt",
+  impassible: "Impassible",
+};
+
+/** What a card's mode symbol means, spelled out for the hover tooltip. */
+export function describeMode(mode: CardMode): string {
+  switch (mode.kind) {
+    case "move":
+      return `Travel ${mode.distance} over ${TERRAIN_NAME[mode.terrain]}`;
+    case "attack":
+      return mode.range === 0
+        ? "Attack an enemy on your tile"
+        : `Attack an enemy within ${mode.range} tiles`;
+    case "draw":
+      return `Draw ${counted(mode.count, "card")}`;
+    case "draw-discard":
+      return `Draw ${mode.draw}, discard ${mode.discard}`;
+    case "discard-hand":
+      return `If your hand has ${mode.threshold} or more cards, discard it and draw ${mode.draw}`;
+    case "recover":
+      return `Take ${counted(mode.count, "card")} from your discard pile`;
+    case "currency":
+      return `Gain ${mode.amount} currency`;
+    case "sleep-card":
+      return `Put a card in your hand to sleep for ${counted(mode.reshuffles, "reshuffle")}`;
+    case "search":
+      return `Take ${counted(mode.count, "card")} from your draw pile`;
+    case "trivial-terrain":
+      return `For ${counted(mode.turns, "turn")}, every terrain costs 1`;
+    case "upgrade-hand":
+      return "Upgrades all other cards in your hand";
+    case "teleport":
+      return `Teleport to an enemy within ${mode.range} tiles`;
+  }
+}
+
+function counted(n: number, noun: string): string {
+  return n === 1 ? `1 ${noun}` : `${n} ${noun}s`;
 }
 
 /** The description of a card effect, without its trigger. */

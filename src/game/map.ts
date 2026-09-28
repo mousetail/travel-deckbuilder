@@ -496,11 +496,20 @@ function placeSection(
   ids: IdFactory,
   queue: readonly string[],
 ): Placement | null {
+  // The opening section is the gentle introduction: always difficulty 0. After
+  // that the map may show sections one above the current band, but never one
+  // below it, so difficulty only ever steps up as the player pushes on.
   const band = difficultyBand(distance);
-  const pool = SECTION_TEMPLATES.filter(
-    (t) => Math.abs(t.difficulty - band) <= 1,
+  const minDifficulty = distance === 0 ? 0 : band;
+  const maxDifficulty = distance === 0 ? 0 : band + 1;
+  const withinBand = (t: SectionTemplate): boolean =>
+    t.difficulty >= minDifficulty && t.difficulty <= maxDifficulty;
+  const pool = SECTION_TEMPLATES.filter(withinBand);
+  // The panic pool is chosen for its small radius (to squeeze into tight
+  // gaps), but it must still respect the difficulty ceiling.
+  const emergencyPool = SECTION_TEMPLATES.filter(
+    (t) => t.radius <= 2 && t.difficulty <= maxDifficulty,
   );
-  const emergencyPool = SECTION_TEMPLATES.filter((t) => t.radius <= 2);
   if (pool.length === 0) {
     return null;
   }
@@ -775,7 +784,9 @@ export function generateMap(
   if (first !== undefined) {
     // The player starts inside the first section, so its timers start now.
     tiles = armSection(tiles, first, startTurn);
-    player = startingHex(tiles, first);
+    const start = startingHex(tiles, first, cursor.rng);
+    player = start.coord;
+    cursor = { ...cursor, rng: start.rng };
   }
 
   return { tiles, records, player, cursor, snipers };
@@ -806,13 +817,18 @@ export function armSection(
 
 /**
  * The player enters through the first section's entry edge. Prefer an edge hex
- * with no feature, so the opening turn is not forced onto a shop or a coin.
+ * with no feature, so the opening turn is not forced onto a shop or a coin; the
+ * exact landing spot among those is rolled at random so runs do not always
+ * begin on the same hex. Falls back to the section centre if the whole edge is
+ * built up.
  */
 function startingHex(
   tiles: ReadonlyMap<string, Tile>,
   section: SectionRecord,
-): HexCoord {
+  rng: Rng,
+): { coord: HexCoord; rng: Rng } {
   const radius = radiusOf(section);
+  const candidates: HexCoord[] = [];
   for (const local of hexSide(section.entryEdge, radius)) {
     const coord: HexCoord = {
       q: section.origin.q + local.q,
@@ -820,10 +836,14 @@ function startingHex(
     };
     const tile = tiles.get(hexKey(coord));
     if (tile !== undefined && tile.feature.kind === "none") {
-      return coord;
+      candidates.push(coord);
     }
   }
-  return section.origin;
+  if (candidates.length === 0) {
+    return { coord: section.origin, rng };
+  }
+  const rolled = pick(rng, candidates);
+  return { coord: rolled.item, rng: rolled.rng };
 }
 
 /**

@@ -1,5 +1,6 @@
 import type { Card, CardEffect } from "../game/cards";
 import { describeEffect, effectNodes, sleepNodes, symbolNodes } from "./card-text";
+import { attachCardTooltip } from "./card-tooltip";
 import { TEMPORARY_ICON } from "./card-icons";
 import { setChildren } from "./dom";
 
@@ -56,6 +57,7 @@ export function cardFace(card: Card, face: CardFace): HTMLElement {
     nodes.push(temporaryBadge());
   }
   setChildren(root, nodes);
+  attachCardTooltip(root, card);
   return root;
 }
 
