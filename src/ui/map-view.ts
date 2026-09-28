@@ -233,6 +233,8 @@ export class MapView {
   private readonly onCancel: () => void;
   private camera: Point = { x: 0, y: 0 };
   private zoom = 1;
+  /** Screen pixels of the bottom edge covered by the HUD's card band. */
+  private bottomInset = 0;
   private drag: DragState | null = null;
   /** Set when a drag ends, so the click it would otherwise fire is ignored. */
   private suppressClick = false;
@@ -494,6 +496,15 @@ export class MapView {
 
   zoomLevel(): number {
     return this.zoom;
+  }
+
+  /** How much of the bottom edge the card band covers, in screen pixels. */
+  setBottomInset(pixels: number): void {
+    this.bottomInset = pixels;
+  }
+
+  bottomInsetPixels(): number {
+    return this.bottomInset;
   }
 
   viewportSize(): { width: number; height: number } {

@@ -81,33 +81,67 @@ button {
 
 .hud-top {
   display: grid;
-  grid-auto-flow: column;
-  justify-content: space-between;
-  align-items: start;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
   gap: 8px;
   color: #fff;
 }
 
-.hud-hint {
+/* The run's currency, kept large and out of the way in the top-left corner. */
+.hud-currency {
+  justify-self: start;
+  display: grid;
+  grid-auto-flow: column;
+  align-items: center;
+  gap: 8px;
+  font-size: 36px;
+  font-weight: bold;
   color: #ffd700;
 }
 
+.hud-hint {
+  justify-self: center;
+  color: #ffd700;
+}
+
+.hud-progress {
+  justify-self: end;
+  text-align: right;
+}
+
 .hud-middle {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+}
+
+/* The modal overlays (shop, smith, game over) centre over the whole row. */
+.hud-overlay {
+  grid-column: 1 / -1;
+  grid-row: 1;
   display: grid;
   place-items: center;
 }
 
 .hud-bottom {
   display: grid;
-  grid-template-columns: auto 1fr auto auto;
+  grid-template-columns: auto 1fr auto;
   align-items: end;
   gap: 12px;
 }
 
-.pile-slot,
-.hud-action {
+.pile-slot {
   display: grid;
   place-items: end;
+}
+
+/* The end-turn / use-feature button sits mid-height on the right edge. */
+.hud-action {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
+  display: grid;
+  place-items: center;
 }
 
 /* The action label spells out the whole action, so keep it on one line. */
@@ -115,8 +149,13 @@ button {
   white-space: nowrap;
 }
 
+.hud-action .hud-button {
+  font-size: 22px;
+  padding: 18px 28px;
+}
+
 /* The coin icon, shown inline wherever an amount of currency is written. */
-.hud-stats .card-symbol-icon,
+.hud-currency .card-symbol-icon,
 .hud-button .card-symbol-icon,
 .card-tooltip-text .card-symbol-icon {
   width: 1em;
@@ -519,7 +558,7 @@ button {
 /* A confirmation (smith upgrade, card removal) is stacked over the selection it
    belongs to: both share one grid cell so the confirm sits on top, and the panel
    underneath stops taking clicks. */
-.hud-middle > .overlay {
+.hud-overlay > .overlay {
   grid-area: 1 / 1;
 }
 

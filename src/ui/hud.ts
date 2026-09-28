@@ -17,24 +17,25 @@ export class Hud {
   }
 
   render(state: GameState): void {
-    const stats = document.createElement("div");
-    stats.classList.add("hud-stats");
-    setChildren(stats, [
-      text(`Turn ${state.turn} · ${state.currency} `),
-      coinIcon(),
-      text(
-        ` · depth ${state.playerSectionOrder} · enemies ${state.enemies.length}`,
-      ),
-    ]);
+    const currency = document.createElement("div");
+    currency.classList.add("hud-currency");
+    setChildren(currency, [coinIcon(), text(`${state.currency}`)]);
 
     const hint = document.createElement("div");
     hint.classList.add("hud-hint");
     hint.textContent = hintFor(state);
 
-    setChildren(this.layer, [stats, hint]);
+    const progress = document.createElement("div");
+    progress.classList.add("hud-progress");
+    setChildren(progress, [
+      text(`Turn ${state.turn}`),
+      text(` · depth ${state.playerSectionOrder}`),
+    ]);
+
+    setChildren(this.layer, [currency, hint, progress]);
   }
 
-  /** The end-turn / use-feature button, which lives in the bottom bar. */
+  /** The end-turn / use-feature button, which sits mid-height on the right. */
   renderAction(slot: HTMLElement, state: GameState, busy: boolean): void {
     const button = document.createElement("button");
     button.classList.add("hud-button");

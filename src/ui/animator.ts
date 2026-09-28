@@ -149,9 +149,12 @@ export class Animator {
   private centredOn(point: Point): Point {
     const size = this.map.viewportSize();
     const zoom = this.map.zoomLevel();
+    // The card band covers the bottom of the viewport, so centre on the visible
+    // rectangle above it rather than the full screen.
+    const visibleHeight = size.height - this.map.bottomInsetPixels();
     return {
       x: point.x - size.width / (2 * zoom),
-      y: point.y - size.height / (2 * zoom),
+      y: point.y - visibleHeight / (2 * zoom),
     };
   }
 }

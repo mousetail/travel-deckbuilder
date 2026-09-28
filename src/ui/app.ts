@@ -54,6 +54,7 @@ export class App {
   private readonly hud: Hud;
   private readonly featureView: FeatureView;
   private readonly middle: HTMLElement;
+  private readonly bottomBar: HTMLElement;
   private readonly handLayer: HTMLElement;
   private readonly drawSlot: HTMLElement;
   private readonly discardSlot: HTMLElement;
@@ -93,20 +94,18 @@ export class App {
     const mapLayer = element("div", "map-layer");
     const hudLayer = element("div", "hud-layer");
     const topBar = element("div", "hud-top");
-    this.middle = element("div", "hud-middle");
+    const middleRow = element("div", "hud-middle");
+    this.middle = element("div", "hud-overlay");
     const bottomBar = element("div", "hud-bottom");
     this.handLayer = element("div", "hand");
     this.drawSlot = element("div", "pile-slot");
     this.discardSlot = element("div", "pile-slot");
     this.actionSlot = element("div", "hud-action");
 
-    setChildren(bottomBar, [
-      this.drawSlot,
-      this.handLayer,
-      this.discardSlot,
-      this.actionSlot,
-    ]);
-    setChildren(hudLayer, [topBar, this.middle, bottomBar]);
+    setChildren(middleRow, [this.middle, this.actionSlot]);
+    setChildren(bottomBar, [this.drawSlot, this.handLayer, this.discardSlot]);
+    setChildren(hudLayer, [topBar, middleRow, bottomBar]);
+    this.bottomBar = bottomBar;
 
     this.shell = element("div", "app");
     const animationLayer = element("div", "card-animation-layer");
@@ -142,8 +141,24 @@ export class App {
 
   mount(): void {
     setChildren(this.root, [this.shell]);
+    window.addEventListener("resize", this.onResize);
     this.render();
   }
+
+  /**
+   * A resize moves the card band, so re-measure it and re-centre the camera.
+   * Removes itself once this app has been replaced by a restart.
+   */
+  private readonly onResize = (): void => {
+    if (!this.shell.isConnected) {
+      window.removeEventListener("resize", this.onResize);
+      return;
+    }
+    this.updateMapInset();
+    if (!this.animating) {
+      this.animator.snap(hexToPixel(this.state.map.player));
+    }
+  };
 
   /**
    * Adopt a transition: store its state, then show the movements it reported.
@@ -219,13 +234,13 @@ export class App {
       activeHighlight: this.activeHighlightKey(),
       killable: this.killableEnemies(),
     });
-    // Mid-animation the animator owns the camera; otherwise keep it on the player.
-    if (!this.animating) {
-      this.animator.snap(hexToPixel(this.state.map.player));
-    }
     this.renderHand();
     this.hud.render(this.state);
-    this.hud.renderAction(this.actionSlot, this.state, this.animating);
+    if (isModalPhase(this.state.phase)) {
+      setChildren(this.actionSlot, []);
+    } else {
+      this.hud.renderAction(this.actionSlot, this.state, this.animating);
+    }
 
     setChildren(this.drawSlot, [
       pileButton("Draw", this.state.deck.draw.length, "draw", () =>
@@ -238,11 +253,27 @@ export class App {
       ),
     ]);
     this.renderMiddle();
+    this.updateMapInset();
+    // Mid-animation the animator owns the camera; otherwise keep it on the player.
+    if (!this.animating) {
+      this.animator.snap(hexToPixel(this.state.map.player));
+    }
 
     if (!prefersReducedMotion()) {
       this.animateDeck(deckDiff(this.previousDeck, this.state.deck), oldHand);
     }
     this.previousDeck = this.state.deck;
+  }
+
+  /**
+   * Tell the map how much of its bottom edge the card band covers, so the
+   * camera centres actors in the visible area above the cards rather than the
+   * geometric centre that the cards sit over.
+   */
+  private updateMapInset(): void {
+    const viewport = this.mapView.viewportSize();
+    const cardsTop = this.bottomBar.getBoundingClientRect().top;
+    this.mapView.setBottomInset(Math.max(0, viewport.height - cardsTop));
   }
 
   /** Every hand card's screen rect, keyed by card id. */
