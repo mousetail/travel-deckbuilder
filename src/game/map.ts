@@ -297,7 +297,7 @@ export type AdvanceResult = {
 
 const MAX_ATTEMPTS = 40;
 const MAX_BAND = 3;
-const SECTIONS_PER_BAND = 4;
+const SECTIONS_PER_BAND = 5;
 
 function difficultyBand(distance: number): number {
   return Math.min(Math.floor(distance / SECTIONS_PER_BAND), MAX_BAND);

@@ -4,6 +4,7 @@ export function renderMenu(
   root: HTMLElement,
   onPlay: () => void,
   onEdit: () => void,
+  onStats: () => void,
 ): void {
   const title = document.createElement("h1");
   title.classList.add("menu-title");
@@ -13,6 +14,7 @@ export function renderMenu(
   buttons.classList.add("menu-buttons");
   setChildren(buttons, [
     menuButton("Play", onPlay),
+    menuButton("Statistics", onStats),
     menuButton("Section editor", onEdit),
   ]);
 

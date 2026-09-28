@@ -18,8 +18,10 @@ import { dangerZone, enemyDangerZones } from "../game/enemies";
 import { applyFeatureAction, useFeature } from "../game/economy";
 import type { FeatureAction } from "../game/economy";
 import { runScores } from "../game/stats";
+import { foldRun, runOutcome } from "../game/career";
 import { loadHistory, recordRun, saveHistory } from "./stats-store";
 import type { History } from "./stats-store";
+import { loadCareer, saveCareer } from "./career-store";
 import {
   beginPlay,
   cancelPending,
@@ -186,6 +188,9 @@ export class App {
     this.previousHistory = this.history;
     this.history = recordRun(this.history, state.playerSectionOrder, scores);
     saveHistory(this.history);
+    saveCareer(
+      foldRun(loadCareer(), runOutcome(state.phase.reason, state.stats)),
+    );
   }
 
   private async animate(moves: readonly MovePath[]): Promise<void> {

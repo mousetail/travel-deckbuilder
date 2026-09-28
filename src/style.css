@@ -981,6 +981,63 @@ button {
   font-size: 16px;
 }
 
+/* --- statistics screen -------------------------------------------------- */
+
+.stats-screen {
+  box-sizing: border-box;
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  gap: 16px;
+  justify-items: center;
+  width: 100vw;
+  height: 100vh;
+  padding: 24px;
+  background: #000;
+  color: #fff;
+}
+
+.stats-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+/* The menu's buttons are white on white; give the tabs a dark unselected look
+   so the active tab reads clearly. */
+.stats-tab {
+  background: #222;
+  color: #fff;
+  border-color: #fff;
+}
+
+.stats-tab-active {
+  background: #fff;
+  color: #000;
+}
+
+.stats-content {
+  width: min(960px, 100%);
+  overflow: auto;
+  padding: 4px;
+}
+
+.stats-group {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+}
+
+.stats-note {
+  color: #999;
+}
+
+/* The tables are drawn on the black screen, so their borders must be white. */
+.stats-screen .stats-table th,
+.stats-screen .stats-table td {
+  border-color: #fff;
+}
+
 /* --- section editor ----------------------------------------------------- */
 
 /* The editor's own styles live in editor.css, imported by editor.ts. */

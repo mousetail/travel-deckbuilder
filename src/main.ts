@@ -3,6 +3,7 @@ import { requireElementById } from "./ui/dom";
 import { App } from "./ui/app";
 import { Editor } from "./ui/editor";
 import { renderMenu } from "./ui/menu";
+import { renderStats } from "./ui/stats-view";
 import { buildDeck } from "./game/deck";
 import { allCards } from "./game/deck";
 import { counterIds, STARTING_DECK } from "./game/cards";
@@ -37,7 +38,14 @@ function startGame(): void {
     phase: { kind: "playing" },
     rng: generated.cursor.rng,
     ids,
-    turnState: { cardsPlayedThisTurn: 0, skipBonusTaken: false },
+    turnState: {
+      cardsPlayedThisTurn: 0,
+      distanceThisTurn: 0,
+      enemiesKilledThisTurn: 0,
+      currencyEarnedThisTurn: 0,
+      currencySpentThisTurn: 0,
+      skipBonusTaken: false,
+    },
     stats: startingStats(allCards(deck), startSection.id, 1, startingCurrency),
     terrainTrivialTurns: 0,
   };
@@ -52,7 +60,11 @@ function startEditor(): void {
 }
 
 function showMenu(): void {
-  renderMenu(root, startGame, startEditor);
+  renderMenu(root, startGame, startEditor, showStats);
+}
+
+function showStats(): void {
+  renderStats(root, showMenu);
 }
 
 showMenu();

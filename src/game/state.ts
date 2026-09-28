@@ -51,6 +51,11 @@ export type GameOverReason =
 /** Per-turn bookkeeping, reset at the start of every turn. */
 export type TurnState = {
   cardsPlayedThisTurn: number;
+  /** Hexes the player has stepped this turn, for the distance record. */
+  distanceThisTurn: number;
+  enemiesKilledThisTurn: number;
+  currencyEarnedThisTurn: number;
+  currencySpentThisTurn: number;
   /**
    * Whether the no-card "skip turn" bonus has already been paid this turn. It
    * is granted when the player commits to ending the turn, which is before a

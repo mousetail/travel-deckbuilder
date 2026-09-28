@@ -21,7 +21,7 @@ import {
   killEnemy,
   resolveEnemyPhase,
 } from "./enemies";
-import { equalsHex } from "./hex";
+import { equalsHex, hexDistance } from "./hex";
 import type { HexCoord } from "./hex";
 import { onPlayerMoved, visibleReach } from "./fog";
 import { reachableHexes, resolveMove } from "./movement";
@@ -33,7 +33,15 @@ import {
 } from "./reach";
 import type { Rng } from "./rng";
 import type { GameState, TurnState } from "./state";
-import { countDiscarded, countDrawn, countKill, countPlay } from "./stats";
+import {
+  countDiscarded,
+  countDrawn,
+  countKill,
+  countPlay,
+  recordCardsPlayedInTurn,
+  recordDistanceInTurn,
+  recordEnemiesKilledInTurn,
+} from "./stats";
 import { playerOnFinish } from "./terrain";
 import { moving, still } from "./transition";
 import type { Transition } from "./transition";
@@ -129,7 +137,11 @@ function spent(
   drawn: readonly Card[],
 ): GameState {
   const paid = payForPlay(state, card);
-  const stats = countPlay(countDrawn(paid.stats, drawn), card.id);
+  const playedThisTurn = paid.turnState.cardsPlayedThisTurn + 1;
+  const stats = recordCardsPlayedInTurn(
+    countPlay(countDrawn(paid.stats, drawn), card.id),
+    playedThisTurn,
+  );
   return {
     ...paid,
     deck,
@@ -137,7 +149,7 @@ function spent(
     stats,
     turnState: {
       ...paid.turnState,
-      cardsPlayedThisTurn: paid.turnState.cardsPlayedThisTurn + 1,
+      cardsPlayedThisTurn: playedThisTurn,
     },
   };
 }
@@ -477,15 +489,25 @@ export function resolveAttack(state: GameState, enemyId: string): Transition {
     return still(state);
   }
   const paid = payForPlay(gainCurrency(state, bountyFor(target), "combat"), card);
+  const killedThisTurn = paid.turnState.enemiesKilledThisTurn + 1;
+  const playedThisTurn = paid.turnState.cardsPlayedThisTurn + 1;
+  const stats = recordCardsPlayedInTurn(
+    recordEnemiesKilledInTurn(
+      countPlay(countKill(paid.stats), card.id),
+      killedThisTurn,
+    ),
+    playedThisTurn,
+  );
   return still({
     ...paid,
-    stats: countPlay(countKill(paid.stats), card.id),
+    stats,
     enemies: killEnemy(paid.enemies, enemyId),
     deck: discardPlayed(paid.deck, card),
     phase: { kind: "playing" },
     turnState: {
       ...paid.turnState,
-      cardsPlayedThisTurn: paid.turnState.cardsPlayedThisTurn + 1,
+      cardsPlayedThisTurn: playedThisTurn,
+      enemiesKilledThisTurn: killedThisTurn,
     },
   });
 }
@@ -511,16 +533,29 @@ export function resolveMoveTo(state: GameState, to: HexCoord): Transition {
           mode.distance,
         );
   const destination = path[path.length - 1];
+  const distance =
+    mode.kind === "teleport"
+      ? hexDistance(state.map.player, to)
+      : path.length - 1;
   const paid = payForPlay(state, phase.card);
+  const playedThisTurn = paid.turnState.cardsPlayedThisTurn + 1;
+  const distanceThisTurn = paid.turnState.distanceThisTurn + distance;
   const moved: GameState = {
     ...paid,
     deck: discardPlayed(paid.deck, phase.card),
-    stats: countPlay(paid.stats, phase.card.id),
+    stats: recordCardsPlayedInTurn(
+      recordDistanceInTurn(
+        countPlay(paid.stats, phase.card.id),
+        distanceThisTurn,
+      ),
+      playedThisTurn,
+    ),
     map: { ...paid.map, player: destination, previous: paid.map.player },
     phase: { kind: "playing" },
     turnState: {
       ...paid.turnState,
-      cardsPlayedThisTurn: paid.turnState.cardsPlayedThisTurn + 1,
+      cardsPlayedThisTurn: playedThisTurn,
+      distanceThisTurn,
     },
   };
   // Crossing into a new section streams the map, but never ends the turn.
@@ -571,7 +606,14 @@ export function startTurn(state: GameState): GameState {
     rng: drawn.rng,
     stats: countDrawn(state.stats, drawn.drawn),
     terrainTrivialTurns: Math.max(0, state.terrainTrivialTurns - 1),
-    turnState: { cardsPlayedThisTurn: 0, skipBonusTaken: false },
+    turnState: {
+      cardsPlayedThisTurn: 0,
+      distanceThisTurn: 0,
+      enemiesKilledThisTurn: 0,
+      currencyEarnedThisTurn: 0,
+      currencySpentThisTurn: 0,
+      skipBonusTaken: false,
+    },
   };
   // Surviving the enemy phase on the finish tile wins the run.
   if (playerOnFinish(next)) {

@@ -14,9 +14,52 @@ export type CardRecord = {
   played: number;
   /** Times the card left the hand for the discard pile without being played. */
   discarded: number;
+  /** Times the card was permanently upgraded at a smith. */
+  upgraded: number;
   /** The turn the card left the deck, or null while it is still held. */
   removedTurn: number | null;
 };
+
+/** How often a card was offered to the player during a run, by card name. */
+export type CardShowTally = {
+  name: string;
+  shownInShop: number;
+  shownInGift: number;
+};
+
+/**
+ * The best single-turn (and deck-size) values for one run, every field tracked
+ * as a running maximum while the run is played. `leastCardsInDeck` is a running
+ * minimum, or null before the deck has been measured once.
+ */
+export type RunRecords = {
+  mostCardsPlayedInTurn: number;
+  mostDistanceInTurn: number;
+  mostEnemiesKilledInTurn: number;
+  mostCurrencyHeld: number;
+  mostCurrencyEarnedInTurn: number;
+  mostCurrencySpentInTurn: number;
+  mostCardsInDeck: number;
+  leastCardsInDeck: number | null;
+  mostUpgradedCardsInDeck: number;
+};
+
+/** The record keys that only ever rise, so `raise` can compare them as numbers. */
+type MaxRecordKey = Exclude<keyof RunRecords, "leastCardsInDeck">;
+
+export function emptyRecords(): RunRecords {
+  return {
+    mostCardsPlayedInTurn: 0,
+    mostDistanceInTurn: 0,
+    mostEnemiesKilledInTurn: 0,
+    mostCurrencyHeld: 0,
+    mostCurrencyEarnedInTurn: 0,
+    mostCurrencySpentInTurn: 0,
+    mostCardsInDeck: 0,
+    leastCardsInDeck: null,
+    mostUpgradedCardsInDeck: 0,
+  };
+}
 
 /** Where a coin came from, for the end-of-run breakdown. */
 export type CurrencyGainSource = "cards" | "combat" | "skips" | "coins";
@@ -46,6 +89,11 @@ export type RunStats = {
   enemiesKilled: number;
   sitesVisited: number;
   cards: readonly CardRecord[];
+  /** How often each card name was offered (whether or not it was taken). */
+  cardShown: readonly CardShowTally[];
+  /** Ids of cards permanently upgraded this run, still held in the deck. */
+  upgradedCardIds: readonly string[];
+  records: RunRecords;
   currency: CurrencyLedger;
 };
 
@@ -69,6 +117,9 @@ export function emptyStats(): RunStats {
     enemiesKilled: 0,
     sitesVisited: 0,
     cards: [],
+    cardShown: [],
+    upgradedCardIds: [],
+    records: emptyRecords(),
     currency: {
       gained: 0,
       spent: 0,
@@ -102,7 +153,8 @@ export function startingStats(
   for (const card of cards) {
     stats = acquireCard(stats, card, { kind: "starting" }, turn);
   }
-  return stats;
+  stats = recordDeckSize(stats, cards.length);
+  return recordCurrencyHeld(stats, startingCurrency);
 }
 
 export function visitSections(
@@ -138,6 +190,7 @@ export function acquireCard(
     drawn: 0,
     played: 0,
     discarded: 0,
+    upgraded: 0,
     removedTurn: null,
   };
   return { ...stats, cards: [...stats.cards, record] };
@@ -231,7 +284,119 @@ export function countRemoved(
     cards: stats.cards.map((record) =>
       record.id === cardId ? { ...record, removedTurn: turn } : record,
     ),
+    upgradedCardIds: stats.upgradedCardIds.filter((id) => id !== cardId),
   };
+}
+
+/** Mark a card as permanently upgraded at a smith, for the records. */
+export function countUpgrade(stats: RunStats, cardId: string): RunStats {
+  if (stats.upgradedCardIds.includes(cardId)) {
+    return stats;
+  }
+  const upgraded: RunStats = {
+    ...stats,
+    cards: stats.cards.map((record) =>
+      record.id === cardId ? { ...record, upgraded: record.upgraded + 1 } : record,
+    ),
+    upgradedCardIds: [...stats.upgradedCardIds, cardId],
+  };
+  return recordUpgradedCards(upgraded, upgraded.upgradedCardIds.length);
+}
+
+/** Note that `name` was offered in a shop or a gift space. */
+export function countCardShown(
+  stats: RunStats,
+  name: string,
+  where: "shop" | "gift",
+): RunStats {
+  const index = stats.cardShown.findIndex((tally) => tally.name === name);
+  if (index === -1) {
+    return {
+      ...stats,
+      cardShown: [
+        ...stats.cardShown,
+        {
+          name,
+          shownInShop: where === "shop" ? 1 : 0,
+          shownInGift: where === "gift" ? 1 : 0,
+        },
+      ],
+    };
+  }
+  return {
+    ...stats,
+    cardShown: stats.cardShown.map((tally, i) =>
+      i === index
+        ? {
+            ...tally,
+            shownInShop: tally.shownInShop + (where === "shop" ? 1 : 0),
+            shownInGift: tally.shownInGift + (where === "gift" ? 1 : 0),
+          }
+        : tally,
+    ),
+  };
+}
+
+/** Raise one of the running maximum records to `value`, if it is higher. */
+function raise(stats: RunStats, key: MaxRecordKey, value: number): RunStats {
+  if (value <= stats.records[key]) {
+    return stats;
+  }
+  const records: RunRecords = { ...stats.records };
+  records[key] = value;
+  return { ...stats, records };
+}
+
+export function recordCardsPlayedInTurn(stats: RunStats, value: number): RunStats {
+  return raise(stats, "mostCardsPlayedInTurn", value);
+}
+
+export function recordDistanceInTurn(stats: RunStats, value: number): RunStats {
+  return raise(stats, "mostDistanceInTurn", value);
+}
+
+export function recordEnemiesKilledInTurn(
+  stats: RunStats,
+  value: number,
+): RunStats {
+  return raise(stats, "mostEnemiesKilledInTurn", value);
+}
+
+export function recordCurrencyEarnedInTurn(
+  stats: RunStats,
+  value: number,
+): RunStats {
+  return raise(stats, "mostCurrencyEarnedInTurn", value);
+}
+
+export function recordCurrencySpentInTurn(
+  stats: RunStats,
+  value: number,
+): RunStats {
+  return raise(stats, "mostCurrencySpentInTurn", value);
+}
+
+export function recordCurrencyHeld(stats: RunStats, value: number): RunStats {
+  return raise(stats, "mostCurrencyHeld", value);
+}
+
+/** Track the deck's size against the most and least seen during the run. */
+export function recordDeckSize(stats: RunStats, size: number): RunStats {
+  const records: RunRecords = { ...stats.records };
+  let changed = false;
+  if (size > records.mostCardsInDeck) {
+    records.mostCardsInDeck = size;
+    changed = true;
+  }
+  if (records.leastCardsInDeck === null || size < records.leastCardsInDeck) {
+    records.leastCardsInDeck = size;
+    changed = true;
+  }
+  return changed ? { ...stats, records } : stats;
+}
+
+export function recordUpgradedCards(stats: RunStats, value: number): RunStats {
+  return raise(stats, "mostUpgradedCardsInDeck", value);
 }
 
 export function countPlay(stats: RunStats, cardId: string): RunStats {

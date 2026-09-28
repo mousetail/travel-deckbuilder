@@ -2,12 +2,19 @@ import type { Card } from "./cards";
 import { SHOP_CATALOGUE, instantiate } from "./cards";
 import { gainCurrency, spendCurrency } from "./currency";
 import type { Deck } from "./deck";
-import { addPurchase } from "./deck";
+import { addPurchase, deckSize } from "./deck";
 import { hexKey } from "./hex";
 import type { HexCoord } from "./hex";
 import { SHOP_STOCK_SIZE, rollShopStock } from "./shop";
 import type { GameState } from "./state";
-import { acquireCard, countRemoved, countSite } from "./stats";
+import {
+  acquireCard,
+  countCardShown,
+  countRemoved,
+  countSite,
+  countUpgrade,
+  recordDeckSize,
+} from "./stats";
 import type { TileFeature } from "./terrain";
 import { still } from "./transition";
 import type { Transition } from "./transition";
@@ -97,7 +104,15 @@ export function useFeature(state: GameState): Transition {
     case "coin":
       return endTurn(collectCoin(site, site.map.player));
     case "shop": {
-      const opened = takeSkipBonus(site);
+      const withShown = {
+        ...site,
+        stats: feature.stock.reduce(
+          (stats, slot) =>
+            slot === null ? stats : countCardShown(stats, slot.name, "shop"),
+          site.stats,
+        ),
+      };
+      const opened = takeSkipBonus(withShown);
       return still({
         ...opened,
         phase: {
@@ -114,11 +129,18 @@ export function useFeature(state: GameState): Transition {
         ...takeSkipBonus(site),
         phase: { kind: "pending-remove" },
       });
-    case "gain-card":
+    case "gain-card": {
+      const opened = takeSkipBonus(site);
+      const stats =
+        feature.card === null
+          ? opened.stats
+          : countCardShown(opened.stats, feature.card.name, "gift");
       return still({
-        ...takeSkipBonus(site),
+        ...opened,
+        stats,
         phase: { kind: "pending-gain", card: feature.card },
       });
+    }
     case "random":
       throw new Error("unresolved random feature");
   }
@@ -132,14 +154,18 @@ export function buyCard(state: GameState, card: Card): GameState {
   const stock = state.phase.stock.map((slot) =>
     slot !== null && slot.id === card.id ? null : slot,
   );
+  const bought = addPurchase(paid.deck, card);
   const next: GameState = {
     ...paid,
-    deck: addPurchase(paid.deck, card),
-    stats: acquireCard(
-      paid.stats,
-      card,
-      { kind: "shop", cost: card.cost },
-      paid.turn,
+    deck: bought,
+    stats: recordDeckSize(
+      acquireCard(
+        paid.stats,
+        card,
+        { kind: "shop", cost: card.cost },
+        paid.turn,
+      ),
+      deckSize(bought),
     ),
     phase: { kind: "shop", stock, rerollCost: state.phase.rerollCost },
   };
@@ -160,6 +186,10 @@ export function rerollShop(state: GameState): GameState {
   const next: GameState = {
     ...paid,
     rng: rolled.rng,
+    stats: rolled.stock.reduce(
+      (stats, card) => countCardShown(stats, card.name, "shop"),
+      paid.stats,
+    ),
     phase: {
       kind: "shop",
       stock: rolled.stock,
@@ -273,6 +303,7 @@ export function chooseSmithCard(state: GameState, cardId: string): Transition {
   const upgraded = {
     ...state,
     deck: upgradeCardInDeck(state.deck, cardId),
+    stats: countUpgrade(state.stats, cardId),
   };
   return finishFeature(consumeFeatureAt(upgraded, upgraded.map.player));
 }
@@ -281,10 +312,14 @@ export function chooseRemoveCard(state: GameState, cardId: string): Transition {
   if (state.phase.kind !== "pending-remove") {
     return still(state);
   }
+  const deck = removeCardFromDeck(state.deck, cardId);
   const removed = {
     ...state,
-    deck: removeCardFromDeck(state.deck, cardId),
-    stats: countRemoved(state.stats, cardId, state.turn),
+    deck,
+    stats: recordDeckSize(
+      countRemoved(state.stats, cardId, state.turn),
+      deckSize(deck),
+    ),
   };
   return finishFeature(consumeFeatureAt(removed, removed.map.player));
 }
@@ -309,10 +344,14 @@ export function takeGift(state: GameState): Transition {
   if (card === null) {
     return still(state);
   }
+  const gift = addPurchase(state.deck, card);
   const withCard = {
     ...state,
-    deck: addPurchase(state.deck, card),
-    stats: acquireCard(state.stats, card, { kind: "gift" }, state.turn),
+    deck: gift,
+    stats: recordDeckSize(
+      acquireCard(state.stats, card, { kind: "gift" }, state.turn),
+      deckSize(gift),
+    ),
   };
   return finishFeature(clearGainCard(withCard, withCard.map.player));
 }

@@ -153,3 +153,8 @@ export function drawUpTo(deck: Deck, handSize: number, rng: Rng): DeckMutation {
 export function allCards(deck: Deck): Card[] {
   return [...deck.draw, ...deck.hand, ...deck.discard];
 }
+
+/** How many cards the deck holds across all three zones. */
+export function deckSize(deck: Deck): number {
+  return deck.draw.length + deck.hand.length + deck.discard.length;
+}
