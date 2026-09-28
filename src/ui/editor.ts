@@ -3,7 +3,6 @@ import {
   AXIAL_DIRECTIONS,
   HEX_SIZE,
   addHex,
-  hexDistance,
   hexKey,
   hexToPixel,
   hexesInRange,
@@ -12,17 +11,18 @@ import {
 import type { HexCoord } from "../game/hex";
 import { hexSide, hexSideCentre } from "../game/hexagon";
 import { TERRAIN_TEXTURE, tileIcons } from "../game/terrain";
+import type { EnemyKind } from "../game/terrain";
+import { WATCHTOWER_RADIUS } from "../game/enemies";
 import {
   COST_BY_CHAR,
+  ENEMY_BY_CHAR,
   FEATURE_BY_CHAR,
-  SNIPER_CHAR,
-  SNIPER_RADIUS,
   TERRAIN_BY_CHAR,
   localCoord,
   validateTemplate,
 } from "../game/map";
 import tiles from "../game/tiles.json";
-import type { SectionTemplate, SpawnPoint } from "../game/map";
+import type { SectionTemplate } from "../game/map";
 import { setChildren } from "./dom";
 import { iconSlotElements } from "./tile-icons";
 
@@ -36,11 +36,13 @@ type Brush =
   | { type: "terrain"; value: string }
   | { type: "cost"; value: string }
   | { type: "overlay"; value: string }
-  | { type: "spawn"; value: "clear" | number };
+  | { type: "enemy"; value: string }
+  | { type: "enemy-timer"; value: string };
 
 const TERRAIN_CHARS = Object.keys(TERRAIN_BY_CHAR);
 const COST_CHARS = Object.keys(COST_BY_CHAR);
 const OVERLAY_CHARS = Object.keys(FEATURE_BY_CHAR);
+const ENEMY_CHARS = Object.keys(ENEMY_BY_CHAR);
 const ALL_EDGES: readonly number[] = [0, 1, 2, 3, 4, 5];
 
 const SQRT3 = Math.sqrt(3);
@@ -64,6 +66,7 @@ const TERRAIN_LABEL: Record<string, string> = {
   m: "mountain",
   d: "dirt",
   "#": "impassible",
+  'e': 'finish'
 };
 
 const COST_LABEL: Record<string, string> = {
@@ -80,10 +83,16 @@ const OVERLAY_LABEL: Record<string, string> = {
   R: "remove",
   G: "gain",
   c: "coin",
-  x: "sniper",
   "1": "random common",
   "2": "random uncommon",
   "3": "random rare",
+};
+
+const ENEMY_LABEL: Record<string, string> = {
+  ".": "none",
+  a: "assassin",
+  s: "sniper",
+  w: "watchtower",
 };
 
 export class Editor {
@@ -92,8 +101,8 @@ export class Editor {
   private templates: SectionTemplate[];
   private selected: number;
   private brush: Brush;
-  /** Delay shown in the spawn input and placed by the spawn brush. */
-  private spawnDelay: number;
+  /** Timer shown in the enemy-timer input and placed by its brush. */
+  private enemyTimer: number;
 
   constructor(root: HTMLElement, onExit: () => void) {
     this.root = root;
@@ -101,7 +110,7 @@ export class Editor {
     this.templates = tiles.map(cloneTemplate);
     this.selected = 0;
     this.brush = { type: "terrain", value: "." };
-    this.spawnDelay = 3;
+    this.enemyTimer = 3;
   }
 
   mount(): void {
@@ -212,9 +221,9 @@ export class Editor {
     container.style.width = `${maxX - minX + HEX_WIDTH + 48}px`;
     container.style.height = `${maxY - minY + HEX_HEIGHT + 48}px`;
 
-    const snipers = sniperHexes(template);
-    const range = sniperRange(snipers);
-    const spawns = template.spawns;
+    const watchtowers = watchtowerHexes(template);
+    const range = watchtowerRange(watchtowers);
+    const spawns = enemySpawns(template);
     const templateKeys = new Set<string>();
     template.terrain.forEach((row, index) => {
       const r = index - radius;
@@ -252,20 +261,18 @@ export class Editor {
       container.append(segment);
     }
 
-    for (const sniper of snipers) {
-      const pixel = hexToPixel(sniper);
+    for (const spawn of spawns) {
+      const pixel = hexToPixel(spawn.coord);
       const node = el("div", "enemy");
-      node.classList.add("enemy-sniper");
+      node.classList.add(`enemy-${spawn.kind}`);
       place(node, { x: pixel.x + offset.x, y: pixel.y + offset.y });
       container.append(node);
-    }
-
-    for (const spawn of spawns) {
-      const pixel = hexToPixel({ q: spawn.q, r: spawn.r });
-      const node = el("div", "hex-spawn");
-      node.textContent = String(spawn.delay);
-      place(node, { x: pixel.x + offset.x, y: pixel.y + offset.y - 26 });
-      container.append(node);
+      if (spawn.delay > 0) {
+        const badge = el("div", "hex-spawn");
+        badge.textContent = String(spawn.delay);
+        place(badge, { x: pixel.x + offset.x, y: pixel.y + offset.y - 26 });
+        container.append(badge);
+      }
     }
 
     return container;
@@ -291,7 +298,7 @@ export class Editor {
   }
 
   /**
-   * The outline of the sniper range, drawn the same way the game draws its
+   * The outline of the watchtower range, drawn the same way the game draws its
    * danger zone: for every in-template hex in range, only the sides whose
    * neighbour is out of range, so the whole zone gets one red border.
    */
@@ -365,7 +372,7 @@ export class Editor {
         type: "overlay",
         value,
       })),
-      this.spawnGroup(),
+      this.enemiesGroup(),
     ]);
     return palette;
   }
@@ -408,9 +415,17 @@ export class Editor {
     return current.type === brush.type && current.value === brush.value;
   }
 
-  private spawnGroup(): HTMLElement {
-    return this.group("Spawn", [
-      [this.spawnDelayInput(), this.spawnClearButton()],
+  /**
+   * The enemy layer and its timer are separate layers, so they get separate
+   * brush rows: one picks the enemy kind, the other the spawn delay.
+   */
+  private enemiesGroup(): HTMLElement {
+    const kinds = ENEMY_CHARS.map((char) =>
+      this.brushButton(ENEMY_LABEL[char], { type: "enemy", value: char }),
+    );
+    return this.group("Enemies", [
+      kinds,
+      [this.enemyTimerInput(), this.enemyTimerClearButton()],
     ]);
   }
 
@@ -433,35 +448,36 @@ export class Editor {
   }
 
   /**
-   * The delay the spawn brush places, in turns after the player enters. Focusing
-   * or editing it selects the spawn brush; it never re-renders, so the hex click
-   * that follows still lands on the hex under the cursor.
+   * The delay the enemy-timer brush places, in turns after the player enters.
+   * Focusing or editing it selects that brush; it never re-renders, so the hex
+   * click that follows still lands on the hex under the cursor.
    */
-  private spawnDelayInput(): HTMLInputElement {
+  private enemyTimerInput(): HTMLInputElement {
     const input = document.createElement("input");
     input.type = "number";
     input.min = "0";
-    input.value = String(this.spawnDelay);
+    input.max = "9";
+    input.value = String(this.enemyTimer);
     input.classList.add("editor-number");
     input.addEventListener("focus", () => {
-      this.brush = { type: "spawn", value: this.spawnDelay };
+      this.brush = { type: "enemy-timer", value: String(this.enemyTimer) };
     });
     input.addEventListener("change", () => {
       const parsed = Number(input.value);
       if (Number.isFinite(parsed)) {
-        this.spawnDelay = Math.max(0, Math.round(parsed));
+        this.enemyTimer = Math.max(0, Math.min(9, Math.round(parsed)));
       }
-      this.brush = { type: "spawn", value: this.spawnDelay };
+      this.brush = { type: "enemy-timer", value: String(this.enemyTimer) };
     });
     return input;
   }
 
-  /** Select the spawn brush in its clearing mode. */
-  private spawnClearButton(): HTMLButtonElement {
+  /** Select the enemy-timer brush in its clearing mode. */
+  private enemyTimerClearButton(): HTMLButtonElement {
     const node = button("Clear", () =>
-      this.setBrush({ type: "spawn", value: "clear" }),
+      this.setBrush({ type: "enemy-timer", value: "." }),
     );
-    if (this.isActive({ type: "spawn", value: "clear" })) {
+    if (this.isActive({ type: "enemy-timer", value: "." })) {
       node.classList.add("active");
     }
     return node;
@@ -596,16 +612,16 @@ export class Editor {
       return;
     }
     const brush = this.brush;
-    if (brush.type === "spawn") {
-      this.paintSpawn(template, rowIndex, column, brush.value);
-      return;
-    }
     const rows =
       brush.type === "terrain"
         ? template.terrain
         : brush.type === "overlay"
           ? template.overlays
-          : template.cost;
+          : brush.type === "enemy"
+            ? template.enemies
+            : brush.type === "enemy-timer"
+              ? template.enemyTimers
+              : template.cost;
     const row = rows[rowIndex];
     if (row === undefined) {
       return;
@@ -618,32 +634,13 @@ export class Editor {
       template.terrain = next;
     } else if (brush.type === "overlay") {
       template.overlays = next;
+    } else if (brush.type === "enemy") {
+      template.enemies = next;
+    } else if (brush.type === "enemy-timer") {
+      template.enemyTimers = next;
     } else {
       template.cost = next;
     }
-    this.render();
-  }
-
-  /** Place or clear a spawn point on one hex, keeping the list sorted. */
-  private paintSpawn(
-    template: SectionTemplate,
-    rowIndex: number,
-    column: number,
-    value: "clear" | number,
-  ): void {
-    const local = localCoord(
-      template.radius,
-      rowIndex - template.radius,
-      column,
-    );
-    const others: SpawnPoint[] = template.spawns.filter(
-      (spawn) => spawn.q !== local.q || spawn.r !== local.r,
-    );
-    if (value !== "clear") {
-      others.push({ q: local.q, r: local.r, delay: value });
-    }
-    others.sort((a, b) => a.r - b.r || a.q - b.q);
-    template.spawns = others;
     this.render();
   }
 
@@ -669,9 +666,17 @@ export class Editor {
       clamped,
       ".",
     );
-    template.spawns = template.spawns.filter(
-      (spawn) =>
-        hexDistance({ q: spawn.q, r: spawn.r }, { q: 0, r: 0 }) <= clamped,
+    template.enemies = resizeRows(
+      template.enemies,
+      template.radius,
+      clamped,
+      ".",
+    );
+    template.enemyTimers = resizeRows(
+      template.enemyTimers,
+      template.radius,
+      clamped,
+      ".",
     );
     template.radius = clamped;
     this.render();
@@ -715,7 +720,8 @@ export class Editor {
       terrain: emptyRows(radius, "."),
       cost: emptyRows(radius, "1"),
       overlays: emptyRows(radius, "."),
-      spawns: [],
+      enemies: emptyRows(radius, "."),
+      enemyTimers: emptyRows(radius, "."),
       entryEdges: [...ALL_EDGES],
       exitEdges: [...ALL_EDGES],
     });
@@ -775,23 +781,42 @@ function sideEdges(
   return edges;
 }
 
-function sniperHexes(template: SectionTemplate): HexCoord[] {
-  const snipers: HexCoord[] = [];
-  template.overlays.forEach((row, index) => {
+type EnemySpawn = { coord: HexCoord; kind: EnemyKind; delay: number };
+
+/** Every enemy authored on the template, from the enemy and timer layers. */
+function enemySpawns(template: SectionTemplate): EnemySpawn[] {
+  const spawns: EnemySpawn[] = [];
+  template.enemies.forEach((row, index) => {
     const r = index - template.radius;
+    const timerRow = template.enemyTimers[index];
     for (let column = 0; column < row.length; column += 1) {
-      if (row[column] === SNIPER_CHAR) {
-        snipers.push(localCoord(template.radius, r, column));
+      const kind = ENEMY_BY_CHAR[row[column]];
+      if (kind === null || kind === undefined) {
+        continue;
       }
+      const timerChar = timerRow[column];
+      spawns.push({
+        coord: localCoord(template.radius, r, column),
+        kind,
+        delay: timerChar === "." ? 0 : Number(timerChar),
+      });
     }
   });
-  return snipers;
+  return spawns;
 }
 
-function sniperRange(snipers: readonly HexCoord[]): ReadonlySet<string> {
+function watchtowerHexes(template: SectionTemplate): HexCoord[] {
+  return enemySpawns(template)
+    .filter((spawn) => spawn.kind === "watchtower")
+    .map((spawn) => spawn.coord);
+}
+
+function watchtowerRange(
+  watchtowers: readonly HexCoord[],
+): ReadonlySet<string> {
   const range = new Set<string>();
-  for (const sniper of snipers) {
-    for (const coord of hexesInRange(sniper, SNIPER_RADIUS)) {
+  for (const watchtower of watchtowers) {
+    for (const coord of hexesInRange(watchtower, WATCHTOWER_RADIUS)) {
       range.add(hexKey(coord));
     }
   }
@@ -806,7 +831,8 @@ function cloneTemplate(template: SectionTemplate): SectionTemplate {
     terrain: [...template.terrain],
     cost: [...template.cost],
     overlays: [...template.overlays],
-    spawns: template.spawns.map((spawn) => ({ ...spawn })),
+    enemies: [...template.enemies],
+    enemyTimers: [...template.enemyTimers],
     entryEdges: [...template.entryEdges],
     exitEdges: [...template.exitEdges],
   };

@@ -1,4 +1,6 @@
 import type { Card } from "./cards";
+import { hexKey } from "./hex";
+import type { GameState } from "./state";
 import grassUrl from "../images/grass.png";
 import forestUrl from "../images/jungle.png";
 import waterUrl from "../images/water.png";
@@ -17,9 +19,10 @@ import rockUrl from "../images/terrain-icons/rock.svg";
 import houseUrl from "../images/terrain-icons/house.png";
 import targetUrl from "../images/terrain-icons/target.png";
 import moonUrl from "../images/terrain-icons/moon.svg";
+import finishUrl from "../images/finish.png";
 
 export type Terrain =
-  "grass" | "forest" | "water" | "mountain" | "dirt" | "impassible";
+  "grass" | "forest" | "water" | "mountain" | "dirt" | "impassible" | "finish";
 
 /** Terrain that a card can be printed with, hardest last. */
 export const CARD_TERRAINS: readonly Terrain[] = [
@@ -36,6 +39,7 @@ export const TERRAIN_TEXTURE: Record<Terrain, string> = {
   mountain: mountainUrl,
   dirt: dirtUrl,
   impassible: impassibleUrl,
+  finish: finishUrl,
 };
 
 /**
@@ -50,6 +54,7 @@ export const TERRAIN_ICON: Record<Terrain, string | null> = {
   mountain: rockUrl,
   dirt: houseUrl,
   impassible: null,
+  finish: null,
 };
 
 /** Icon for attack cards: the target reticle. */
@@ -60,16 +65,22 @@ export const SLEEP_ICON = moonUrl;
 
 /**
  * A movement card printed with `cardTerrain` may enter `terrain`.
- * Dirt is universally passable; impassible never is.
+ * Dirt and the finish are universally passable; impassible never is.
  */
 export function canEnter(terrain: Terrain, cardTerrain: Terrain): boolean {
   if (terrain === "impassible") {
     return false;
   }
-  if (terrain === "dirt") {
+  if (terrain === "dirt" || terrain === "finish") {
     return true;
   }
   return terrain === cardTerrain;
+}
+
+/** Whether the player is standing on a finish tile, which wins the run. */
+export function playerOnFinish(state: GameState): boolean {
+  const tile = state.map.tiles.get(hexKey(state.map.player));
+  return tile !== undefined && tile.terrain === "finish";
 }
 
 export type TileFeature =
@@ -85,18 +96,23 @@ export type TileFeature =
 /** The difficulty tier of a random upgrade. */
 export type UpgradeTier = "common" | "uncommon" | "rare";
 
+/** The kinds of enemy that can be authored to spawn on a tile. */
+export type EnemyKind = "assassin" | "sniper" | "watchtower";
+
 export type Tile = {
   terrain: Terrain;
   /** Movement points to cross this tile; also the number of icons shown. */
   cost: number;
   feature: TileFeature;
+  /** Which enemy spawns here, or null for none. */
+  spawnKind: EnemyKind | null;
   /**
-   * Turns after the player enters this tile's section that an assassin spawns
+   * Turns after the player enters this tile's section that the enemy spawns
    * here; -1 means never. Fixed at generation, and the timer only starts when
    * the section is entered (chapter 05).
    */
   spawnDelay: number;
-  /** Absolute turn the assassin appears; -1 until the section is entered. */
+  /** Absolute turn the enemy appears; -1 until the section is entered. */
   spawnTurn: number;
 };
 
@@ -105,6 +121,7 @@ export function emptyTile(terrain: Terrain, spawnDelay: number): Tile {
     terrain,
     cost: 1,
     feature: { kind: "none" },
+    spawnKind: null,
     spawnDelay,
     spawnTurn: -1,
   };

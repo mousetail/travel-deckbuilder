@@ -34,6 +34,7 @@ import {
 import type { Rng } from "./rng";
 import type { GameState, TurnState } from "./state";
 import { countDiscarded, countDrawn, countKill, countPlay } from "./stats";
+import { playerOnFinish } from "./terrain";
 import { moving, still } from "./transition";
 import type { Transition } from "./transition";
 
@@ -564,7 +565,7 @@ export function discardCard(state: GameState, card: Card): Transition {
 
 export function startTurn(state: GameState): GameState {
   const drawn = drawUpTo(state.deck, HAND_SIZE, state.rng);
-  return {
+  const next: GameState = {
     ...state,
     deck: drawn.deck,
     rng: drawn.rng,
@@ -572,6 +573,11 @@ export function startTurn(state: GameState): GameState {
     terrainTrivialTurns: Math.max(0, state.terrainTrivialTurns - 1),
     turnState: { cardsPlayedThisTurn: 0, skipBonusTaken: false },
   };
+  // Surviving the enemy phase on the finish tile wins the run.
+  if (playerOnFinish(next)) {
+    return { ...next, phase: { kind: "game-over", reason: { kind: "victory" } } };
+  }
+  return next;
 }
 
 export function endTurn(state: GameState): Transition {

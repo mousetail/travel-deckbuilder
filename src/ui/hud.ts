@@ -1,6 +1,7 @@
 import type { GameState } from "../game/state";
 import { endTurnAction } from "../game/economy";
 import type { EndTurnAction } from "../game/economy";
+import { playerOnFinish } from "../game/terrain";
 import { coinIcon } from "./card-icons";
 import { setChildren } from "./dom";
 
@@ -53,7 +54,11 @@ export class Hud {
     if (action.kind === "use-feature") {
       button.classList.add("use-feature");
     }
-    setChildren(button, endTurnLabel(action));
+    const label = endTurnLabel(action);
+    if (playerOnFinish(state)) {
+      label.push(text(" — win if you survive"));
+    }
+    setChildren(button, label);
     button.disabled = busy || phase.kind !== "playing";
     button.addEventListener("click", () => this.onAction());
     setChildren(slot, [button]);

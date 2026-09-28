@@ -33,7 +33,7 @@ function startGame(): void {
       cursor: generated.cursor,
     },
     playerSectionOrder: 0,
-    enemies: generated.snipers,
+    enemies: generated.enemies,
     phase: { kind: "playing" },
     rng: generated.cursor.rng,
     ids,

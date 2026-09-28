@@ -228,14 +228,14 @@ export function ensureAhead(state: GameState): GameState {
   let changed = false;
 
   while (records.length < state.playerSectionOrder + AHEAD) {
-    const advanced = advanceMap(tiles, records, cursor, state.ids);
+    const advanced = advanceMap(tiles, records, cursor, state.turn, state.ids);
     if (advanced === null) {
       break;
     }
     tiles = advanced.tiles;
     records = advanced.records;
     cursor = advanced.cursor;
-    enemies = [...enemies, ...advanced.snipers];
+    enemies = [...enemies, ...advanced.enemies];
     changed = true;
   }
 

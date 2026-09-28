@@ -60,7 +60,7 @@ export function gameOverPanel(
   const panel = document.createElement("div");
   panel.classList.add("overlay");
   setChildren(panel, [
-    title("Game over"),
+    title(gameOverTitle(reason)),
     message,
     statsTable(scores, history, onOpenFinance),
     button("finance stats", onOpenFinance),
@@ -388,13 +388,21 @@ function title(text: string): HTMLElement {
   return element;
 }
 
+function gameOverTitle(reason: GameOverReason): string {
+  return reason.kind === "victory" ? "You win!" : "Game over";
+}
+
 function gameOverText(reason: GameOverReason): string {
   switch (reason.kind) {
     case "assassin":
       return "An assassin caught you.";
     case "sniper":
       return "A sniper shot you down.";
+    case "watchtower":
+      return "A watchtower shot you down.";
     case "caught":
       return "You were caught.";
+    case "victory":
+      return "Congratulations! You reached the finish and escaped.";
   }
 }

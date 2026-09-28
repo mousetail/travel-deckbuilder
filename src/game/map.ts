@@ -1,15 +1,17 @@
 import { hexDistance, hexKey, neighbours, parseHexKey } from "./hex";
 import type { HexCoord } from "./hex";
 import { hexesInHexagon, hexSide, rotateTimes } from "./hexagon";
-import type { Terrain, Tile, TileFeature } from "./terrain";
+import type { EnemyKind, Terrain, Tile, TileFeature } from "./terrain";
 import type { IdFactory } from "./cards";
 import { SHOP_CATALOGUE, instantiate } from "./cards";
-import type { Sniper } from "./enemies";
+import { instantEnemies } from "./enemies";
+import type { Enemy } from "./enemies";
 import type { Rng } from "./rng";
 import { pick, shuffle } from "./rng";
 import { SHOP_STOCK_SIZE, rollGift, rollShopStock } from "./shop";
 import type { MapIndex } from "./state";
 import tiles from "./tiles.json";
+import finishTile from "./finish.json";
 
 export type SectionRecord = {
   id: string;
@@ -32,21 +34,12 @@ export type SectionTemplate = {
   /** Movement cost of each hex, one char ('1'-'4') per hex. */
   cost: readonly string[];
   overlays: readonly string[];
-  spawns: readonly SpawnPoint[];
+  /** Enemy layer: one char per hex — '.' none, 'a' assassin, 's' sniper, 'w' watchtower. */
+  enemies: readonly string[];
+  /** Enemy timer layer: one char per hex — '.' none, else the spawn delay in turns. */
+  enemyTimers: readonly string[];
   entryEdges: readonly number[];
   exitEdges: readonly number[];
-};
-
-/**
- * An assassin spawn point authored on a template. `q`/`r` are template-local hex
- * coords, rotated into the world when the section is stamped; `delay` is the
- * number of turns after the player enters the section that an assassin appears
- * here (chapter 07).
- */
-export type SpawnPoint = {
-  q: number;
-  r: number;
-  delay: number;
 };
 
 /** Terrain layer: one char per hex. */
@@ -57,6 +50,7 @@ export const TERRAIN_BY_CHAR: Record<string, Terrain> = {
   m: "mountain",
   d: "dirt",
   "#": "impassible",
+  'e': 'finish',
 };
 
 /** Overlay layer: what sits on top of the terrain. "." is nothing. */
@@ -67,7 +61,6 @@ export const FEATURE_BY_CHAR: Record<string, TileFeature> = {
   R: { kind: "remove-card" },
   G: { kind: "gain-card", card: null },
   c: { kind: "coin", value: 3 },
-  x: { kind: "none" },
   // Random upgrades roll one of their options when the section is placed.
   "1": {
     kind: "random",
@@ -97,17 +90,25 @@ export const COST_BY_CHAR: Record<string, number> = {
   "4": 4,
 };
 
-/** Overlay char marking a fixed sniper post. */
-export const SNIPER_CHAR = "x";
-export const SNIPER_RADIUS = 2;
-/** Snipers only appear once the player is this deep, per the design. */
-const SNIPER_MIN_DISTANCE = 5;
+/** Enemy layer: which enemy spawns on a hex. "." is nothing. */
+export const ENEMY_BY_CHAR: Record<string, EnemyKind | null> = {
+  ".": null,
+  a: "assassin",
+  s: "sniper",
+  w: "watchtower",
+};
 
 export function validateTemplate(template: SectionTemplate): void {
   validateRows(template.id, "terrain", template.terrain, template.radius);
   validateRows(template.id, "cost", template.cost, template.radius);
   validateRows(template.id, "overlays", template.overlays, template.radius);
-  validateSpawns(template);
+  validateRows(template.id, "enemies", template.enemies, template.radius);
+  validateRows(
+    template.id,
+    "enemyTimers",
+    template.enemyTimers,
+    template.radius,
+  );
   for (const row of template.cost) {
     for (const char of row) {
       if (COST_BY_CHAR[char] === undefined) {
@@ -115,21 +116,20 @@ export function validateTemplate(template: SectionTemplate): void {
       }
     }
   }
-}
-
-/** Every spawn point must sit on a hex of the template, with a sane delay. */
-function validateSpawns(template: SectionTemplate): void {
-  const hexes = new Set(hexesInHexagon(template.radius).map(hexKey));
-  for (const spawn of template.spawns) {
-    if (!hexes.has(hexKey({ q: spawn.q, r: spawn.r }))) {
-      throw new Error(
-        `template ${template.id}: spawn ${spawn.q},${spawn.r} is outside the hexagon`,
-      );
+  for (const row of template.enemies) {
+    for (const char of row) {
+      if (!(char in ENEMY_BY_CHAR)) {
+        throw new Error(`template ${template.id}: bad enemy char '${char}'`);
+      }
     }
-    if (!Number.isInteger(spawn.delay) || spawn.delay < 0) {
-      throw new Error(
-        `template ${template.id}: spawn ${spawn.q},${spawn.r} has a bad delay`,
-      );
+  }
+  for (const row of template.enemyTimers) {
+    for (const char of row) {
+      if (char !== "." && !/^[0-9]$/.test(char)) {
+        throw new Error(
+          `template ${template.id}: bad enemy timer char '${char}'`,
+        );
+      }
     }
   }
 }
@@ -170,7 +170,8 @@ export function localCoord(
 
 /**
  * Stamp `template` into `tiles`, centred on the section that follows
- * `frontier`, and return that centre plus the world coords of its sniper posts.
+ * `frontier`, and return that centre. Enemy spawns are written straight onto
+ * the tiles from the enemy and enemy-timer layers.
  */
 export function stampSection(
   tiles: Map<string, Tile>,
@@ -178,13 +179,14 @@ export function stampSection(
   frontier: MapFrontier,
   rotationSteps: number,
   shift: number,
-): { origin: HexCoord; snipers: HexCoord[] } {
+): { origin: HexCoord } {
   const origin = sectionOrigin(frontier, template.radius, shift);
-  const snipers: HexCoord[] = [];
   template.terrain.forEach((row, index) => {
     const r = index - template.radius;
     const overlayRow = template.overlays[index];
     const costRow = template.cost[index];
+    const enemyRow = template.enemies[index];
+    const timerRow = template.enemyTimers[index];
     for (let column = 0; column < row.length; column += 1) {
       const rotated = rotateTimes(
         localCoord(template.radius, r, column),
@@ -196,33 +198,21 @@ export function stampSection(
       };
       const terrain = TERRAIN_BY_CHAR[row[column]];
       const overlay = overlayRow[column];
+      const spawnKind = ENEMY_BY_CHAR[enemyRow[column]] ?? null;
+      const timerChar = timerRow[column];
+      const spawnDelay =
+        spawnKind === null || timerChar === "." ? -1 : Number(timerChar);
       tiles.set(hexKey(world), {
         terrain,
         cost: COST_BY_CHAR[costRow[column]],
         feature: FEATURE_BY_CHAR[overlay],
-        spawnDelay: -1,
+        spawnKind,
+        spawnDelay: spawnKind === null ? -1 : Math.max(0, spawnDelay),
         spawnTurn: -1,
       });
-      if (overlay === SNIPER_CHAR) {
-        snipers.push(world);
-      }
     }
   });
-
-  // Authored spawn points, rotated like the terrain so they follow the section.
-  for (const spawn of template.spawns) {
-    const rotated = rotateTimes({ q: spawn.q, r: spawn.r }, rotationSteps);
-    const world: HexCoord = {
-      q: origin.q + rotated.q,
-      r: origin.r + rotated.r,
-    };
-    const key = hexKey(world);
-    const tile = tiles.get(key);
-    if (tile !== undefined) {
-      tiles.set(key, { ...tile, spawnDelay: spawn.delay });
-    }
-  }
-  return { origin, snipers };
+  return { origin };
 }
 
 function mirrorTemplate(template: SectionTemplate): SectionTemplate {
@@ -235,18 +225,28 @@ function mirrorTemplate(template: SectionTemplate): SectionTemplate {
     terrain: template.terrain.toReversed(),
     cost: template.cost.toReversed(),
     overlays: template.overlays.toReversed(),
-    spawns: template.spawns.toReversed(),
+    enemies: template.enemies.toReversed(),
+    enemyTimers: template.enemyTimers.toReversed(),
     entryEdges: template.entryEdges.map(mirrorEdge),
     exitEdges: template.exitEdges.map(mirrorEdge),
   };
 }
+
+/**
+ * The finish section, kept out of the random pool: it is placed deliberately
+ * once the map reaches its final difficulty, and nothing is generated after it.
+ */
+export const FINISH_TEMPLATE: SectionTemplate = finishTile;
+
+/** The difficulty at which the finish section is attempted. */
+export const FINISH_DIFFICULTY = 4;
 
 export const SECTION_TEMPLATES: readonly SectionTemplate[] = [
   ...tiles,
   ...tiles.map(mirrorTemplate),
 ];
 
-for (const template of SECTION_TEMPLATES) {
+for (const template of [...SECTION_TEMPLATES, FINISH_TEMPLATE]) {
   validateTemplate(template);
 }
 
@@ -276,6 +276,8 @@ export type MapCursor = {
   rng: Rng;
   /** Shuffled bag of template ids; refilled once every template has been used. */
   queue: readonly string[];
+  /** Once the finish section is placed, no further sections are generated. */
+  finished: boolean;
 };
 
 export type GeneratedMap = {
@@ -283,19 +285,19 @@ export type GeneratedMap = {
   records: SectionRecord[];
   player: HexCoord;
   cursor: MapCursor;
-  snipers: Sniper[];
+  enemies: Enemy[];
 };
 
 export type AdvanceResult = {
   tiles: Map<string, Tile>;
   records: SectionRecord[];
   cursor: MapCursor;
-  snipers: Sniper[];
+  enemies: Enemy[];
 };
 
 const MAX_ATTEMPTS = 40;
-const MAX_BAND = 2;
-const SECTIONS_PER_BAND = 3;
+const MAX_BAND = 3;
+const SECTIONS_PER_BAND = 4;
 
 function difficultyBand(distance: number): number {
   return Math.min(Math.floor(distance / SECTIONS_PER_BAND), MAX_BAND);
@@ -387,7 +389,9 @@ type Placement = {
   frontier: MapFrontier;
   rng: Rng;
   queue: readonly string[];
-  snipers: Sniper[];
+  enemies: Enemy[];
+  /** Whether this placement was the finish section. */
+  finished: boolean;
 };
 
 /**
@@ -492,9 +496,11 @@ function placeSection(
   records: readonly SectionRecord[],
   frontier: MapFrontier,
   distance: number,
+  turn: number,
   rng: Rng,
   ids: IdFactory,
   queue: readonly string[],
+  finish: SectionTemplate,
 ): Placement | null {
   // The opening section is the gentle introduction: always difficulty 0. After
   // that the map may show sections one above the current band, but never one
@@ -531,17 +537,27 @@ function placeSection(
 
   let currentRng = rng;
   let bag = queue;
+  // Once the map reaches the finish difficulty, the first attempt of every
+  // section is the finish itself; if it cannot fit, a normal section is placed
+  // and the finish is tried again at the next frontier.
+  const finishMode = maxDifficulty >= FINISH_DIFFICULTY;
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
-    let panicMode = attempt > (MAX_ATTEMPTS * 3) / 4;
+    const panicMode = attempt > (MAX_ATTEMPTS * 3) / 4;
+    const useFinish = finishMode && attempt === 0;
 
-    const drawn = drawTemplate(
-      panicMode ? emergencyPool : pool,
-      bag,
-      currentRng,
-    );
-    currentRng = drawn.rng;
-    bag = drawn.bag;
-    const template = drawn.template;
+    let template: SectionTemplate;
+    if (useFinish) {
+      template = finish;
+    } else {
+      const drawn = drawTemplate(
+        panicMode ? emergencyPool : pool,
+        bag,
+        currentRng,
+      );
+      currentRng = drawn.rng;
+      bag = drawn.bag;
+      template = drawn.template;
+    }
 
     const { item: localEntry, rng: localEntryRng } = pick(
       currentRng,
@@ -555,39 +571,43 @@ function placeSection(
     );
     currentRng = exitRollRng;
     const worldExit = normalize(rotation + localExit);
-    if (
-      worldExit === frontier.entryEdge ||
-      frontier.bannedEdges.some((i) => i == worldExit)
-    ) {
-      continue;
-    }
 
-    // When we are already digging into the panic pool, only let the path run
-    // straight on: a bend here is what folds the map back onto itself.
-    if (panicMode && worldExit !== normalize(frontier.entryEdge + 3)) {
-      continue;
-    }
+    // The finish ends the map, so its exit edge is never used to grow further
+    // and none of the winding guards apply to it.
+    if (!useFinish) {
+      if (
+        worldExit === frontier.entryEdge ||
+        frontier.bannedEdges.some((i) => i == worldExit)
+      ) {
+        continue;
+      }
 
-    if (
-      (template.radius < frontier.radius || panicMode) &&
-      (normalize(frontier.entryEdge + 1) === worldExit ||
-        normalize(frontier.entryEdge - 1) === worldExit)
-    ) {
-      continue;
-    }
+      // When we are already digging into the panic pool, only let the path run
+      // straight on: a bend here is what folds the map back onto itself.
+      if (panicMode && worldExit !== normalize(frontier.entryEdge + 3)) {
+        continue;
+      }
 
-    if (
-      !panicMode &&
-      frontier.radius !== 0 &&
-      Math.abs(template.radius - frontier.radius) > 1
-    ) {
-      continue;
+      if (
+        (template.radius < frontier.radius || panicMode) &&
+        (normalize(frontier.entryEdge + 1) === worldExit ||
+          normalize(frontier.entryEdge - 1) === worldExit)
+      ) {
+        continue;
+      }
+
+      if (
+        !panicMode &&
+        frontier.radius !== 0 &&
+        Math.abs(template.radius - frontier.radius) > 1
+      ) {
+        continue;
+      }
     }
 
     let chosen: {
       tiles: Map<string, Tile>;
       origin: HexCoord;
-      snipers: HexCoord[];
     } | null = null;
     for (const shift of shiftOrder(frontier, template.radius)) {
       const sectionTiles = new Map<string, Tile>();
@@ -607,7 +627,6 @@ function placeSection(
       chosen = {
         tiles: sectionTiles,
         origin: stamped.origin,
-        snipers: stamped.snipers,
       };
       break;
     }
@@ -663,18 +682,12 @@ function placeSection(
       exitEdge: worldExit,
     };
 
-    const snipers: Sniper[] =
-      distance >= SNIPER_MIN_DISTANCE
-        ? chosen.snipers.map((position) => ({
-            kind: "sniper",
-            id: ids(),
-            position,
-            radius: SNIPER_RADIUS,
-          }))
-        : [];
-
     const rawTurn = normalize(worldExit - frontier.entryEdge - 3);
     const lastTurn = rawTurn > 3 ? rawTurn - 6 : rawTurn;
+
+    // Delay-0 spawns appear the moment the section is stamped, so the player can
+    // see them (and their danger zone) before they can fire.
+    const enemies = instantEnemies(sectionTiles, turn, ids);
 
     return {
       record,
@@ -687,7 +700,8 @@ function placeSection(
       },
       rng: currentRng,
       queue: bag,
-      snipers,
+      enemies,
+      finished: useFinish,
     };
   }
 
@@ -713,17 +727,23 @@ export function advanceMap(
   tiles: ReadonlyMap<string, Tile>,
   records: readonly SectionRecord[],
   cursor: MapCursor,
+  turn: number,
   ids: IdFactory,
 ): AdvanceResult | null {
+  if (cursor.finished) {
+    return null;
+  }
   const nextTiles = new Map(tiles);
   const placed = placeSection(
     nextTiles,
     records,
     cursor.frontier,
     cursor.distance,
+    turn,
     cursor.rng,
     ids,
     cursor.queue,
+    FINISH_TEMPLATE,
   );
   if (placed === null) {
     return null;
@@ -736,8 +756,9 @@ export function advanceMap(
       distance: cursor.distance + 1,
       rng: placed.rng,
       queue: placed.queue,
+      finished: placed.finished,
     },
-    snipers: placed.snipers,
+    enemies: placed.enemies,
   };
 }
 
@@ -749,7 +770,7 @@ export function generateMap(
 ): GeneratedMap {
   let tiles = new Map<string, Tile>();
   let records: SectionRecord[] = [];
-  let snipers: Sniper[] = [];
+  let enemies: Enemy[] = [];
 
   let rng = { seed };
 
@@ -766,17 +787,18 @@ export function generateMap(
     distance: 0,
     rng: firstBannedEdge.rng,
     queue: [],
+    finished: false,
   };
 
   for (let i = 0; i < sectionCount; i += 1) {
-    const advanced = advanceMap(tiles, records, cursor, ids);
+    const advanced = advanceMap(tiles, records, cursor, startTurn, ids);
     if (advanced === null) {
       break;
     }
     tiles = advanced.tiles;
     records = advanced.records;
     cursor = advanced.cursor;
-    snipers = [...snipers, ...advanced.snipers];
+    enemies = [...enemies, ...advanced.enemies];
   }
 
   let player: HexCoord = { q: 0, r: 0 };
@@ -789,14 +811,15 @@ export function generateMap(
     cursor = { ...cursor, rng: start.rng };
   }
 
-  return { tiles, records, player, cursor, snipers };
+  return { tiles, records, player, cursor, enemies };
 }
 
 /**
- * Start a section's assassin timers: the player has just entered it, so every
- * armed tile gets an absolute `spawnTurn` — the turn the assassin appears —
+ * Start a section's enemy timers: the player has just entered it, so every
+ * armed tile gets an absolute `spawnTurn` — the turn the enemy appears —
  * counted from `turn`. Tiles keep their relative `spawnDelay`, and the
- * `spawnTurn` guard means a section is armed only once.
+ * `spawnTurn` guard means a section is armed only once. Delay-0 spawns are
+ * skipped: they were already placed when the section was stamped.
  */
 export function armSection(
   tiles: ReadonlyMap<string, Tile>,
@@ -807,7 +830,7 @@ export function armSection(
   for (const coord of section.footprint) {
     const key = hexKey(coord);
     const tile = next.get(key);
-    if (tile === undefined || tile.spawnTurn !== -1 || tile.spawnDelay < 0) {
+    if (tile === undefined || tile.spawnTurn !== -1 || tile.spawnDelay <= 0) {
       continue;
     }
     next.set(key, { ...tile, spawnTurn: turn + tile.spawnDelay });

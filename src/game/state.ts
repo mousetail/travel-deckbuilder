@@ -42,7 +42,11 @@ export type Phase =
   | { kind: "game-over"; reason: GameOverReason };
 
 export type GameOverReason =
-  { kind: "assassin" } | { kind: "sniper" } | { kind: "caught" };
+  | { kind: "assassin" }
+  | { kind: "sniper" }
+  | { kind: "watchtower" }
+  | { kind: "caught" }
+  | { kind: "victory" };
 
 /** Per-turn bookkeeping, reset at the start of every turn. */
 export type TurnState = {

@@ -119,6 +119,7 @@ const TERRAIN_NAME: Record<Terrain, string> = {
   mountain: "Mountain",
   dirt: "Dirt",
   impassible: "Impassible",
+  finish: "Finish",
 };
 
 /** What a card's mode symbol means, spelled out for the hover tooltip. */

@@ -1,5 +1,5 @@
 /* Styles for the section editor only. The shared map/hex/card styles live in
-   style.css; the editor reuses `.hex`, `.hex-icon` and `.enemy-sniper`. */
+   style.css; the editor reuses `.hex`, `.hex-icon` and `.enemy-watchtower`. */
 
 .editor {
   display: grid;
@@ -95,7 +95,7 @@
   background: #ff0;
 }
 
-/* Outline of the sniper range, matching the game's danger-zone border. */
+/* Outline of the watchtower range, matching the game's danger-zone border. */
 .editor-range-edge {
   position: absolute;
   top: 0;
