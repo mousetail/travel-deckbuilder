@@ -17,3 +17,12 @@ export const UPGRADE_ICON = upgradeUrl;
 export const TEMPORARY_ICON = temporaryUrl;
 /** Hookshot's teleport mode. */
 export const TELEPORT_ICON = teleportUrl;
+
+/** The coin icon as an inline element, for writing an amount of currency. */
+export function coinIcon(): HTMLImageElement {
+  const icon = document.createElement("img");
+  icon.classList.add("card-symbol-icon");
+  icon.src = COIN_ICON;
+  icon.alt = "";
+  return icon;
+}

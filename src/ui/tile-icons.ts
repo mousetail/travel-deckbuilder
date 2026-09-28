@@ -10,9 +10,7 @@ export function iconSlotElements(icons: readonly TileIcon[]): HTMLElement[] {
     const icon = icons[i];
     const slot = document.createElement("div");
     slot.classList.add("hex-icon", `hex-icon-slot-${i}`);
-    if (icon.kind === "coin") {
-      slot.classList.add("hex-icon-coin");
-    } else if (icon.kind === "random") {
+    if (icon.kind === "random") {
       slot.classList.add("hex-icon-random", `hex-icon-random-${icon.tier}`);
       slot.textContent = "?";
     } else {

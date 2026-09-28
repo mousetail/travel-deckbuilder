@@ -217,6 +217,7 @@ export class App {
       trivialTerrain: this.state.terrainTrivialTurns > 0,
       highlights: this.highlightGroups(),
       activeHighlight: this.activeHighlightKey(),
+      killable: this.killableEnemies(),
     });
     // Mid-animation the animator owns the camera; otherwise keep it on the player.
     if (!this.animating) {
@@ -391,6 +392,24 @@ export class App {
     return groups;
   }
 
+  /** Enemy ids that clicking would kill right now, so the cursor shows a reticle. */
+  private killableEnemies(): ReadonlySet<string> {
+    const phase = this.state.phase;
+    if (phase.kind === "pending-card") {
+      return new Set(phase.targets.map((enemy) => enemy.id));
+    }
+    if (phase.kind !== "playing") {
+      return new Set();
+    }
+    const killable = new Set<string>();
+    for (const enemy of this.state.enemies) {
+      if (bestAttackCard(this.state, enemy.id) !== null) {
+        killable.add(enemy.id);
+      }
+    }
+    return killable;
+  }
+
   /** Which highlight is visible right now. */
   private activeHighlightKey(): string | null {
     const phase = this.state.phase;
@@ -553,7 +572,10 @@ export class App {
     if (enemy !== undefined) {
       const attack = bestAttackCard(this.state, enemy.id);
       if (attack !== null) {
-        this.apply(resolveAttack(this.state, enemy.id));
+        const pending = beginPlay(this.state, attack);
+        if (pending.state.phase.kind === "pending-card") {
+          this.apply(resolveAttack(pending.state, enemy.id));
+        }
         return;
       }
     }

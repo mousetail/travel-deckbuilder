@@ -9,6 +9,7 @@ import shopUrl from "../images/shop.png";
 import smithUrl from "../images/smith.png";
 import removeCardUrl from "../images/map-icons/delete-card.svg";
 import gainCardUrl from "../images/map-icons/add-card.svg";
+import coinUrl from "../images/card-icons/coin.svg";
 import grassIconUrl from "../images/terrain-icons/grass.svg";
 import treeUrl from "../images/terrain-icons/tree.svg";
 import dropUrl from "../images/terrain-icons/drop.svg";
@@ -113,19 +114,15 @@ export function emptyTile(terrain: Terrain, spawnDelay: number): Tile {
 export type FeatureVisual =
   | { kind: "none" }
   | { kind: "image"; url: string }
-  | { kind: "coin" }
   | { kind: "random"; tier: UpgradeTier };
 
-/**
- * The overlay for a tile feature. There is no `coin.png`, so the coin is drawn
- * as a CSS badge instead; every other feature has pixel-art of its own.
- */
+/** The overlay for a tile feature. */
 export function featureVisual(feature: TileFeature): FeatureVisual {
   switch (feature.kind) {
     case "none":
       return { kind: "none" };
     case "coin":
-      return { kind: "coin" };
+      return { kind: "image", url: coinUrl };
     case "shop":
       return { kind: "image", url: shopUrl };
     case "smith":
@@ -139,11 +136,10 @@ export function featureVisual(feature: TileFeature): FeatureVisual {
   }
 }
 
-/** One icon drawn on a tile. A coin has no art of its own, so it is a badge. */
+/** One icon drawn on a tile. */
 export type TileIcon =
   | { kind: "image"; url: string }
   | { kind: "terrain"; url: string }
-  | { kind: "coin" }
   | { kind: "random"; tier: UpgradeTier };
 
 /**
@@ -168,9 +164,6 @@ export function tileIcons(
       break;
     case "image":
       icons.push({ kind: "image", url: visual.url });
-      break;
-    case "coin":
-      icons.push({ kind: "coin" });
       break;
     case "random":
       icons.push({ kind: "random", tier: visual.tier });

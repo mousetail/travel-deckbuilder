@@ -46,6 +46,8 @@ export type MapViewState = {
   highlights: readonly HighlightGroup[];
   /** Which highlight is visible right now, or null for none. */
   activeHighlight: string | null;
+  /** Enemies that clicking would kill right now, so the cursor shows a reticle. */
+  killable: ReadonlySet<string>;
 };
 
 export type Point = { x: number; y: number };
@@ -240,6 +242,7 @@ export class MapView {
   private readonly enemyHex = new Map<string, string>();
   private readonly enemyById = new Map<string, Enemy>();
   private enemyDanger = new Map<string, ReadonlySet<string>>();
+  private killable: ReadonlySet<string> = new Set();
   private dangerOutline: SVGSVGElement | null = null;
   private readonly enemyOutlines = new Map<string, SVGSVGElement>();
   private readonly highlightGroups = new Map<string, HighlightNodes>();
@@ -440,6 +443,7 @@ export class MapView {
       nodes.push(node);
     }
     this.enemyDanger = new Map(view.enemyDanger);
+    this.killable = view.killable;
     this.playerNode = this.markerElement(view.player);
     nodes.push(this.playerNode);
 
@@ -701,23 +705,13 @@ export class MapView {
   }
 
   /**
-   * The target reticle as the cursor while hovering an enemy the active
-   * highlight could attack. The cursor lives on the layer, not the enemy, since
-   * enemy markers pass pointer events through to the map.
+   * The target reticle as the cursor while hovering an enemy that clicking would
+   * kill. The cursor lives on the layer, not the enemy, since enemy markers pass
+   * pointer events through to the map.
    */
   private updateHoverCursor(): void {
-    let targeted = false;
-    if (this.activeHighlight !== null && this.hoveredKey !== null) {
-      const active = this.highlightGroups.get(this.activeHighlight);
-      if (active !== undefined) {
-        for (const [id, hex] of this.enemyHex) {
-          if (hex === this.hoveredKey && active.targets.has(id)) {
-            targeted = true;
-            break;
-          }
-        }
-      }
-    }
+    const hoveredEnemy = this.hoveredEnemyId();
+    const targeted = hoveredEnemy !== null && this.killable.has(hoveredEnemy);
     this.layer.style.cursor = targeted ? `url("${targetUrl}") 8 8, pointer` : "";
   }
 }

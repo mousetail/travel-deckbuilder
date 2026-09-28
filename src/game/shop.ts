@@ -4,7 +4,7 @@ import type { Rng } from "./rng";
 import { nextRng } from "./rng";
 
 /** How many cards a shop offers at once. */
-export const SHOP_STOCK_SIZE = 3;
+export const SHOP_STOCK_SIZE = 4;
 
 /** Draw one spec from `pool`, weighted by rarity. */
 export function pickWeightedCard(
@@ -26,7 +26,10 @@ export function pickWeightedCard(
   return { spec: pool[pool.length - 1], rng: roll.rng };
 }
 
-/** Roll a fresh shop stock of `count` instantiated cards. */
+/**
+ * Roll a fresh shop stock of `count` instantiated cards. Cards are drawn without
+ * replacement, so a shop never offers the same card twice.
+ */
 export function rollShopStock(
   pool: readonly CardSpec[],
   count: number,
@@ -34,11 +37,13 @@ export function rollShopStock(
   ids: IdFactory,
 ): { stock: Card[]; rng: Rng } {
   let current = rng;
+  const remaining = [...pool];
   const stock: Card[] = [];
-  for (let i = 0; i < count; i += 1) {
-    const rolled = pickWeightedCard(pool, current);
+  for (let i = 0; i < count && remaining.length > 0; i += 1) {
+    const rolled = pickWeightedCard(remaining, current);
     stock.push(instantiate(rolled.spec, ids()));
     current = rolled.rng;
+    remaining.splice(remaining.indexOf(rolled.spec), 1);
   }
   return { stock, rng: current };
 }

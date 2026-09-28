@@ -1,6 +1,7 @@
 import type { GameState } from "../game/state";
 import { endTurnAction } from "../game/economy";
 import type { EndTurnAction } from "../game/economy";
+import { coinIcon } from "./card-icons";
 import { setChildren } from "./dom";
 
 /** The top bar (run stats and a contextual hint). */
@@ -18,9 +19,13 @@ export class Hud {
   render(state: GameState): void {
     const stats = document.createElement("div");
     stats.classList.add("hud-stats");
-    stats.textContent =
-      `Turn ${state.turn} · ${state.currency} currency · ` +
-      `depth ${state.playerSectionOrder} · enemies ${state.enemies.length}`;
+    setChildren(stats, [
+      text(`Turn ${state.turn} · ${state.currency} `),
+      coinIcon(),
+      text(
+        ` · depth ${state.playerSectionOrder} · enemies ${state.enemies.length}`,
+      ),
+    ]);
 
     const hint = document.createElement("div");
     hint.classList.add("hud-hint");
@@ -47,7 +52,7 @@ export class Hud {
     if (action.kind === "use-feature") {
       button.classList.add("use-feature");
     }
-    button.textContent = endTurnLabel(action);
+    setChildren(button, endTurnLabel(action));
     button.disabled = busy || phase.kind !== "playing";
     button.addEventListener("click", () => this.onAction());
     setChildren(slot, [button]);
@@ -55,24 +60,25 @@ export class Hud {
 }
 
 /** The label spells out the whole action, including the skip-turn coin. */
-function endTurnLabel(action: EndTurnAction): string {
+function endTurnLabel(action: EndTurnAction): Node[] {
   switch (action.kind) {
     case "end-turn":
       return endTurnPrefix(action.bonus);
     case "use-feature":
       switch (action.feature.kind) {
         case "shop":
-          return `${endTurnPrefix(action.bonus)} & Enter Shop`;
+          return [...endTurnPrefix(action.bonus), text(" & Enter Shop")];
         case "smith":
-          return `${endTurnPrefix(action.bonus)} & Use Smith`;
+          return [...endTurnPrefix(action.bonus), text(" & Use Smith")];
         case "remove-card":
-          return `${endTurnPrefix(action.bonus)} & Remove a card`;
+          return [...endTurnPrefix(action.bonus), text(" & Remove a card")];
         case "gain-card":
-          return action.feature.card === null
-            ? `${endTurnPrefix(action.bonus)} & Enter`
-            : `${endTurnPrefix(action.bonus)} & Take a card`;
+          return [
+            ...endTurnPrefix(action.bonus),
+            text(action.feature.card === null ? " & Enter" : " & Take a card"),
+          ];
         case "coin":
-          return `${endTurnPrefix(action.bonus)} & Collect coin`;
+          return [...endTurnPrefix(action.bonus), text(" & Collect coin")];
         case "none":
           return endTurnPrefix(action.bonus);
         case "random":
@@ -82,8 +88,15 @@ function endTurnLabel(action: EndTurnAction): string {
 }
 
 /** Ending a turn without playing a card pays 1 currency. */
-function endTurnPrefix(bonus: number): string {
-  return bonus > 0 ? `Skip turn (+${bonus} currency)` : "End turn";
+function endTurnPrefix(bonus: number): Node[] {
+  if (bonus <= 0) {
+    return [text("End turn")];
+  }
+  return [text(`Skip turn (+${bonus} `), coinIcon(), text(")")];
+}
+
+function text(content: string): Text {
+  return document.createTextNode(content);
 }
 
 function hintFor(state: GameState): string {

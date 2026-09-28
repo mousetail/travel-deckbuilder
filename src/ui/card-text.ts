@@ -8,6 +8,7 @@ import {
   SEARCH_ICON,
   TELEPORT_ICON,
   UPGRADE_ICON,
+  coinIcon,
 } from "./card-icons";
 
 /**
@@ -31,22 +32,19 @@ export function cardTooltipRows(card: Card): HTMLElement[] {
     tooltipRow(modeSymbolNodes(mode), describeMode(mode)),
   );
   for (const effect of card.onPlay) {
-    rows.push(
-      tooltipRow(effectNodes(effect), describeEffect(effect)),
-    );
+    rows.push(tooltipRow(effectNodes(effect), [text(describeEffect(effect))]));
   }
   for (const effect of card.onDiscard) {
     rows.push(
-      tooltipRow(
-        effectNodes(effect),
-        `When discarded: ${describeEffect(effect)}`,
-      ),
+      tooltipRow(effectNodes(effect), [
+        text(`When discarded: ${describeEffect(effect)}`),
+      ]),
     );
   }
   return rows;
 }
 
-function tooltipRow(symbolContent: Node[], description: string): HTMLElement {
+function tooltipRow(symbolContent: Node[], description: Node[]): HTMLElement {
   const row = document.createElement("div");
   row.classList.add("card-tooltip-row");
   const symbol = document.createElement("span");
@@ -54,7 +52,7 @@ function tooltipRow(symbolContent: Node[], description: string): HTMLElement {
   setChildren(symbol, symbolContent);
   const text = document.createElement("span");
   text.classList.add("card-tooltip-text");
-  text.textContent = description;
+  setChildren(text, description);
   setChildren(row, [symbol, text]);
   return row;
 }
@@ -124,34 +122,52 @@ const TERRAIN_NAME: Record<Terrain, string> = {
 };
 
 /** What a card's mode symbol means, spelled out for the hover tooltip. */
-export function describeMode(mode: CardMode): string {
+export function describeMode(mode: CardMode): Node[] {
   switch (mode.kind) {
     case "move":
-      return `Travel ${mode.distance} over ${TERRAIN_NAME[mode.terrain]}`;
+      return [
+        text(`Travel ${mode.distance} over ${TERRAIN_NAME[mode.terrain]}`),
+      ];
     case "attack":
-      return mode.range === 0
-        ? "Attack an enemy on your tile"
-        : `Attack an enemy within ${mode.range} tiles`;
+      return [
+        text(
+          mode.range === 0
+            ? "Attack an enemy on your tile"
+            : `Attack an enemy within ${mode.range} tiles`,
+        ),
+      ];
     case "draw":
-      return `Draw ${counted(mode.count, "card")}`;
+      return [text(`Draw ${counted(mode.count, "card")}`)];
     case "draw-discard":
-      return `Draw ${mode.draw}, discard ${mode.discard}`;
+      return [text(`Draw ${mode.draw}, discard ${mode.discard}`)];
     case "discard-hand":
-      return `If your hand has ${mode.threshold} or more cards, discard it and draw ${mode.draw}`;
+      return [
+        text(
+          `If your hand has ${mode.threshold} or more cards, discard it and draw ${mode.draw}`,
+        ),
+      ];
     case "recover":
-      return `Take ${counted(mode.count, "card")} from your discard pile`;
+      return [
+        text(`Take ${counted(mode.count, "card")} from your discard pile`),
+      ];
     case "currency":
-      return `Gain ${mode.amount} currency`;
+      return [text(`Gain ${mode.amount} `), coinIcon()];
     case "sleep-card":
-      return `Put a card in your hand to sleep for ${counted(mode.reshuffles, "reshuffle")}`;
+      return [
+        text(
+          `Put a card in your hand to sleep for ${counted(mode.reshuffles, "reshuffle")}`,
+        ),
+      ];
     case "search":
-      return `Take ${counted(mode.count, "card")} from your draw pile`;
+      return [text(`Take ${counted(mode.count, "card")} from your draw pile`)];
     case "trivial-terrain":
-      return `For ${counted(mode.turns, "turn")}, every terrain costs 1`;
+      return [
+        text(`For ${counted(mode.turns, "turn")}, every terrain costs 1`),
+      ];
     case "upgrade-hand":
-      return "Upgrades all other cards in your hand";
+      return [text("Upgrades all other cards in your hand")];
     case "teleport":
-      return `Teleport to an enemy within ${mode.range} tiles`;
+      return [text(`Teleport to an enemy within ${mode.range} tiles`)];
   }
 }
 

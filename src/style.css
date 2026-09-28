@@ -115,6 +115,15 @@ button {
   white-space: nowrap;
 }
 
+/* The coin icon, shown inline wherever an amount of currency is written. */
+.hud-stats .card-symbol-icon,
+.hud-button .card-symbol-icon,
+.card-tooltip-text .card-symbol-icon {
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.15em;
+}
+
 /* --- piles -------------------------------------------------------------- */
 
 /* A pile reads as a stack of card backs, the same size as a hand card. */
@@ -303,6 +312,12 @@ button {
     }
   }
 
+  /* A shop card you cannot afford: greyed out and inert. */
+  &.card-disabled {
+    background: #8e8e8e;
+    cursor: default;
+  }
+
   /* Viewer cards are dimmed and non-interactive: they carry no click handler,
      so they only need to stay hoverable for their tooltip. */
   &.card-view-only {
@@ -451,20 +466,26 @@ button {
   text-align: center;
 }
 
-/* A card offered as a choice: the card with a full-width action button
-   underneath. The size is fixed so swapping a card for an empty slot (or a
-   longer button label) never resizes the overlay. */
+/* A card offered as a choice: the card itself is the button, with an optional
+   caption underneath (cost in the shop, upgrade target at the smith). The width
+   is fixed so swapping a card for an empty slot never resizes the overlay. */
 .card-choice {
   display: grid;
-  grid-template-rows: var(--card-h) 1fr;
+  justify-items: center;
   gap: 4px;
   width: var(--card-w);
-  min-height: calc(var(--card-h) + 4px + 32px);
+}
 
-  & button {
-    padding: 6px 4px;
-    font-size: 12px;
-    overflow-wrap: anywhere;
+.card-choice-caption {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 12px;
+  text-align: center;
+
+  & .card-symbol-icon {
+    width: 16px;
+    height: 16px;
   }
 }
 
@@ -663,11 +684,6 @@ button {
 .hex-icon-slot-3 {
   left: 50%;
   top: 50%;
-}
-
-.hex-icon-coin {
-  background: #ffd700;
-  border: 2px solid #000;
 }
 
 /* While Scout's effect is live every tile costs 1, so only the first printed

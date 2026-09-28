@@ -3,6 +3,7 @@ import { allCards } from "../game/deck";
 import { instantiate } from "../game/cards";
 import type { FeatureAction } from "../game/economy";
 import type { GameState } from "../game/state";
+import { COIN_ICON } from "./card-icons";
 import { cardFace, cardWithCaption } from "./card-view";
 import { setChildren } from "./dom";
 import { gameOverPanel } from "./game-over-view";
@@ -66,21 +67,49 @@ export class FeatureView {
   }
 
   /**
-   * A card offered as a choice: the card itself and a full-width action button
-   * underneath. Any context info (cost, upgrade target) lives in the button
-   * text.
+   * A card offered as a choice: the card itself is the button, with an optional
+   * caption underneath (cost in the shop, upgrade target at the smith). A
+   * disabled card is greyed out and ignores clicks.
    */
   private cardChoice(
     card: Card,
-    buttonText: string,
+    caption: Node | null,
     disabled: boolean,
     onChoose: () => void,
   ): HTMLElement {
     const wrapper = document.createElement("div");
     wrapper.classList.add("card-choice");
     const cardEl = cardFace(card, { index: 0, count: 1, viewOnly: false });
-    setChildren(wrapper, [cardEl, this.button(buttonText, disabled, onChoose)]);
+    if (disabled) {
+      cardEl.classList.add("card-disabled");
+    } else {
+      cardEl.addEventListener("click", onChoose);
+    }
+    const nodes: Node[] = [cardEl];
+    if (caption !== null) {
+      nodes.push(caption);
+    }
+    setChildren(wrapper, nodes);
     return wrapper;
+  }
+
+  /** The price line under a shop card: a coin icon and the cost. */
+  private costCaption(cost: number): HTMLElement {
+    const caption = document.createElement("div");
+    caption.classList.add("card-choice-caption");
+    const icon = document.createElement("img");
+    icon.classList.add("card-symbol-icon");
+    icon.src = COIN_ICON;
+    icon.alt = "";
+    caption.append(icon, document.createTextNode(`${cost}`));
+    return caption;
+  }
+
+  private textCaption(text: string): HTMLElement {
+    const caption = document.createElement("div");
+    caption.classList.add("card-choice-caption");
+    caption.textContent = text;
+    return caption;
   }
 
   private shopPanel(
@@ -98,7 +127,7 @@ export class FeatureView {
       cardNodes.push(
         this.cardChoice(
           slot,
-          `Buy — Cost: ${slot.cost}`,
+          this.costCaption(slot.cost),
           slot.cost > state.currency,
           () => this.onAction({ kind: "buy", card: slot }),
         ),
@@ -128,7 +157,7 @@ export class FeatureView {
       cardNodes.push(
         this.cardChoice(
           card,
-          `Upgrade — ${card.upgradedForm.name}`,
+          this.textCaption(`Upgrade — ${card.upgradedForm.name}`),
           false,
           () => {
             this.smithPreviewCardId = card.id;
@@ -188,7 +217,7 @@ export class FeatureView {
     const cardNodes: HTMLElement[] = [];
     for (const card of allCards(state.deck)) {
       cardNodes.push(
-        this.cardChoice(card, "Remove", false, () =>
+        this.cardChoice(card, null, false, () =>
           this.onAction({ kind: "remove", cardId: card.id }),
         ),
       );
@@ -211,11 +240,10 @@ export class FeatureView {
     }
     nodes.push(
       this.cardsContainer([
-        cardFace(card, { index: 0, count: 1, viewOnly: false }),
+        this.cardChoice(card, null, false, () =>
+          this.onAction({ kind: "take-gift" }),
+        ),
       ]),
-    );
-    nodes.push(
-      this.button("Take it", false, () => this.onAction({ kind: "take-gift" })),
     );
     nodes.push(
       this.button("Skip", false, () => this.onAction({ kind: "leave" })),
