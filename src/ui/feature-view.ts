@@ -1,4 +1,4 @@
-import type { Card } from "../game/cards";
+import type { Card, CardSpec } from "../game/cards";
 import { allCards } from "../game/deck";
 import { instantiate } from "../game/cards";
 import type { FeatureAction } from "../game/economy";
@@ -6,7 +6,11 @@ import type { GameState } from "../game/state";
 import { COIN_ICON } from "./card-icons";
 import { cardFace, cardWithCaption } from "./card-view";
 import { setChildren } from "./dom";
-import { gameOverPanel } from "./game-over-view";
+import {
+  cardStatsPanel,
+  financeStatsPanel,
+  gameOverPanel,
+} from "./game-over-view";
 import type { History } from "./stats-store";
 
 /** Modal UI for the shop, smith, removal, gain and game-over phases. */
@@ -15,6 +19,8 @@ export class FeatureView {
   private readonly onAction: (action: FeatureAction) => void;
   private readonly onRestart: () => void;
   private smithPreviewCardId: string | null = null;
+  private removePreviewCardId: string | null = null;
+  private openStatsModal: "cards" | "finance" | null = null;
   private lastHistory: History = { kind: "none" };
 
   constructor(
@@ -29,34 +35,115 @@ export class FeatureView {
 
   render(state: GameState, history: History): void {
     this.lastHistory = history;
-    const panel = this.panel(state, history);
-    setChildren(this.layer, panel === null ? [] : [panel]);
+    setChildren(this.layer, this.panels(state, history));
   }
 
-  private panel(state: GameState, history: History): HTMLElement | null {
+  /**
+   * The panels to show, bottom first. A confirmation (smith upgrade, card
+   * removal) is a second panel stacked over the selection it belongs to.
+   */
+  private panels(state: GameState, history: History): HTMLElement[] {
     const phase = state.phase;
     switch (phase.kind) {
       case "shop":
-        return this.shopPanel(state, phase.stock, phase.rerollCost);
+        return [this.shopPanel(state, phase.stock, phase.rerollCost)];
       case "smith": {
-        if (this.smithPreviewCardId !== null) {
-          return this.smithPreviewPanel(state);
+        const preview = this.smithPreview(state);
+        if (preview === null) {
+          return [this.smithSelectionPanel(state)];
         }
-        return this.smithSelectionPanel(state);
+        return [
+          this.behindPanel(this.smithSelectionPanel(state)),
+          this.smithPreviewPanel(state, preview.card, preview.upgradedForm),
+        ];
       }
-      case "pending-remove":
-        return this.removePanel(state);
+      case "pending-remove": {
+        const card = this.removePreviewCard(state);
+        if (card === null) {
+          return [this.removePanel(state)];
+        }
+        return [
+          this.behindPanel(this.removePanel(state)),
+          this.removeConfirmPanel(state, card),
+        ];
+      }
       case "pending-gain":
-        return this.giftPanel(phase.card);
-      case "game-over":
-        return gameOverPanel(phase.reason, state, history, this.onRestart);
+        return [this.giftPanel(phase.card)];
+      case "game-over": {
+        const main = gameOverPanel(
+          phase.reason,
+          state,
+          history,
+          this.onRestart,
+          () => this.toggleStatsModal("cards", state, history),
+          () => this.toggleStatsModal("finance", state, history),
+        );
+        const modal = this.openStatsModal;
+        if (modal === null) {
+          return [main];
+        }
+        main.classList.add("overlay-behind");
+        const panel =
+          modal === "cards"
+            ? cardStatsPanel(
+                allCards(state.deck),
+                state.stats,
+                state.turn,
+                () => this.toggleStatsModal("cards", state, history),
+              )
+            : financeStatsPanel(state.stats.currency, () =>
+                this.toggleStatsModal("finance", state, history),
+              );
+        return [main, panel];
+      }
       case "playing":
       case "pending-card":
       case "pending-discard":
       case "pending-sleep":
       case "pending-search":
-        return null;
+        return [];
     }
+  }
+
+  private toggleStatsModal(
+    kind: "cards" | "finance",
+    state: GameState,
+    history: History,
+  ): void {
+    this.openStatsModal = this.openStatsModal === kind ? null : kind;
+    this.render(state, history);
+  }
+
+  /** The card the smith preview is showing, with its upgraded form. */
+  private smithPreview(
+    state: GameState,
+  ): { card: Card; upgradedForm: CardSpec } | null {
+    if (this.smithPreviewCardId === null) {
+      return null;
+    }
+    const card = allCards(state.deck).find(
+      (c) => c.id === this.smithPreviewCardId,
+    );
+    if (card === undefined || card.upgradedForm === null) {
+      this.smithPreviewCardId = null;
+      return null;
+    }
+    return { card, upgradedForm: card.upgradedForm };
+  }
+
+  /** The card the removal confirmation is showing. */
+  private removePreviewCard(state: GameState): Card | null {
+    if (this.removePreviewCardId === null) {
+      return null;
+    }
+    const card = allCards(state.deck).find(
+      (c) => c.id === this.removePreviewCardId,
+    );
+    if (card === undefined) {
+      this.removePreviewCardId = null;
+      return null;
+    }
+    return card;
   }
 
   private cardsContainer(nodes: readonly Node[]): HTMLElement {
@@ -176,18 +263,12 @@ export class FeatureView {
     return this.panelElement(nodes);
   }
 
-  private smithPreviewPanel(state: GameState): HTMLElement {
-    const originalCard = allCards(state.deck).find(
-      (c) => c.id === this.smithPreviewCardId,
-    );
-    if (originalCard === undefined || originalCard.upgradedForm === null) {
-      this.smithPreviewCardId = null;
-      return this.smithSelectionPanel(state);
-    }
-    const upgradedCard = instantiate(
-      originalCard.upgradedForm,
-      originalCard.id,
-    );
+  private smithPreviewPanel(
+    state: GameState,
+    originalCard: Card,
+    upgradedForm: CardSpec,
+  ): HTMLElement {
+    const upgradedCard = instantiate(upgradedForm, originalCard.id);
     const face = { index: 0, count: 1, viewOnly: false };
     const nodes: Node[] = [
       this.title("Upgrade preview"),
@@ -200,16 +281,12 @@ export class FeatureView {
         this.smithPreviewCardId = null;
         if (cardId !== null) this.onAction({ kind: "upgrade", cardId });
       }),
-      this.button("Select a different card", false, () => {
+      this.button("Cancel", false, () => {
         this.smithPreviewCardId = null;
         this.render(state, this.lastHistory);
       }),
-      this.button("Cancel", false, () => {
-        this.smithPreviewCardId = null;
-        this.onAction({ kind: "leave" });
-      }),
     ];
-    return this.panelElement(nodes);
+    return this.confirmElement(nodes);
   }
 
   private removePanel(state: GameState): HTMLElement {
@@ -217,9 +294,10 @@ export class FeatureView {
     const cardNodes: HTMLElement[] = [];
     for (const card of allCards(state.deck)) {
       cardNodes.push(
-        this.cardChoice(card, null, false, () =>
-          this.onAction({ kind: "remove", cardId: card.id }),
-        ),
+        this.cardChoice(card, null, false, () => {
+          this.removePreviewCardId = card.id;
+          this.render(state, this.lastHistory);
+        }),
       );
     }
     nodes.push(this.cardsContainer(cardNodes));
@@ -227,6 +305,25 @@ export class FeatureView {
       this.button("Do nothing", false, () => this.onAction({ kind: "leave" })),
     );
     return this.panelElement(nodes);
+  }
+
+  private removeConfirmPanel(state: GameState, card: Card): HTMLElement {
+    const nodes: Node[] = [
+      this.title("Remove this card?"),
+      this.cardsContainer([
+        cardFace(card, { index: 0, count: 1, viewOnly: false }),
+      ]),
+      this.button("Confirm removal", false, () => {
+        const cardId = this.removePreviewCardId;
+        this.removePreviewCardId = null;
+        if (cardId !== null) this.onAction({ kind: "remove", cardId });
+      }),
+      this.button("Cancel", false, () => {
+        this.removePreviewCardId = null;
+        this.render(state, this.lastHistory);
+      }),
+    ];
+    return this.confirmElement(nodes);
   }
 
   private giftPanel(card: Card | null): HTMLElement {
@@ -285,6 +382,18 @@ export class FeatureView {
     const panel = document.createElement("div");
     panel.classList.add("overlay");
     setChildren(panel, nodes);
+    return panel;
+  }
+
+  /** A panel with a confirmation stacked over it: it stops taking clicks. */
+  private behindPanel(panel: HTMLElement): HTMLElement {
+    panel.classList.add("overlay-behind");
+    return panel;
+  }
+
+  private confirmElement(nodes: readonly Node[]): HTMLElement {
+    const panel = this.panelElement(nodes);
+    panel.classList.add("overlay-confirm");
     return panel;
   }
 }

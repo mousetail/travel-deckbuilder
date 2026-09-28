@@ -33,7 +33,7 @@ import {
 } from "./reach";
 import type { Rng } from "./rng";
 import type { GameState, TurnState } from "./state";
-import { countDrawn, countKill, countPlay } from "./stats";
+import { countDiscarded, countDrawn, countKill, countPlay } from "./stats";
 import { moving, still } from "./transition";
 import type { Transition } from "./transition";
 
@@ -54,10 +54,10 @@ export function takeSkipBonus(state: GameState): GameState {
   if (bonus === 0) {
     return state;
   }
+  const paid = gainCurrency(state, bonus, "skips");
   return {
-    ...state,
-    currency: state.currency + bonus,
-    turnState: { ...state.turnState, skipBonusTaken: true },
+    ...paid,
+    turnState: { ...paid.turnState, skipBonusTaken: true },
   };
 }
 
@@ -144,7 +144,7 @@ function spent(
 /** Spend a card's play cost, if it has one. */
 function payForPlay(state: GameState, card: Card): GameState {
   const cost = playCost(card);
-  return cost > 0 ? spendCurrency(state, cost) : state;
+  return cost > 0 ? spendCurrency(state, cost, "cards") : state;
 }
 
 /** Whether the player could usefully play `mode` of `card` right now. */
@@ -253,8 +253,14 @@ function playInstant(state: GameState, card: Card, mode: CardMode): Transition {
         state.deck.hand.length >= mode.threshold
           ? state.deck.hand
           : [];
+      // The played card is discarded by the effect too, but it counts as played.
+      const thrown = discarded.filter((c) => c.id !== card.id);
+      const withDiscards = {
+        ...state,
+        stats: countDiscarded(state.stats, thrown),
+      };
       const played = spent(
-        state,
+        withDiscards,
         discardPlayed(applied.deck, card),
         applied.rng,
         card,
@@ -275,7 +281,7 @@ function playInstant(state: GameState, card: Card, mode: CardMode): Transition {
       });
     }
     case "currency": {
-      const paid = gainCurrency(state, mode.amount);
+      const paid = gainCurrency(state, mode.amount, "cards");
       return still(
         spent(paid, discardPlayed(paid.deck, card), state.rng, card, []),
       );
@@ -359,7 +365,7 @@ function applyOnDiscard(
     for (const effect of card.onDiscard) {
       switch (effect.kind) {
         case "currency":
-          next = gainCurrency(next, effect.amount);
+          next = gainCurrency(next, effect.amount, "cards");
           break;
         case "sleep":
           next = {
@@ -394,7 +400,10 @@ export function discardForChoice(state: GameState, card: Card): Transition {
     return still(state);
   }
   const deck = discardFromHand(state.deck, card);
-  const withEffect = applyOnDiscard({ ...state, deck }, [card]);
+  const withEffect = applyOnDiscard(
+    { ...state, deck, stats: countDiscarded(state.stats, [card]) },
+    [card],
+  );
   const remaining = phase.count - 1;
   if (remaining <= 0 || deck.hand.length === 0) {
     return still({ ...withEffect, phase: { kind: "playing" } });
@@ -417,6 +426,7 @@ export function sleepForChoice(state: GameState, card: Card): Transition {
   return still({
     ...state,
     deck: sleepFromHand(state.deck, card, phase.reshuffles),
+    stats: countDiscarded(state.stats, [card]),
     phase: { kind: "playing" },
   });
 }
@@ -465,7 +475,7 @@ export function resolveAttack(state: GameState, enemyId: string): Transition {
   ) {
     return still(state);
   }
-  const paid = payForPlay(gainCurrency(state, bountyFor(target)), card);
+  const paid = payForPlay(gainCurrency(state, bountyFor(target), "combat"), card);
   return still({
     ...paid,
     stats: countPlay(countKill(paid.stats), card.id),
@@ -544,7 +554,12 @@ export function discardCard(state: GameState, card: Card): Transition {
     return still(state);
   }
   const deck = discardFromHand(state.deck, card);
-  return still(applyOnDiscard({ ...state, deck }, [card]));
+  return still(
+    applyOnDiscard(
+      { ...state, deck, stats: countDiscarded(state.stats, [card]) },
+      [card],
+    ),
+  );
 }
 
 export function startTurn(state: GameState): GameState {

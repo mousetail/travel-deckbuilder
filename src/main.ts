@@ -19,10 +19,11 @@ function startGame(): void {
   const generated = generateMap(Math.random() * 1000 | 0, 3, 1, ids);
   const deck = buildDeck(STARTING_DECK, ids, generated.cursor.rng);
   const startSection = generated.records[0];
+  const startingCurrency = 3;
 
   const state: GameState = {
     turn: 1,
-    currency: 3,
+    currency: startingCurrency,
     deck,
     map: {
       tiles: generated.tiles,
@@ -37,7 +38,7 @@ function startGame(): void {
     rng: generated.cursor.rng,
     ids,
     turnState: { cardsPlayedThisTurn: 0, skipBonusTaken: false },
-    stats: startingStats(allCards(deck), startSection.id, 1),
+    stats: startingStats(allCards(deck), startSection.id, 1, startingCurrency),
     terrainTrivialTurns: 0,
   };
 

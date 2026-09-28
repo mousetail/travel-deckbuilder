@@ -516,6 +516,25 @@ button {
   font-weight: bold;
 }
 
+/* A confirmation (smith upgrade, card removal) is stacked over the selection it
+   belongs to: both share one grid cell so the confirm sits on top, and the panel
+   underneath stops taking clicks. */
+.hud-middle > .overlay {
+  grid-area: 1 / 1;
+}
+
+.overlay-behind {
+  pointer-events: none;
+}
+
+.overlay-confirm {
+  /* Positioned so it paints above the cards in the panel underneath, which are
+     themselves positioned and would otherwise cover it. */
+  position: relative;
+  z-index: 1;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
 .overlay-cards {
   display: flex;
   flex-wrap: wrap;
@@ -565,6 +584,22 @@ button {
   font-weight: bold;
 }
 
+/* A stat that beat every previous run is underlined. */
+.stat-best {
+  text-decoration: underline;
+}
+
+/* A stat label that opens a modal, styled as a link. */
+.stat-link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .stat-past {
   color: #999;
 }
@@ -582,6 +617,11 @@ button {
   gap: 6px;
 }
 
+/* The featured card is a shortcut into the card-stats modal. */
+.usage-card {
+  cursor: pointer;
+}
+
 .usage-heading {
   font-weight: bold;
 }
@@ -595,22 +635,31 @@ button {
   color: #999;
 }
 
-.more-stats {
+.currency-breakdown {
   display: grid;
   gap: 8px;
-  padding-top: 8px;
-  border-top: 2px solid var(--ui-fg);
+}
 
-  /* The author `display: grid` must not defeat the `hidden` attribute. */
-  &[hidden] {
-    display: none;
+.finance-table-wrap {
+  display: grid;
+  gap: 4px;
+}
+
+/* Fixed column widths so the Earned and Spent tables line up. */
+.finance-table {
+  table-layout: fixed;
+
+  & td:first-child {
+    width: 200px;
+  }
+
+  & td:last-child {
+    width: 80px;
   }
 }
 
 .game-over-buttons {
   display: grid;
-  grid-auto-flow: column;
-  justify-content: start;
   gap: 8px;
 }
 

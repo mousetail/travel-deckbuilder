@@ -7,7 +7,7 @@ import { hexKey } from "./hex";
 import type { HexCoord } from "./hex";
 import { SHOP_STOCK_SIZE, rollShopStock } from "./shop";
 import type { GameState } from "./state";
-import { acquireCard, countSite } from "./stats";
+import { acquireCard, countRemoved, countSite } from "./stats";
 import type { TileFeature } from "./terrain";
 import { still } from "./transition";
 import type { Transition } from "./transition";
@@ -128,7 +128,7 @@ export function buyCard(state: GameState, card: Card): GameState {
   if (state.phase.kind !== "shop") {
     return state;
   }
-  const paid = spendCurrency(state, card.cost);
+  const paid = spendCurrency(state, card.cost, "shops");
   const stock = state.phase.stock.map((slot) =>
     slot !== null && slot.id === card.id ? null : slot,
   );
@@ -150,7 +150,7 @@ export function rerollShop(state: GameState): GameState {
   if (state.phase.kind !== "shop") {
     return state;
   }
-  const paid = spendCurrency(state, state.phase.rerollCost);
+  const paid = spendCurrency(state, state.phase.rerollCost, "shops");
   const rolled = rollShopStock(
     SHOP_CATALOGUE,
     SHOP_STOCK_SIZE,
@@ -209,7 +209,11 @@ export function collectCoin(state: GameState, coord: HexCoord): GameState {
   if (tile === undefined || tile.feature.kind !== "coin") {
     throw new Error("no coin here");
   }
-  return gainCurrency(consumeFeatureAt(state, coord), tile.feature.value);
+  return gainCurrency(
+    consumeFeatureAt(state, coord),
+    tile.feature.value,
+    "coins",
+  );
 }
 
 /** A choice forwarded from the feature UI; every transition lives here. */
@@ -280,6 +284,7 @@ export function chooseRemoveCard(state: GameState, cardId: string): Transition {
   const removed = {
     ...state,
     deck: removeCardFromDeck(state.deck, cardId),
+    stats: countRemoved(state.stats, cardId, state.turn),
   };
   return finishFeature(consumeFeatureAt(removed, removed.map.player));
 }

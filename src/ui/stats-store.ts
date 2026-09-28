@@ -50,6 +50,8 @@ function bestOf(a: RunScores, b: RunScores): RunScores {
     cardsDrawn: Math.max(a.cardsDrawn, b.cardsDrawn),
     enemiesKilled: Math.max(a.enemiesKilled, b.enemiesKilled),
     sitesVisited: Math.max(a.sitesVisited, b.sitesVisited),
+    currencyGained: Math.max(a.currencyGained, b.currencyGained),
+    currencySpent: Math.max(a.currencySpent, b.currencySpent),
   };
 }
 
@@ -66,18 +68,22 @@ function encode(history: History): string {
       const f = history.furthest.scores;
       const b = history.best;
       const fields = [
-        "v1",
+        "v2",
         history.furthest.depth,
         f.tilesVisited,
         f.cardsPlayed,
         f.cardsDrawn,
         f.enemiesKilled,
         f.sitesVisited,
+        f.currencyGained,
+        f.currencySpent,
         b.tilesVisited,
         b.cardsPlayed,
         b.cardsDrawn,
         b.enemiesKilled,
         b.sitesVisited,
+        b.currencyGained,
+        b.currencySpent,
       ];
       return fields.join(",");
     }
@@ -86,37 +92,80 @@ function encode(history: History): string {
 
 function decode(raw: string): History {
   const parts = raw.split(",");
-  if (parts.length !== 12 || parts[0] !== "v1") {
-    return { kind: "none" };
+  if (parts[0] === "v2" && parts.length === 16) {
+    const numbers = parseNumbers(parts.slice(1));
+    if (numbers === null) {
+      return { kind: "none" };
+    }
+    return {
+      kind: "records",
+      furthest: {
+        depth: numberAt(numbers, 0),
+        scores: {
+          tilesVisited: numberAt(numbers, 1),
+          cardsPlayed: numberAt(numbers, 2),
+          cardsDrawn: numberAt(numbers, 3),
+          enemiesKilled: numberAt(numbers, 4),
+          sitesVisited: numberAt(numbers, 5),
+          currencyGained: numberAt(numbers, 6),
+          currencySpent: numberAt(numbers, 7),
+        },
+      },
+      best: {
+        tilesVisited: numberAt(numbers, 8),
+        cardsPlayed: numberAt(numbers, 9),
+        cardsDrawn: numberAt(numbers, 10),
+        enemiesKilled: numberAt(numbers, 11),
+        sitesVisited: numberAt(numbers, 12),
+        currencyGained: numberAt(numbers, 13),
+        currencySpent: numberAt(numbers, 14),
+      },
+    };
   }
+  // v1 predates the coin columns; read it with those left at zero.
+  if (parts[0] === "v1" && parts.length === 12) {
+    const numbers = parseNumbers(parts.slice(1));
+    if (numbers === null) {
+      return { kind: "none" };
+    }
+    return {
+      kind: "records",
+      furthest: {
+        depth: numberAt(numbers, 0),
+        scores: {
+          tilesVisited: numberAt(numbers, 1),
+          cardsPlayed: numberAt(numbers, 2),
+          cardsDrawn: numberAt(numbers, 3),
+          enemiesKilled: numberAt(numbers, 4),
+          sitesVisited: numberAt(numbers, 5),
+          currencyGained: 0,
+          currencySpent: 0,
+        },
+      },
+      best: {
+        tilesVisited: numberAt(numbers, 6),
+        cardsPlayed: numberAt(numbers, 7),
+        cardsDrawn: numberAt(numbers, 8),
+        enemiesKilled: numberAt(numbers, 9),
+        sitesVisited: numberAt(numbers, 10),
+        currencyGained: 0,
+        currencySpent: 0,
+      },
+    };
+  }
+  return { kind: "none" };
+}
+
+function parseNumbers(parts: readonly string[]): number[] | null {
   const numbers: number[] = [];
-  for (const part of parts.slice(1)) {
+  for (const part of parts) {
     const value = Number(part);
     if (!Number.isInteger(value) || value < 0) {
-      return { kind: "none" };
+      return null;
     }
     numbers.push(value);
   }
-  return {
-    kind: "records",
-    furthest: {
-      depth: numberAt(numbers, 0),
-      scores: {
-        tilesVisited: numberAt(numbers, 1),
-        cardsPlayed: numberAt(numbers, 2),
-        cardsDrawn: numberAt(numbers, 3),
-        enemiesKilled: numberAt(numbers, 4),
-        sitesVisited: numberAt(numbers, 5),
-      },
-    },
-    best: {
-      tilesVisited: numberAt(numbers, 6),
-      cardsPlayed: numberAt(numbers, 7),
-      cardsDrawn: numberAt(numbers, 8),
-      enemiesKilled: numberAt(numbers, 9),
-      sitesVisited: numberAt(numbers, 10),
-    },
-  };
+  return numbers;
 }
 
 function numberAt(values: readonly number[], index: number): number {
