@@ -33,7 +33,7 @@ is what makes the later steps (pathfinding, enemy AI, map generation) tractable.
 | 04 | [Turns, drawing, and movement](04-turns-and-movement.md) | Play a movement card and walk the map |
 | 05 | [Map generation](05-map-generation.md) | An endless, winding, difficulty-graded path |
 | 06 | [Fog of war & tile streaming](06-fog-of-war.md) | Only three sections visible, memory of the path |
-| 07 | [Enemies & combat](07-enemies-and-combat.md) | Assassins chase, snipers snipe, you can kill them |
+| 07 | [Enemies & combat](07-enemies-and-combat.md) | Assassins chase, watchtowers snipe, you can kill them |
 | 08 | [Economy & upgrades](08-economy-and-upgrades.md) | Shops, smiths, removal, and coins |
 | 09 | [UI & graphics](09-ui-and-graphics.md) | The fanned hand, piles, HUD, and pixel-art look |
 | 10 | [Testing, balance & next steps](10-testing-and-balance.md) | A tuned difficulty curve and a green test suite |
@@ -57,7 +57,7 @@ src/
     deck.ts               # draw/hand/discard zones, shuffle, draw, discard
     movement.ts           # reachable-hex search, path validation
     map.ts                # section templates, generation, streaming
-    enemies.ts            # assassins, snipers, their AI
+    enemies.ts            # assassins, watchtowers, their AI
     economy.ts            # currency, shop, smith, removal
     state.ts              # GameState and the turn state machine
     rng.ts                # seeded random + weighted picks
@@ -104,7 +104,7 @@ exactly the mistakes those rules are designed to avoid.
 | **Leading edge** | The far edge of the newest section — the direction you are escaping toward. |
 | **Trailing edge** | The edge behind you; sections and enemies here are dropped. |
 | **Assassin** | A roaming enemy spawned from a tile timer; kills you if it ends its move on your hex. |
-| **Sniper** | A fixed enemy that kills you if you end your turn inside its radius. |
+| **Watchtower** | A fixed enemy that kills you if you end your turn inside its radius. |
 | **Draw/Hand/Discard** | The three card zones. Bought cards go to discard; discard reshuffles only when draw runs out. |
 
 ## Decisions to confirm before you start

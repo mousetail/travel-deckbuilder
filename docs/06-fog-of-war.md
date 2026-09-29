@@ -192,7 +192,53 @@ a `fog` class (dimmed, per the "limited colours" guideline) so the player reads 
 as not-yet-accessible. Because hexes outside the window are simply absent from the
 input map, they disappear for free.
 
-## 7. Milestone
+## 7. Sleeping enemies
+
+An enemy is only ever as visible as the hex it stands on. `visibleMap` already
+knows which hexes are revealed and which are the fog sliver, so it also exposes
+the `revealed` set and a `visibleEnemies` filter:
+
+```ts
+export function visibleEnemies(state: GameState): Enemy[] {
+  const visible = visibleMap(state).tiles;
+  return state.enemies.filter((enemy) => visible.has(hexKey(enemy.position)));
+}
+```
+
+An enemy on a hex outside the window is **asleep**: it is not rendered, and the
+enemy phase skips it entirely — it neither fires nor moves. This is what stops an
+enemy from striking the instant its section scrolls into view.
+
+There is one edge case. Stepping onto the leading edge of the fogged section
+reveals that whole section, waking every enemy in it — and they act that same
+enemy phase, so the player could die with no warning. To keep that fair, a
+sleeping enemy's **danger zone is still drawn, but only over the fog sliver of
+the section it stands in**: those are exactly the hexes the player could end a
+turn on to wake it. Anywhere else it is harmless until it wakes, so nothing is
+drawn there.
+
+```ts
+export function enemyDangerZones(state: GameState): Map<string, Set<string>> {
+  const visible = visibleMap(state);
+  const fogOrder = state.playerSectionOrder + 1;
+  const zones = new Map<string, Set<string>>();
+  for (const enemy of state.enemies) {
+    const zone = enemyDanger(enemy, state.map.tiles);
+    if (!visible.revealed.has(hexKey(enemy.position))) {
+      const wakes = sectionOrderAt(state.map.index, enemy.position) === fogOrder;
+      for (const key of zone) {
+        if (!wakes || !visible.fog.has(key)) {
+          zone.delete(key);
+        }
+      }
+    }
+    zones.set(enemy.id, zone);
+  }
+  return zones;
+}
+```
+
+## 8. Milestone
 
 - Walking from one section into the next reveals it fully and dims the following
   two rows.
@@ -200,5 +246,7 @@ input map, they disappear for free.
 - Moving forward then trying to walk back is impossible (the hexes no longer exist),
   yet generation never places a new section over the remembered footprint.
 - Reaching a new section does not end the turn or refill the hand.
+- An enemy on a hex the player cannot see is neither drawn nor moved; a sleeping
+  enemy still marks the fog rows it could be woken from.
 
 Next: [Enemies & combat](07-enemies-and-combat.md).

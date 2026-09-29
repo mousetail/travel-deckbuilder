@@ -115,17 +115,25 @@ export type TileFeature =
 export type Tile = {
   terrain: Terrain;
   feature: TileFeature;
+  /** Which enemy spawns here, or null for none. */
+  spawnKind: EnemyKind | null;
   /**
-   * Turns after the player enters this tile's section that an assassin spawns
+   * Turns after the player enters this tile's section that the enemy spawns
    * here; -1 means never.
    */
   spawnDelay: number;
-  /** Absolute turn the assassin appears; -1 until the section is entered. */
+  /** Absolute turn the enemy appears; -1 until the section is entered. */
   spawnTurn: number;
 };
 
 export function emptyTile(terrain: Terrain, spawnDelay: number): Tile {
-  return { terrain, feature: { kind: "none" }, spawnDelay, spawnTurn: -1 };
+  return {
+    terrain,
+    feature: { kind: "none" },
+    spawnKind: null,
+    spawnDelay,
+    spawnTurn: -1,
+  };
 }
 ```
 

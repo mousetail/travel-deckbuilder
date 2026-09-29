@@ -106,10 +106,10 @@ export function pickWeightedCard(
 
 ## 4. Shops
 
-"Shops stock 3 cards ... and you can also spend money to reroll what the shop
-sells." Roll a stock of 3 (allowing duplicates is fine, or de-duplicate if you
-prefer). Entering the shop phase generates the stock; rerolling pays `rerollCost` and
-generates a new one.
+"Shops stock 4 cards ... and you can also spend money to reroll what the shop
+sells." Roll a stock of 4, drawing without replacement so the same card is never
+offered twice. Entering the shop phase generates the stock; rerolling pays
+`rerollCost` and generates a new one.
 
 ```ts
 export function rollShopStock(
@@ -118,11 +118,13 @@ export function rollShopStock(
   rng: Rng,
 ): { stock: CardSpec[]; rng: Rng } {
   let current = rng;
+  const remaining = [...pool];
   const stock: CardSpec[] = [];
-  for (let i = 0; i < count; i += 1) {
-    const rolled = pickWeightedCard(pool, current);
+  for (let i = 0; i < count && remaining.length > 0; i += 1) {
+    const rolled = pickWeightedCard(remaining, current);
     stock.push(rolled.spec);
     current = rolled.rng;
+    remaining.splice(remaining.indexOf(rolled.spec), 1);
   }
   return { stock, rng: current };
 }

@@ -40,7 +40,7 @@ fine.
 | `deck.ts` | Total card count is conserved by `drawCards`/`toDiscard`/`addPurchase`; reshuffle happens exactly when draw empties; a purchase never appears before a reshuffle; `drawUpTo` never draws past the deck. |
 | `movement.ts` | Reachable set honours the distance budget; it excludes impassible and unenterable hexes; a `distance: 0`-style card reaches nothing new. |
 | `map.ts` | Same seed ⇒ identical map; footprints never overlap; every generated section has an entry→exit path for grass+forest. |
-| `enemies.ts` | An assassin within budget of the player reports `killedPlayer`; one out of budget moves toward the player by at most its movement; `sniperKills` is true exactly inside the radius; impassible terrain blocks a path. |
+| `enemies.ts` | An assassin within budget of the player reports `killedPlayer`; one out of budget moves toward the player by at most its movement; `watchtowerKills` is true exactly inside the radius; `sniperLine` stops before impassible and off-map hexes and `sniperKills` is true exactly on the line; a sniper always takes a step, retreating from the player, leaving the section about to be streamed away, and avoiding other enemies (sharing a hex worse than being adjacent); `aimAt` picks the direction closest to the player, longest line on a tie; a sniper never kills on its own hex; impassible terrain blocks a path. |
 | `economy.ts` | Buying deducts currency and lands in discard; `upgradeCard` bumps movement and leaves attack range alone; `removeCardFromDeck` clears the id from all three zones; weighted picks never return a `starting` spec. |
 
 A representative test, to show the style (pure in, pure out):
@@ -114,7 +114,8 @@ export const BALANCE = {
   shopRerollCost: 2,
   assassinBaseMovement: 2,
   assassinMovementPerTurns: 8,   // +1 movement every this many turns
-  sniperRadius: 3,
+  sniperMovementPerTurns: 16,    // snipers speed up more slowly
+  watchtowerRadius: 3,
   difficultyPerSection: 1,
 } as const;
 ```
@@ -126,12 +127,13 @@ the nearest enemy) and log:
 
 - **Turns survived** and **sections cleared** per seed.
 - **Currency earned vs. spent** (is money too tight or too loose?).
-- **Death cause** (assassin vs. sniper vs. caught) — this tells you which threat is
-  over-tuned.
+- **Death cause** (assassin vs. sniper vs. watchtower vs. caught) — this tells you
+  which threat is over-tuned.
 
 Target a death *distribution* rather than a single difficulty: early runs should
-mostly end to assassins, mid runs should introduce sniper pressure, and a good player
-should occasionally be squeezed out of currency rather than killed outright.
+mostly end to assassins, mid runs should introduce sniper and watchtower pressure,
+and a good player should occasionally be squeezed out of currency rather than
+killed outright.
 
 Curve guidance from the design:
 

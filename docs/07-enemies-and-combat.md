@@ -1,8 +1,9 @@
 # 07 — Enemies & combat
 
 **Goal:** assassins that spawn from tile timers, pathfind with terrain costs, and
-kill you on contact; snipers that kill you if you end your turn inside their radius;
-and combat cards that let you kill either.
+kill you on contact; snipers that move slowly, then aim along a hex direction and
+shoot down the whole line; watchtowers that kill you if you end your turn inside
+their radius; and combat cards that let you kill any of them.
 
 ## 1. The enemy types
 
@@ -21,15 +22,26 @@ export type Sniper = {
   kind: "sniper";
   id: string;
   position: HexCoord;
+  /** Movement points available each enemy turn. */
+  movement: number;
+  /** Index into `AXIAL_DIRECTIONS` the sniper aims along, or null before it aims. */
+  aim: number | null;
+};
+
+export type Watchtower = {
+  kind: "watchtower";
+  id: string;
+  position: HexCoord;
   /** Lethal radius in hexes. */
   radius: number;
 };
 
-export type Enemy = Assassin | Sniper;
+export type Enemy = Assassin | Sniper | Watchtower;
 ```
 
-A tagged union again (not `kind: "assassin" | "sniper"` plus optional fields), so a
-`switch (enemy.kind)` narrows to exactly the fields that variant has.
+A tagged union again (not `kind: "assassin" | "sniper" | "watchtower"` plus
+optional fields), so a `switch (enemy.kind)` narrows to exactly the fields that
+variant has.
 
 ## 2. Terrain costs for movement
 
@@ -183,100 +195,208 @@ break toward the assassin.
 
 ## 5. Spawning from tile timers
 
-Assassin spawn points are **authored per template** in the level editor: each
-`SectionTemplate` lists `{ q, r, delay }` points (chapter 05). Stamping marks those
-tiles with `spawnDelay`; entering the section arms each one with an absolute
-`spawnTurn = entryTurn + delay` (chapters 05–06) — the turn the assassin appears.
-The enemy phase spawns an assassin on every live tile due at the start of the next
-turn, so the assassin is already on the map when the countdown the player sees
-would reach 0, and the badge never shows 0. A delay-0 tile is armed mid-turn, so
-it can only appear at the end of that same turn:
+Spawns are **authored per template** in the level editor as two layers (chapter
+05): an **enemy layer** (`enemies`) naming the kind on each hex — `.` none, `a`
+assassin, `s` sniper, `w` watchtower — and an **enemy-timer layer**
+(`enemyTimers`) giving the delay in turns, `.` meaning 0. Stamping writes both
+onto the tile as `spawnKind` and `spawnDelay`.
+
+A delay of **0 is special**: the enemy is placed the moment the section is
+stamped, so it is on the map — and its danger zone is drawn — as soon as the
+section is visible. This is how watchtowers work, and it is what lets the player
+see the threat *before* ending a turn standing in it:
 
 ```ts
 import type { Tile } from "./terrain";
 import type { IdFactory } from "./cards";
 
-export function spawnAssassins(
+export function instantEnemies(
   tiles: ReadonlyMap<string, Tile>,
-  currentTurn: number,
-  movementFor: (turn: number) => number,
+  turn: number,
   ids: IdFactory,
-): Assassin[] {
-  const spawned: Assassin[] = [];
+): Enemy[] {
+  const spawned: Enemy[] = [];
   for (const [key, tile] of tiles) {
-    const due =
-      tile.spawnTurn === currentTurn + 1 ||
-      (tile.spawnDelay === 0 && tile.spawnTurn === currentTurn);
-    if (!due) {
+    if (tile.spawnKind === null || tile.spawnDelay !== 0) {
       continue;
     }
-    const [q, r] = key.split(",");
-    spawned.push({
-      kind: "assassin",
-      id: ids(),
-      position: { q: Number(q), r: Number(r) },
-      movement: movementFor(currentTurn),
-    });
+    spawned.push(makeEnemy(tile.spawnKind, parseHexKey(key), turn, ids));
+  }
+  return spawned;
+}
+```
+
+Any other delay is **relative**: entering the section arms the tile with an
+absolute `spawnTurn = entryTurn + delay` (chapters 05–06), and the enemy phase
+spawns it on the turn before that, so it is already on the map when the countdown
+the player sees would reach 0 and the badge never shows 0:
+
+```ts
+export function spawnEnemies(
+  tiles: ReadonlyMap<string, Tile>,
+  currentTurn: number,
+  ids: IdFactory,
+): Enemy[] {
+  const spawned: Enemy[] = [];
+  for (const [key, tile] of tiles) {
+    if (tile.spawnKind === null || tile.spawnDelay === 0) {
+      continue;
+    }
+    if (tile.spawnTurn !== currentTurn + 1) {
+      continue;
+    }
+    spawned.push(makeEnemy(tile.spawnKind, parseHexKey(key), currentTurn, ids));
   }
   return spawned;
 }
 ```
 
 Scaling ("further in, multiple spawn at once and get faster") is expressed purely
-by the authored spawn points — how many a band's templates carry and their delays —
-and by `movementFor`, e.g.:
+by the authored spawns — how many a band's templates carry and their delays — and
+by the movement curves, e.g.:
 
 ```ts
 export function assassinMovementFor(turn: number): number {
-  return 2 + Math.floor(turn / 8);
+  return 1 + Math.floor(turn / 8);
+}
+
+/** Snipers are slower than assassins, and speed up more gradually. */
+export function sniperMovementFor(turn: number): number {
+  return 1 + Math.floor(turn / 16);
 }
 ```
 
-Keep the curve in one function so chapter 10 can tune it.
+Keep the curves in one place so chapter 10 can tune them.
 
-## 6. Snipers
+## 6. Watchtowers and snipers
 
-Snipers are placed at fixed hexes during generation, only in high-difficulty
-sections. They never move. Their rule is evaluated when the player **ends their
-turn**:
+Watchtowers are authored on the enemy layer with a timer of 0, so they are placed
+as soon as their section is stamped (chapter 05) and are visible before the player
+can end a turn inside them. They never move. (Like every enemy, a watchtower in a
+section the player has not reached yet is asleep and harmless — chapter 06.) Their
+rule is evaluated when the player **ends their turn**:
 
 ```ts
 import { hexDistance } from "./hex";
 
-export function sniperKills(sniper: Sniper, player: HexCoord): boolean {
-  return hexDistance(sniper.position, player) <= sniper.radius;
+export function watchtowerKills(watchtower: Watchtower, player: HexCoord): boolean {
+  return hexDistance(watchtower.position, player) <= watchtower.radius;
 }
 ```
 
-Check every sniper after the assassins have moved (the player's position does not
-change during the enemy phase, so the exact order of the sniper checks does not
-matter, but do them once and early).
+Snipers walk on `sniperMovementFor`, **away** from the player (they are weak up
+close) and never onto the section that is about to be streamed away — a sniper
+left there is simply deleted. Then they aim along the hex direction closest to
+the player; when the player sits exactly between two directions, the one with the
+longer line wins. A sniper shoots the whole ray from its own hex outward,
+stopping before the first impassable hex or the edge of the map:
+
+```ts
+import { AXIAL_DIRECTIONS, addHex, equalsHex, hexKey } from "./hex";
+
+export function sniperLine(
+  position: HexCoord,
+  direction: number,
+  tiles: ReadonlyMap<string, Tile>,
+): HexCoord[] {
+  const step = AXIAL_DIRECTIONS[direction];
+  const line: HexCoord[] = [];
+  let coord = addHex(position, step);
+  while (true) {
+    const tile = tiles.get(hexKey(coord));
+    if (tile === undefined || tile.terrain === "impassible") {
+      break;
+    }
+    line.push(coord);
+    coord = addHex(coord, step);
+  }
+  return line;
+}
+
+export function sniperKills(
+  sniper: Sniper,
+  player: HexCoord,
+  tiles: ReadonlyMap<string, Tile>,
+): boolean {
+  return (
+    sniper.aim !== null &&
+    sniperLine(sniper.position, sniper.aim, tiles).some((c) => equalsHex(c, player))
+  );
+}
+```
+
+The whole ray is the sniper's danger zone, so the map draws its red outline over
+every hex of the line.
+
+**Movement.** `sniperMove` ranks every hex within reach, most significant first:
+outside the doomed section (`playerSectionOrder - 1`, the one `streamToSection`
+drops next); not sharing a hex with another enemy; not adjacent to one; then
+furthest from the player. Its own hex is not a candidate, so it always moves —
+even a single step, and even if that step is toward the player. So a sniper
+retreats until it would step into the doomed section, and if it is already in it,
+it walks forward to escape rather than being deleted for free. Movement is
+otherwise unrestricted: a sniper may walk past the player or even end on their
+hex, which is harmless because it never kills by contact.
+
+**Aiming.** `aimAt` takes the cube-space dot product of the offset to the player
+with each of the six directions and keeps the largest. A tie means the player is
+exactly between two directions, so it picks whichever of the two has the longer
+`sniperLine`.
+
+**Firing.** The sniper fires the line it aimed along *last* turn, before it moves
+and re-aims. That is what makes the danger zone the player sees during their turn
+the exact line that fires at the end of it — aim at the player, but give them a
+turn to step off the line. A sniper is **ranged only**: `sniperLine` starts one
+hex out from its own position, so a player sharing the sniper's hex is never hit,
+and the enemy phase never checks for a contact kill.
 
 ## 7. The enemy phase
 
 One function drives the whole end-of-turn enemy step. It returns a new state whose
-`phase` may be `game-over`; it never throws:
+`phase` may be `game-over`; it never throws. Only **awake** enemies act: one
+standing on a hex the player cannot see yet is asleep and is skipped (chapter 06),
+so it can never strike the moment it scrolls into view:
 
 ```ts
-export function resolveEnemyPhase(state: GameState, maxDistance: number): GameState {
-  const spawned = spawnAssassins(
-    state.map.tiles,
-    state.turn,
-    assassinMovementFor,
-    state.ids,
-  );
-  let enemies: Enemy[] = [...state.enemies, ...spawned];
+export function resolveEnemyPhase(state: GameState, maxDistance: number): Transition {
+  const spawned = spawnEnemies(state.map.tiles, state.turn, state.ids);
+  const alreadyHere = state.enemies;
+  let enemies: Enemy[] = [...alreadyHere, ...spawned];
+  const moves: MovePath[] = [];
 
-  // Snipers fire first: ending your turn in their radius is fatal.
+  const revealed = visibleMap(state).revealed;
+  const awake = (enemy: Enemy) => revealed.has(hexKey(enemy.position));
+
+  // Watchtowers fire first: ending your turn in their radius is fatal.
   for (const enemy of enemies) {
-    if (enemy.kind === "sniper" && sniperKills(enemy, state.map.player)) {
-      return { ...state, phase: { kind: "game-over", reason: { kind: "sniper" } } };
+    if (enemy.kind === "watchtower" && awake(enemy) && watchtowerKills(enemy, state.map.player)) {
+      return moving({ ...state, enemies, phase: { kind: "game-over", reason: { kind: "watchtower" } } }, moves);
     }
   }
 
+  // Snipers fire the line they aimed last turn, then walk away and re-aim.
+  const alreadyIds = new Set(alreadyHere.map((enemy) => enemy.id));
+  const doomed = state.playerSectionOrder - 1;
+  const orderAt = (coord: HexCoord) => sectionOrderAt(state.map.index, coord);
+  for (const enemy of [...enemies]) {
+    if (enemy.kind !== "sniper" || !awake(enemy)) {
+      continue;
+    }
+    if (sniperKills(enemy, state.map.player, state.map.tiles)) {
+      return moving({ ...state, enemies, phase: { kind: "game-over", reason: { kind: "sniper" } } }, moves);
+    }
+    let sniper = enemy;
+    if (alreadyIds.has(enemy.id)) {
+      const result = sniperMove(sniper, state.map.player, state.map.tiles, doomed, orderAt);
+      sniper = { ...sniper, position: result.position };
+    }
+    sniper = { ...sniper, aim: aimAt(sniper, state.map.player, state.map.tiles) };
+    enemies = enemies.map((e) => (e.id === sniper.id ? sniper : e));
+  }
+
   // Then assassins move, one at a time; the first to reach you wins.
-  for (const enemy of enemies) {
-    if (enemy.kind !== "assassin") {
+  for (const enemy of alreadyHere) {
+    if (enemy.kind !== "assassin" || !awake(enemy)) {
       continue;
     }
     const peers = enemies
@@ -290,14 +410,20 @@ export function resolveEnemyPhase(state: GameState, maxDistance: number): GameSt
       peers,
     );
     if (turn.killedPlayer) {
-      return { ...state, phase: { kind: "game-over", reason: { kind: "assassin" } } };
+      return moving({ ...state, enemies, phase: { kind: "game-over", reason: { kind: "assassin" } } }, moves);
     }
     enemies = enemies.map((e) => (e.id === turn.assassin.id ? turn.assassin : e));
   }
 
-  return { ...state, enemies };
+  return moving({ ...state, enemies }, moves);
 }
 ```
+
+A sleeping enemy's danger zone is still drawn, but only over the fog sliver of the
+section it stands in — the hexes the player could end a turn on to wake it
+(chapter 06). The player's own interactions follow the same rule: attack targets
+and hover paths come from `visibleEnemies`, so an unseen enemy cannot be shot or
+previewed.
 
 Then `onPlayerMoved`-style streaming (chapter 06) drops any enemy standing on a
 section that gets removed, which is the "disappear off the trailing edge" rule.
@@ -337,6 +463,8 @@ export function bountyFor(enemy: Enemy): number {
     case "assassin":
       return 2;
     case "sniper":
+      return 3;
+    case "watchtower":
       return 4;
   }
 }
@@ -363,14 +491,26 @@ const resolved = resolveEnemyPhase(paid, visibleReach(paid));
 
 ## 11. Milestone
 
-- Tiles spawn assassins on their `spawnTurn`; multiple can appear on the same turn.
-  A section's timers only start once the player enters it, so an assassin never
-  pops up in a section the player has not reached (and so cannot see).
+- Tiles spawn their authored enemy on its `spawnTurn`; multiple can appear on the
+  same turn. A section's timers only start once the player enters it, so a timed
+  enemy never pops up in a section the player has not reached (and so cannot see).
+  A delay-0 enemy (a watchtower) is placed when the section is stamped, so its
+  danger zone is visible before it can fire.
 - An assassin that can reach you ends the game; one that cannot chases the spot
   nearest you that is clear of its peers.
 - Assassins cross grass quickly and water/mountains slowly, pay extra to switch
   terrain type, and cannot cross impassible hexes.
-- Ending your turn inside a sniper's radius ends the game.
+- A sniper moves more slowly than an assassin, always taking a step — away from
+  the player, off the section about to be streamed away, and clear of other
+  enemies (sharing a hex is worse than being adjacent) — then aims along the hex
+  direction closest to the player (longest line breaks a tie). Ending your turn
+  on that line ends the game; the line stops at the first impassible hex or the
+  edge of the map. A sniper is ranged only: it never kills by contact, even when
+  it ends on the player's hex.
+- Ending your turn inside a watchtower's radius ends the game.
+- An enemy on a hex the player cannot see is asleep: it is not drawn, does not
+  fire, and does not move. A sleeping enemy still marks the fog rows of its own
+  section, so the player can see which hexes would wake it into a kill.
 - Assassins never end a move crowded next to a peer.
 - A combat card kills a target within range and pays the bounty; a
   `range: 0` attack only works when you share the enemy's hex.

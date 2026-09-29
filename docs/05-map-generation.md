@@ -125,15 +125,14 @@ export type SectionTemplate = {
   difficulty: number;
   radius: number;
   rows: readonly string[];       // rows[r + radius], lengths = hexagon row lengths
-  /** Authored assassin spawn points, in local hex coords. */
-  spawns: readonly SpawnPoint[];
+  /** Enemy layer: '.' none, 'a' assassin, 's' sniper, 'w' watchtower. */
+  enemies: readonly string[];
+  /** Enemy-timer layer: '.' none, else the spawn delay in turns. */
+  enemyTimers: readonly string[];
   /** Edge indices (0..5) the player may enter from / leave through. */
   entryEdges: readonly number[];
   exitEdges: readonly number[];
 };
-
-/** `delay` = turns after the player enters the section before an assassin appears. */
-export type SpawnPoint = { q: number; r: number; delay: number };
 
 const TERRAIN_BY_CHAR: Record<string, Terrain> = {
   ".": "grass", f: "forest", w: "water", m: "mountain", d: "dirt", "#": "impassible",
@@ -189,6 +188,8 @@ export function stampSection(
 ): void {
   template.rows.forEach((row, index) => {
     const r = index - template.radius;
+    const enemyRow = template.enemies[index];
+    const timerRow = template.enemyTimers[index];
     for (let column = 0; column < row.length; column += 1) {
       const local = localCoord(template.radius, r, column);
       const rotated = rotateTimes(local, rotationSteps);
@@ -196,24 +197,17 @@ export function stampSection(
       const char = row[column];
       const terrain = TERRAIN_BY_CHAR[char];
       const feature = FEATURE_BY_CHAR[char];
+      const spawnKind = ENEMY_BY_CHAR[enemyRow[column]] ?? null;
+      const timerChar = timerRow[column];
       tiles.set(hexKey(world), {
         terrain,
         feature,
-        spawnDelay: -1,
+        spawnKind,
+        spawnDelay: spawnKind === null || timerChar === "." ? -1 : Number(timerChar),
         spawnTurn: -1,
       });
     }
   });
-
-  // Authored spawn points, rotated like the terrain so they follow the section.
-  for (const spawn of template.spawns) {
-    const rotated = rotateTimes({ q: spawn.q, r: spawn.r }, rotationSteps);
-    const world: HexCoord = { q: origin.q + rotated.q, r: origin.r + rotated.r };
-    const tile = tiles.get(hexKey(world));
-    if (tile !== undefined) {
-      tiles.set(hexKey(world), { ...tile, spawnDelay: spawn.delay });
-    }
-  }
 }
 
 /** Column index → axial q for a shifted hexagon row. */
@@ -223,16 +217,20 @@ function localCoord(radius: number, r: number, column: number): HexCoord {
 }
 ```
 
-Assassin spawn points are **authored**, not derived from terrain: each template
-carries a `spawns` list of local hex coords and per-point delays. Sections are
-grouped into difficulty bands, so the template's `difficulty` and how many points
-it carries (and how short their delays are) set the pressure without any per-depth
-formula. The level editor paints these points and their delays.
+Enemy spawns are **authored**, not derived from terrain: each template carries an
+`enemies` layer naming the kind on each hex and an `enemyTimers` layer giving the
+delay in turns. Sections are grouped into difficulty bands, so the template's
+`difficulty` and how many spawns it carries (and how short their delays are) set
+the pressure without any per-depth formula. The level editor paints these two
+layers separately.
 
-Note the delay is **relative** and `spawnTurn` starts at `-1`: a section is stamped
-well before the player reaches it (they are generated ahead, chapter 06), so its
-timers must not start yet. `spawnTurn` — the turn the assassin appears — is armed
-when the player enters the section.
+A delay of **0** is special-cased: those enemies are placed the moment the
+section is stamped (chapter 07), so they are visible — with their danger zone — as
+soon as the section scrolls into view (chapter 06). Every other delay is
+**relative** and `spawnTurn` starts
+at `-1`: a section is stamped well before the player reaches it (they are
+generated ahead, chapter 06), so its timers must not start yet. `spawnTurn` — the
+turn the enemy appears — is armed when the player enters the section.
 
 ```ts
 export function armSection(
@@ -244,7 +242,7 @@ export function armSection(
   for (const coord of section.footprint) {
     const key = hexKey(coord);
     const tile = next.get(key);
-    if (tile === undefined || tile.spawnTurn !== -1 || tile.spawnDelay < 0) {
+    if (tile === undefined || tile.spawnTurn !== -1 || tile.spawnDelay <= 0) {
       continue;
     }
     next.set(key, { ...tile, spawnTurn: turn + tile.spawnDelay });
@@ -255,7 +253,8 @@ export function armSection(
 
 The first section is armed at generation (the player starts inside it); every other
 one when `onPlayerMoved` (chapter 06) crosses into it. The `spawnTurn !== -1` guard
-means a section is only ever armed once.
+means a section is only ever armed once, and delay-0 tiles are skipped since they
+were already placed when the section was stamped.
 
 ## 5. The generation loop
 
@@ -278,8 +277,10 @@ flowchart TD
 Key points:
 
 - **Difficulty bands.** Compute `difficulty = clamp(distanceTravelled / tuningK, 0,
-  maxBand)`. Filter the template pool to templates whose `difficulty` is within the
-  current band (± 1). Later bands include snipers and rarer upgrades.
+  maxBand)`. The opening section is always difficulty `0`; after that, filter the
+  template pool to templates whose `difficulty` is within the current band up to
+  one above it (`band`..`band + 1`), so difficulty only ever steps up. Later bands
+  include watchtowers and rarer upgrades.
 - **Winding.** From the entry edge, pick an exit edge that is *not* the direct
   opposite (which would make a straight line). The design wants "winding sections";
   require the chord between entry and exit to be at least one edge away from
@@ -294,8 +295,10 @@ Key points:
   (mountains hide rares, water/forest guard shortcuts). Additionally, when a
   `shop` feature is stamped, fill its `stock` by drawing from `SHOP_CATALOGUE` with
   rarity weighting (chapter 08).
-- **Snipers.** Only place a sniper on sections above a difficulty threshold, at a
-  fixed hex the template marks; record its position (chapter 07).
+- **Enemies.** The template's enemy and enemy-timer layers are written straight
+  onto the stamped tiles as `spawnKind`/`spawnDelay`. Delay-0 spawns are placed
+  immediately (so watchtowers are visible as soon as their section is in view);
+  the rest are armed and spawned later (chapters 06–07).
 
 Because all of this is driven by the seeded `Rng` threaded through `pick`, the same
 seed always produces the same map — invaluable for debugging and for the tests in

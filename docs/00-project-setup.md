@@ -128,6 +128,7 @@ export type Phase =
 export type GameOverReason =
   | { kind: 'assassin' }
   | { kind: 'sniper' }
+  | { kind: 'watchtower' }
   | { kind: 'caught' };
 
 export type GameState = {

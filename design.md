@@ -91,7 +91,7 @@ A card can be asleep for N reshuffles. A sleeping card sits in the discard pile 
 
 Sleeping is an effect of a card's action, not a fixed property: a card can sleep itself when played (a drawback on hand-cycling and long-range combat cards) or when discarded. The amount is set per card so it can be balanced individually, and it is shown on the card face as a play or discard line with a moon icon and the count.
 
-- Hand-cycling cards (Forage, Gamble, Scout, Insight) sleep 2 when played.
+- Hand-cycling cards (Forage, Gamble, Survey, Insight) sleep 2 when played.
 - Long-range combat cards (Volley, Charge) sleep 1 when played.
 - Discarding a card by hand never puts it to sleep unless the card's discard action says so.
 
@@ -107,15 +107,15 @@ Assasins have to consider terrain when moving and can also move faster over easi
 
 Further in the game, multiple assasins will spawn at the same time. They also get faster.
 
-In addition, there are snipers. They spawn in fixed positions on the map. Only appearing later in the game. If the player ends their turn within a certain radius of the sniper, they die.
+In addition, there are watchtowers. They spawn in fixed positions on the map. Only appearing later in the game. If the player ends their turn within a certain radius of the watchtower, they die.
 
-Both assasins and snipers can be killed with a combat card. Or if they disappear off the trailing edge of the screen.
+Both assasins and watchtowers can be killed with a combat card. Or if they disappear off the trailing edge of the screen.
 
 # Map Generation
 
 The map has a hexagonical grid and consists of winding sections of had coded tiles. The terrain in a labarynthine structure.
 
-Each pre-generated terrain tile has a difficulty associated with it. The further in the game the more difficult the tiles get. More advanced upgrades and obstacles like snipers only appear on more difficult ones.
+Each pre-generated terrain tile has a difficulty associated with it. The further in the game the more difficult the tiles get. More advanced upgrades and obstacles like watchtowers only appear on more difficult ones.
 
 Each pregenerated tile has a side length of 4 hexagons.
 
