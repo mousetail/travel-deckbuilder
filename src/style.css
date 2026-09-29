@@ -1001,6 +1001,21 @@ button {
   font-size: 16px;
 }
 
+.menu-share {
+  display: grid;
+  grid-auto-flow: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #bbb;
+  cursor: pointer;
+}
+
+.menu-share input {
+  accent-color: #fff;
+}
+
 /* --- statistics screen -------------------------------------------------- */
 
 .stats-screen {

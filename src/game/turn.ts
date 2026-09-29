@@ -399,6 +399,11 @@ function applyOnDiscard(
             },
           };
           break;
+        case "draw": {
+          const applied = drawCards(next.deck, effect.count, next.rng);
+          next = { ...next, deck: applied.deck, rng: applied.rng };
+          break;
+        }
         case "pay":
         case "double-cost":
           break;

@@ -34,7 +34,8 @@ export type CardEffect =
   | { kind: "sleep"; reshuffles: number }
   | { kind: "pay"; amount: number }
   | { kind: "double-cost" }
-  | { kind: "halve-cost" };
+  | { kind: "halve-cost" }
+  | { kind: "draw"; count: number };
 
 export type Rarity = "starting" | "common" | "uncommon" | "rare";
 
@@ -214,6 +215,8 @@ const currency = (amount: number): CardEffect => ({
 });
 
 const pay = (amount: number): CardEffect => ({ kind: "pay", amount });
+
+const drawEffect = (count: number): CardEffect => ({ kind: "draw", count });
 
 const doubleCost: CardEffect = { kind: "double-cost" };
 
@@ -545,14 +548,14 @@ export const SHOP_CATALOGUE: readonly CardSpec[] = [
     3,
     [trivialTerrain(1)],
     [],
-    [],
+    [drawEffect(1)],
     spec(
       "Scout+",
       "uncommon",
       3,
       [trivialTerrain(2)],
       [sleep(1)],
-      [],
+      [drawEffect(1)],
       null,
     ),
   ),
@@ -565,7 +568,7 @@ export const SHOP_CATALOGUE: readonly CardSpec[] = [
     [],
     spec("Hookshot+", "rare", 5, [teleport(8)], [sleep(1)], [], null),
   ),
-  spec("Upgrader", "uncommon", 3, [upgradeHand], [], [], null),
+  spec("Upgrader", "uncommon", 3, [upgradeHand], [], [drawEffect(1)], null),
 
   // combat
   spec(

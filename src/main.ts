@@ -4,6 +4,7 @@ import { App } from "./ui/app";
 import { Editor } from "./ui/editor";
 import { renderMenu } from "./ui/menu";
 import { renderStats } from "./ui/stats-view";
+import { loadSharePreference } from "./ui/share-store";
 import { buildDeck } from "./game/deck";
 import { allCards } from "./game/deck";
 import { counterIds, STARTING_DECK } from "./game/cards";
@@ -17,7 +18,8 @@ const root = requireElementById("app", HTMLDivElement);
 
 function startGame(): void {
   const ids = counterIds("id");
-  const generated = generateMap(Math.random() * 1000 | 0, 3, 1, ids);
+  const seed = Math.random() * 1000 | 0;
+  const generated = generateMap(seed, 3, 1, ids);
   const deck = buildDeck(STARTING_DECK, ids, generated.cursor.rng);
   const startSection = generated.records[0];
   const startingCurrency = 3;
@@ -48,9 +50,20 @@ function startGame(): void {
     },
     stats: startingStats(allCards(deck), startSection.id, 1, startingCurrency),
     terrainTrivialTurns: 0,
+    anomalies: [],
   };
 
-  const app = new App(root, ensureAhead(startTurn(state)), startGame, state.deck);
+  const app = new App(
+    root,
+    ensureAhead(startTurn(state)),
+    startGame,
+    state.deck,
+    {
+      seed,
+      startedAt: Date.now(),
+      share: loadSharePreference(),
+    },
+  );
   app.mount();
 }
 

@@ -104,6 +104,8 @@ export function effectNodes(effect: CardEffect): Node[] {
       return [text("×2")];
     case "halve-cost":
       return [text("½")];
+    case "draw":
+      return [text(`+${effect.count}`)];
   }
 }
 
@@ -189,6 +191,8 @@ export function describeEffect(effect: CardEffect): string {
       return "double this card's cost";
     case "halve-cost":
       return "halve this card's cost";
+    case "draw":
+      return `draw ${counted(effect.count, "card")}`;
   }
 }
 

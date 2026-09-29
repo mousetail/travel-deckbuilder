@@ -22,6 +22,7 @@ import { foldRun, runOutcome } from "../game/career";
 import { loadHistory, recordRun, saveHistory } from "./stats-store";
 import type { History } from "./stats-store";
 import { loadCareer, saveCareer } from "./career-store";
+import { buildRunReport, uploadRunReport } from "./run-report";
 import {
   beginPlay,
   cancelPending,
@@ -43,6 +44,15 @@ import type { HoverPath } from "../game/reach";
 import type { HighlightGroup } from "./map-view";
 
 type Pile = "draw" | "discard";
+
+/** Per-run details that only the end-of-run report needs. */
+export type RunInfo = {
+  seed: number;
+  /** Wall-clock time the run began, for the report's duration. */
+  startedAt: number;
+  /** Whether the player opted in to sharing this run's data. */
+  share: boolean;
+};
 
 /** The highlight key for the union across the whole hand. */
 const UNION_KEY = "union";
@@ -79,6 +89,7 @@ export class App {
   private history: History;
   /** The records as they stood before this run, for the grey comparison columns. */
   private previousHistory: History;
+  private readonly runInfo: RunInfo;
   private state: GameState;
 
   constructor(
@@ -86,10 +97,12 @@ export class App {
     state: GameState,
     restart: () => void,
     previousDeck: Deck,
+    runInfo: RunInfo,
   ) {
     this.root = root;
     this.state = state;
     this.previousDeck = previousDeck;
+    this.runInfo = runInfo;
     this.history = loadHistory();
     this.previousHistory = this.history;
 
@@ -188,9 +201,23 @@ export class App {
     this.previousHistory = this.history;
     this.history = recordRun(this.history, state.playerSectionOrder, scores);
     saveHistory(this.history);
-    saveCareer(
-      foldRun(loadCareer(), runOutcome(state.phase.reason, state.stats)),
+    const career = foldRun(
+      loadCareer(),
+      runOutcome(state.phase.reason, state.stats),
     );
+    saveCareer(career);
+    if (this.runInfo.share) {
+      uploadRunReport(
+        buildRunReport(
+          scores,
+          state.stats,
+          career,
+          state.anomalies,
+          this.runInfo.seed,
+          this.runInfo.startedAt,
+        ),
+      );
+    }
   }
 
   private async animate(moves: readonly MovePath[]): Promise<void> {

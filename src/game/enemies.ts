@@ -12,7 +12,7 @@ import {
 } from "./hex";
 import type { HexCoord, StepCost } from "./hex";
 import { visibleMap } from "./fog";
-import type { GameState, MapIndex } from "./state";
+import type { Anomaly, GameState, MapIndex } from "./state";
 import type { EnemyKind, Terrain, Tile } from "./terrain";
 import { moving } from "./transition";
 import type { MovePath, Transition } from "./transition";
@@ -660,20 +660,47 @@ export function playerInDanger(state: GameState): boolean {
 }
 
 /**
+ * The death of the player in the enemy phase, with any anomaly it implies. A
+ * death on a hex the player was shown as dangerous (`savedDangerZone` is the
+ * zone displayed when they ended their turn) is expected; a death anywhere else
+ * is reported so it can be reproduced.
+ */
+function deathTransition(
+  state: GameState,
+  enemies: Enemy[],
+  moves: readonly MovePath[],
+  savedDangerZone: ReadonlySet<string>,
+  reason: "assassin" | "sniper" | "watchtower",
+): Transition {
+  const anomaly = unexplainedDeath(state, savedDangerZone, reason);
+  const anomalies =
+    anomaly === null ? state.anomalies : [...state.anomalies, anomaly];
+  return moving(
+    {
+      ...state,
+      enemies,
+      anomalies,
+      phase: { kind: "game-over", reason: { kind: reason } },
+    },
+    moves,
+  );
+}
+
+/**
  * Debug aid for the "died outside the danger zone" report. `savedDangerZone` is
  * the zone the player was shown when they ended their turn. If the enemy phase
  * kills them on a hex that zone did not cover, dump the whole board so the state
- * can be reproduced. A death on a covered hex is expected and logs nothing.
+ * can be reproduced, and return the anomaly to record. A death on a covered hex
+ * is expected: it logs nothing and returns null.
  */
-function reportUnexplainedDeath(
+function unexplainedDeath(
   state: GameState,
   savedDangerZone: ReadonlySet<string>,
   reason: "assassin" | "sniper" | "watchtower",
-): void {
+): Anomaly | null {
   const playerKey = hexKey(state.map.player);
   if (savedDangerZone.has(playerKey)) {
-    console.log("Player was inside danger zone, death was expected")
-    return;
+    return null;
   }
   console.log("Player died outside the danger zone", {
     reason,
@@ -701,6 +728,12 @@ function reportUnexplainedDeath(
       spawnTurn: tile.spawnTurn,
     })),
   });
+  return {
+    kind: "death-outside-danger-zone",
+    reason,
+    turn: state.turn,
+    sectionOrder: state.playerSectionOrder,
+  };
 }
 
 /**
@@ -733,14 +766,12 @@ export function resolveEnemyPhase(
       awake(enemy) &&
       watchtowerKills(enemy, state.map.player)
     ) {
-      reportUnexplainedDeath(state, savedDangerZone, "watchtower");
-      return moving(
-        {
-          ...state,
-          enemies,
-          phase: { kind: "game-over", reason: { kind: "watchtower" } },
-        },
+      return deathTransition(
+        state,
+        enemies,
         moves,
+        savedDangerZone,
+        "watchtower",
       );
     }
   }
@@ -758,15 +789,7 @@ export function resolveEnemyPhase(
       continue;
     }
     if (sniperKills(enemy, state.map.player, state.map.tiles)) {
-      reportUnexplainedDeath(state, savedDangerZone, "sniper");
-      return moving(
-        {
-          ...state,
-          enemies,
-          phase: { kind: "game-over", reason: { kind: "sniper" } },
-        },
-        moves,
-      );
+      return deathTransition(state, enemies, moves, savedDangerZone, "sniper");
     }
     let sniper = enemy;
     if (alreadyIds.has(enemy.id)) {
@@ -820,14 +843,12 @@ export function resolveEnemyPhase(
       e.id === turn.assassin.id ? turn.assassin : e,
     );
     if (turn.killedPlayer) {
-      reportUnexplainedDeath(state, savedDangerZone, "assassin");
-      return moving(
-        {
-          ...state,
-          enemies,
-          phase: { kind: "game-over", reason: { kind: "assassin" } },
-        },
+      return deathTransition(
+        state,
+        enemies,
         moves,
+        savedDangerZone,
+        "assassin",
       );
     }
   }

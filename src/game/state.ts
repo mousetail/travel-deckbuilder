@@ -48,6 +48,18 @@ export type GameOverReason =
   | { kind: "caught" }
   | { kind: "victory" };
 
+/**
+ * Something that should not normally happen, recorded so an end-of-run report
+ * can flag it for the developers.
+ */
+export type Anomaly = {
+  kind: "death-outside-danger-zone";
+  reason: "assassin" | "sniper" | "watchtower";
+  turn: number;
+  /** The map section the player was in when they died. */
+  sectionOrder: number;
+};
+
 /** Per-turn bookkeeping, reset at the start of every turn. */
 export type TurnState = {
   cardsPlayedThisTurn: number;
@@ -78,4 +90,6 @@ export type GameState = {
   stats: RunStats;
   /** Turns left (including this one) that every tile costs 1 to enter. */
   terrainTrivialTurns: number;
+  /** Odd events seen this run, for the end-of-run report. */
+  anomalies: readonly Anomaly[];
 };
