@@ -866,8 +866,9 @@ button {
 }
 
 /* Outlines of a set of hexes, one SVG per region so each gets a single
-   continuous border. The enemy range sits above the player's, and the union
-   danger zone below it. */
+   continuous border. The red danger zone sits above the green reachable area,
+   so a dangerous edge is never hidden by the movement border, and the hovered
+   enemy's own range sits above both. */
 .map-outline {
   position: absolute;
   top: 0;
@@ -877,16 +878,27 @@ button {
   & line {
     stroke-width: 3;
   }
+
+  /* The thinner line just inside the border, marking which side is the zone. */
+  & .outline-inner {
+    fill: none;
+    stroke-width: 1.5;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+  }
 }
 
 .outline-danger {
-  & line {
+  z-index: 2;
+
+  & line,
+  & .outline-inner {
     stroke: #f00;
   }
 }
 
 .outline-reachable {
-  z-index: 2;
+  z-index: 1;
 
   & line {
     stroke: #0f0;
@@ -896,7 +908,8 @@ button {
 .outline-enemy {
   z-index: 3;
 
-  & line {
+  & line,
+  & .outline-inner {
     stroke: #f00;
   }
 }

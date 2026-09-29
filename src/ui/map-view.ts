@@ -56,6 +56,8 @@ const SQRT3 = Math.sqrt(3);
 const SVG_NS = "http://www.w3.org/2000/svg";
 /** The stroke is centred on each side, so it spills past the corners. */
 const OUTLINE_PAD = 2;
+/** How far inside the border the danger zone's inner line is drawn. */
+const INNER_INSET = 5;
 /** How far the pointer must travel before a press counts as a drag, in pixels. */
 const DRAG_THRESHOLD = 4;
 /** Zoom bounds and how fast the wheel changes it. */
@@ -86,18 +88,20 @@ function hexCorners(pixel: Point): Point[] {
   ];
 }
 
-type Segment = { a: Point; b: Point };
+/** A hex edge on the border of a region, with the normal pointing into it. */
+type BoundaryEdge = { a: Point; b: Point; inward: Point };
 
 /**
- * The outline of a set of hexes: for every hex, the sides whose neighbour is not
- * in the set, as world-pixel segments. Side `s` of a hex runs from corner `s` to
+ * The border of a set of hexes: for every hex, the sides whose neighbour is not
+ * in the set, as world-pixel edges. Side `s` of a hex runs from corner `s` to
  * corner `s + 1`, so the whole region gets one continuous border.
  */
-function outlineSegments(hexes: ReadonlySet<string>): Segment[] {
-  const segments: Segment[] = [];
+function boundaryEdges(hexes: ReadonlySet<string>): BoundaryEdge[] {
+  const edges: BoundaryEdge[] = [];
   for (const key of hexes) {
     const coord = parseHexKey(key);
-    const corners = hexCorners(hexToPixel(coord));
+    const centre = hexToPixel(coord);
+    const corners = hexCorners(centre);
     for (
       let direction = 0;
       direction < AXIAL_DIRECTIONS.length;
@@ -108,10 +112,21 @@ function outlineSegments(hexes: ReadonlySet<string>): Segment[] {
         continue;
       }
       const side = (1 - direction + 6) % 6;
-      segments.push({ a: corners[side], b: corners[(side + 1) % 6] });
+      const a = corners[side];
+      const b = corners[(side + 1) % 6];
+      const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      const length = Math.hypot(centre.x - mid.x, centre.y - mid.y);
+      edges.push({
+        a,
+        b,
+        inward: {
+          x: (centre.x - mid.x) / length,
+          y: (centre.y - mid.y) / length,
+        },
+      });
     }
   }
-  return segments;
+  return edges;
 }
 
 /** An SVG positioned at `(minX, minY)` in world pixels, sized to its content. */
@@ -131,24 +146,154 @@ function positionedSvg(
   return svg;
 }
 
+type Line = { point: Point; direction: Point };
+type VertexEdges = { at: Point; indices: number[] };
+
+/** Identity of a hex corner by position, so corners shared by hexes collapse. */
+function vertexKey(point: Point): string {
+  return `${Math.round(point.x * 1000)},${Math.round(point.y * 1000)}`;
+}
+
+function offsetLine(edge: BoundaryEdge, inset: number): Line {
+  return {
+    point: {
+      x: edge.a.x + inset * edge.inward.x,
+      y: edge.a.y + inset * edge.inward.y,
+    },
+    direction: { x: edge.b.x - edge.a.x, y: edge.b.y - edge.a.y },
+  };
+}
+
+function intersectLines(first: Line, second: Line): Point | null {
+  const denominator =
+    first.direction.x * second.direction.y -
+    first.direction.y * second.direction.x;
+  if (Math.abs(denominator) < 1e-9) {
+    return null;
+  }
+  const t =
+    ((second.point.x - first.point.x) * second.direction.y -
+      (second.point.y - first.point.y) * second.direction.x) /
+    denominator;
+  return {
+    x: first.point.x + t * first.direction.x,
+    y: first.point.y + t * first.direction.y,
+  };
+}
+
+/** The inset corner at `vertex`, where its two edges' inset lines cross. */
+function cornerPoint(
+  vertex: VertexEdges,
+  edges: readonly BoundaryEdge[],
+  inset: number,
+): Point {
+  if (vertex.indices.length !== 2) {
+    return vertex.at;
+  }
+  const first = edges[vertex.indices[0]];
+  const second = edges[vertex.indices[1]];
+  const meet = intersectLines(
+    offsetLine(first, inset),
+    offsetLine(second, inset),
+  );
+  if (meet !== null) {
+    return meet;
+  }
+  // Collinear edges share one inset line, so either edge gives the point.
+  return {
+    x: vertex.at.x + inset * first.inward.x,
+    y: vertex.at.y + inset * first.inward.y,
+  };
+}
+
+/** The other edge sharing `vertex` with `current`, or null at a dead end. */
+function nextEdge(
+  vertex: VertexEdges | undefined,
+  current: number,
+): number | null {
+  if (vertex === undefined || vertex.indices.length !== 2) {
+    return null;
+  }
+  const first = vertex.indices[0];
+  const second = vertex.indices[1];
+  return first === current ? second : first;
+}
+
+/**
+ * The inset border of a region, one closed polyline per border loop. Each edge
+ * is pushed towards its hex's centre by `inset`, and neighbouring edges are
+ * joined where their inset lines cross, so the line stays connected through
+ * convex and concave corners alike instead of leaving gaps or spikes.
+ */
+function insetOutlineLoops(
+  edges: readonly BoundaryEdge[],
+  inset: number,
+): Point[][] {
+  const vertices = new Map<string, VertexEdges>();
+  edges.forEach((edge, index) => {
+    for (const at of [edge.a, edge.b]) {
+      const key = vertexKey(at);
+      const vertex = vertices.get(key);
+      if (vertex === undefined) {
+        vertices.set(key, { at, indices: [index] });
+      } else {
+        vertex.indices.push(index);
+      }
+    }
+  });
+
+  const corners = new Map<string, Point>();
+  for (const [key, vertex] of vertices) {
+    corners.set(key, cornerPoint(vertex, edges, inset));
+  }
+
+  const loops: Point[][] = [];
+  const visited = new Set<number>();
+  for (let start = 0; start < edges.length; start += 1) {
+    if (visited.has(start)) {
+      continue;
+    }
+    const loop: Point[] = [];
+    let current = start;
+    while (!visited.has(current)) {
+      visited.add(current);
+      const corner = corners.get(vertexKey(edges[current].a));
+      if (corner !== undefined) {
+        loop.push(corner);
+      }
+      const next = nextEdge(vertices.get(vertexKey(edges[current].b)), current);
+      if (next === null) {
+        break;
+      }
+      current = next;
+    }
+    if (loop.length >= 2) {
+      loop.push(loop[0]);
+      loops.push(loop);
+    }
+  }
+  return loops;
+}
+
 /** The outline of `hexes` as one SVG, or null when there is nothing to draw. */
 function outlineSvg(
   hexes: ReadonlySet<string>,
   className: string,
+  inset: number | null,
 ): SVGSVGElement | null {
-  const segments = outlineSegments(hexes);
-  if (segments.length === 0) {
+  const edges = boundaryEdges(hexes);
+  if (edges.length === 0) {
     return null;
   }
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
   let maxY = -Infinity;
-  for (const segment of segments) {
-    minX = Math.min(minX, segment.a.x, segment.b.x);
-    maxX = Math.max(maxX, segment.a.x, segment.b.x);
-    minY = Math.min(minY, segment.a.y, segment.b.y);
-    maxY = Math.max(maxY, segment.a.y, segment.b.y);
+  for (const edge of edges) {
+    minX = Math.min(minX, edge.a.x, edge.b.x);
+    maxX = Math.max(maxX, edge.a.x, edge.b.x);
+    minY = Math.min(minY, edge.a.y, edge.b.y);
+    maxY = Math.max(maxY, edge.a.y, edge.b.y);
   }
   minX -= OUTLINE_PAD;
   minY -= OUTLINE_PAD;
@@ -162,13 +307,24 @@ function outlineSvg(
     maxY - minY,
     ["map-outline", className],
   );
-  for (const segment of segments) {
+  for (const edge of edges) {
     const line = document.createElementNS(SVG_NS, "line");
-    line.setAttribute("x1", `${segment.a.x - minX}`);
-    line.setAttribute("y1", `${segment.a.y - minY}`);
-    line.setAttribute("x2", `${segment.b.x - minX}`);
-    line.setAttribute("y2", `${segment.b.y - minY}`);
+    line.setAttribute("x1", `${edge.a.x - minX}`);
+    line.setAttribute("y1", `${edge.a.y - minY}`);
+    line.setAttribute("x2", `${edge.b.x - minX}`);
+    line.setAttribute("y2", `${edge.b.y - minY}`);
     svg.append(line);
+  }
+  if (inset !== null) {
+    for (const loop of insetOutlineLoops(edges, inset)) {
+      const polyline = document.createElementNS(SVG_NS, "polyline");
+      polyline.classList.add("outline-inner");
+      polyline.setAttribute(
+        "points",
+        loop.map((point) => `${point.x - minX},${point.y - minY}`).join(" "),
+      );
+      svg.append(polyline);
+    }
   }
   return svg;
 }
@@ -410,6 +566,7 @@ export class MapView {
     this.dangerOutline = outlineSvg(
       this.visibleHexes(view.danger, view.tiles),
       "outline-danger",
+      INNER_INSET,
     );
     if (this.dangerOutline !== null) {
       nodes.push(this.dangerOutline);
@@ -420,6 +577,7 @@ export class MapView {
       const outline = outlineSvg(
         this.visibleHexes(zone, view.tiles),
         "outline-enemy",
+        INNER_INSET,
       );
       if (outline !== null) {
         this.enemyOutlines.set(id, outline);
@@ -451,7 +609,7 @@ export class MapView {
 
     this.highlightGroups.clear();
     for (const group of view.highlights) {
-      const outline = outlineSvg(group.reachable, "outline-reachable");
+      const outline = outlineSvg(group.reachable, "outline-reachable", null);
       this.highlightGroups.set(group.key, { outline, targets: group.targets });
       if (outline !== null) {
         nodes.push(outline);

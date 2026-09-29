@@ -651,6 +651,50 @@ export function dangerZone(state: GameState): Set<string> {
 }
 
 /**
+ * Debug aid for the "died outside the danger zone" report. `savedDangerZone` is
+ * the zone the player was shown when they ended their turn. If the enemy phase
+ * kills them on a hex that zone did not cover, dump the whole board so the state
+ * can be reproduced. A death on a covered hex is expected and logs nothing.
+ */
+function reportUnexplainedDeath(
+  state: GameState,
+  savedDangerZone: ReadonlySet<string>,
+  reason: "assassin" | "sniper" | "watchtower",
+): void {
+  const playerKey = hexKey(state.map.player);
+  if (savedDangerZone.has(playerKey)) {
+    console.log("Player was inside danger zone, death was expected")
+    return;
+  }
+  console.log("Player died outside the danger zone", {
+    reason,
+    turn: state.turn,
+    playerSectionOrder: state.playerSectionOrder,
+    player: state.map.player,
+    previous: state.map.previous,
+    playerKey,
+    savedDangerZone: [...savedDangerZone],
+    enemies: state.enemies.map((enemy) => ({ ...enemy })),
+    sections: state.map.index.sections.map((section) => ({
+      id: section.id,
+      difficulty: section.difficulty,
+      origin: section.origin,
+      entryEdge: section.entryEdge,
+      exitEdge: section.exitEdge,
+      footprint: section.footprint.map(hexKey),
+    })),
+    tiles: [...state.map.tiles].map(([key, tile]) => ({
+      key,
+      terrain: tile.terrain,
+      cost: tile.cost,
+      spawnKind: tile.spawnKind,
+      spawnDelay: tile.spawnDelay,
+      spawnTurn: tile.spawnTurn,
+    })),
+  });
+}
+
+/**
  * The end-of-turn enemy step: spawn, fire the watchtowers, fire the snipers and
  * then walk and re-aim them, then move every assassin, one at a time. Returns
  * the new state together with the paths walked, in order, so the UI can show
@@ -659,6 +703,7 @@ export function dangerZone(state: GameState): Set<string> {
 export function resolveEnemyPhase(
   state: GameState,
   maxDistance: number,
+  savedDangerZone: ReadonlySet<string>,
 ): Transition {
   const spawned = spawnEnemies(state.map.tiles, state.turn, state.ids);
   const alreadyHere = state.enemies;
@@ -679,6 +724,7 @@ export function resolveEnemyPhase(
       awake(enemy) &&
       watchtowerKills(enemy, state.map.player)
     ) {
+      reportUnexplainedDeath(state, savedDangerZone, "watchtower");
       return moving(
         {
           ...state,
@@ -703,6 +749,7 @@ export function resolveEnemyPhase(
       continue;
     }
     if (sniperKills(enemy, state.map.player, state.map.tiles)) {
+      reportUnexplainedDeath(state, savedDangerZone, "sniper");
       return moving(
         {
           ...state,
@@ -764,6 +811,7 @@ export function resolveEnemyPhase(
       e.id === turn.assassin.id ? turn.assassin : e,
     );
     if (turn.killedPlayer) {
+      reportUnexplainedDeath(state, savedDangerZone, "assassin");
       return moving(
         {
           ...state,

@@ -17,6 +17,7 @@ import {
 } from "./deck";
 import {
   bountyFor,
+  dangerZone,
   enemiesInRange,
   killEnemy,
   resolveEnemyPhase,
@@ -628,7 +629,15 @@ export function endTurn(state: GameState): Transition {
     return still(state);
   }
   const paid = takeSkipBonus(state);
-  const resolved = resolveEnemyPhase(paid, visibleReach(paid));
+  // The zone the player was shown when they committed to ending the turn. The
+  // enemy phase checks its kills against this, so a death on a hex that was not
+  // marked dangerous can be reported.
+  const savedDangerZone = dangerZone(paid);
+  const resolved = resolveEnemyPhase(
+    paid,
+    visibleReach(paid),
+    savedDangerZone,
+  );
   if (resolved.state.phase.kind === "game-over") {
     return resolved;
   }

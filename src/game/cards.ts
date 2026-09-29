@@ -586,7 +586,7 @@ export const SHOP_CATALOGUE: readonly CardSpec[] = [
     ),
   ),
   spec("Volley", "common", 3, [{ kind: "attack", range: 3 }], [sleep(1)], [], null),
-  spec("Silver", "uncommon", 6, [{ "kind": "attack", range: 8 },], [pay(10)], [], null),
+  spec("Silver", "uncommon", 6, [{ "kind": "attack", range: 8 },], [pay(7)], [], null),
   spec(
     "Charge",
     "uncommon",
