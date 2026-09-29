@@ -117,6 +117,11 @@ export function computeVisibility(
 export type VisibleMap = {
   tiles: Map<string, Tile>;
   fog: ReadonlyMap<string, FogLevel>;
+  /**
+   * Hexes of the fully revealed sections. An enemy standing here is awake and
+   * acts this turn; one in the fog sliver is visible but still asleep.
+   */
+  revealed: ReadonlySet<string>;
 };
 
 /**
@@ -135,15 +140,27 @@ export function visibleMap(state: GameState): VisibleMap {
     fog.set(hexKey(hex.coord), hex.level);
   }
   const tiles = new Map<string, Tile>();
+  const revealed = new Set<string>();
   for (const [key, tile] of state.map.tiles) {
     const sectionId = state.map.index.hexToSection.get(key);
     if (sectionId !== undefined && full.has(sectionId)) {
       tiles.set(key, tile);
+      revealed.add(key);
     } else if (fog.has(key)) {
       tiles.set(key, tile);
     }
   }
-  return { tiles, fog };
+  return { tiles, fog, revealed };
+}
+
+/**
+ * The enemies standing on a hex the player can currently see. An enemy on a
+ * hex outside the window is hidden: it neither renders nor acts until the
+ * player's section reaches it.
+ */
+export function visibleEnemies(state: GameState): Enemy[] {
+  const visible = visibleMap(state).tiles;
+  return state.enemies.filter((enemy) => visible.has(hexKey(enemy.position)));
 }
 
 /**

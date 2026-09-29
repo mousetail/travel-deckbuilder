@@ -23,7 +23,7 @@ import {
 } from "./enemies";
 import { equalsHex, hexDistance } from "./hex";
 import type { HexCoord } from "./hex";
-import { onPlayerMoved, visibleReach } from "./fog";
+import { onPlayerMoved, visibleEnemies, visibleReach } from "./fog";
 import { reachableHexes, resolveMove } from "./movement";
 import {
   cardReach,
@@ -169,7 +169,8 @@ export function modeIsAvailable(
   switch (mode.kind) {
     case "attack":
       return (
-        enemiesInRange(state.enemies, state.map.player, mode.range).length > 0
+        enemiesInRange(visibleEnemies(state), state.map.player, mode.range)
+          .length > 0
       );
     case "discard-hand":
       return state.deck.hand.length >= mode.threshold;

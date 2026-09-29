@@ -4,7 +4,7 @@ import { enemiesInRange, terrainCostAt } from "./enemies";
 import type { Enemy } from "./enemies";
 import { equalsHex, findPathByCost, hexDistance, hexKey } from "./hex";
 import type { HexCoord } from "./hex";
-import { visibleMap } from "./fog";
+import { visibleEnemies, visibleMap } from "./fog";
 import { cardCostAt, reachableHexes } from "./movement";
 import type { TileLookup } from "./movement";
 import type { GameState } from "./state";
@@ -87,7 +87,11 @@ export function cardReach(state: GameState, card: Card): CardReach {
       case "attack":
         attacks.push({
           mode,
-          targets: enemiesInRange(state.enemies, state.map.player, mode.range),
+          targets: enemiesInRange(
+            visibleEnemies(state),
+            state.map.player,
+            mode.range,
+          ),
         });
         break;
       default:
@@ -261,8 +265,12 @@ export function hoverPaths(state: GameState, to: HexCoord): HoverPath[] {
   if (player !== null) {
     paths.push({ kind: "player", path: player });
   }
+  const revealed = visibleMap(state).revealed;
   for (const enemy of state.enemies) {
-    if (enemy.kind !== "assassin") {
+    if (
+      enemy.kind !== "assassin" ||
+      !revealed.has(hexKey(enemy.position))
+    ) {
       continue;
     }
     const found = findPathByCost(

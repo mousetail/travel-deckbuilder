@@ -11,6 +11,7 @@ import {
   parseHexKey,
 } from "./hex";
 import type { HexCoord, StepCost } from "./hex";
+import { visibleMap } from "./fog";
 import type { GameState, MapIndex } from "./state";
 import type { EnemyKind, Terrain, Tile } from "./terrain";
 import { moving } from "./transition";
@@ -387,11 +388,42 @@ function sectionOrderAt(index: MapIndex, coord: HexCoord): number {
 }
 
 /**
+ * A destination's desirability for a sniper, most significant field first:
+ * outside the doomed section, not sharing a hex with another enemy, not adjacent
+ * to one, then furthest from the player.
+ */
+function sniperRank(
+  coord: HexCoord,
+  player: HexCoord,
+  peers: readonly HexCoord[],
+  doomed: number,
+  orderAt: (coord: HexCoord) => number,
+): readonly number[] {
+  return [
+    orderAt(coord) !== doomed ? 1 : 0,
+    peers.some((peer) => equalsHex(peer, coord)) ? 0 : 1,
+    peers.some((peer) => hexDistance(peer, coord) <= 1) ? 0 : 1,
+    hexDistance(coord, player),
+  ];
+}
+
+/** True if rank `a` beats `b`, comparing the most significant field first. */
+function beatsRank(a: readonly number[], b: readonly number[]): boolean {
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] !== b[i]) {
+      return a[i] > b[i];
+    }
+  }
+  return false;
+}
+
+/**
  * Where a sniper walks this turn: away from the player, since it is weak up
  * close, but never onto the section that is about to be streamed away — a
- * sniper left behind there is simply deleted. The sniper always moves, so its
- * own hex is not a candidate: even a single step beats standing still. Returns
- * the destination and the path walked.
+ * sniper left behind there is simply deleted. It also keeps its distance from
+ * other enemies: ending on one is strongly avoided, ending next to one weakly.
+ * The sniper always moves, so its own hex is not a candidate: even a single step
+ * beats standing still. Returns the destination and the path walked.
  *
  * Movement is otherwise unrestricted: a sniper may walk past the player or even
  * end on their hex. That is harmless because a sniper only ever kills down its
@@ -401,28 +433,22 @@ function sniperMove(
   sniper: Sniper,
   player: HexCoord,
   tiles: ReadonlyMap<string, Tile>,
+  peers: readonly HexCoord[],
   doomed: number,
   orderAt: (coord: HexCoord) => number,
 ): { position: HexCoord; path: HexCoord[] } {
   const costAt = terrainCostAt(tiles, sniper.position);
   const reachable = hexesWithinCost(sniper.position, sniper.movement, costAt);
   let best: HexCoord | null = null;
-  let bestSafe = false;
-  let bestDistance = -Infinity;
+  let bestRank: readonly number[] | null = null;
   for (const coord of reachable) {
     if (equalsHex(coord, sniper.position)) {
       continue;
     }
-    const safe = orderAt(coord) !== doomed;
-    const distance = hexDistance(coord, player);
-    if (
-      best === null ||
-      (safe && !bestSafe) ||
-      (safe === bestSafe && distance > bestDistance)
-    ) {
+    const rank = sniperRank(coord, player, peers, doomed, orderAt);
+    if (bestRank === null || beatsRank(rank, bestRank)) {
       best = coord;
-      bestSafe = safe;
-      bestDistance = distance;
+      bestRank = rank;
     }
   }
   if (best === null) {
@@ -584,11 +610,28 @@ function enemyDanger(
 /**
  * Every hex an enemy could strike at the end of this turn, keyed by enemy id.
  * The map uses it to show which enemies threaten the tile under the cursor.
+ *
+ * A sleeping enemy — one the player cannot see yet — only threatens the fog
+ * sliver of the section it stands in: stepping onto one of those leading rows
+ * would wake that section, so the player must still be warned there. Anywhere
+ * else it is harmless until it wakes.
  */
 export function enemyDangerZones(state: GameState): Map<string, Set<string>> {
+  const visible = visibleMap(state);
+  const fogOrder = state.playerSectionOrder + 1;
   const zones = new Map<string, Set<string>>();
   for (const enemy of state.enemies) {
-    zones.set(enemy.id, enemyDanger(enemy, state.map.tiles));
+    const zone = enemyDanger(enemy, state.map.tiles);
+    if (!visible.revealed.has(hexKey(enemy.position))) {
+      const wakes =
+        sectionOrderAt(state.map.index, enemy.position) === fogOrder;
+      for (const key of zone) {
+        if (!wakes || !visible.fog.has(key)) {
+          zone.delete(key);
+        }
+      }
+    }
+    zones.set(enemy.id, zone);
   }
   return zones;
 }
@@ -599,8 +642,8 @@ export function enemyDangerZones(state: GameState): Map<string, Set<string>> {
  */
 export function dangerZone(state: GameState): Set<string> {
   const zone = new Set<string>();
-  for (const enemy of state.enemies) {
-    for (const key of enemyDanger(enemy, state.map.tiles)) {
+  for (const enemyZone of enemyDangerZones(state).values()) {
+    for (const key of enemyZone) {
       zone.add(key);
     }
   }
@@ -622,10 +665,18 @@ export function resolveEnemyPhase(
   let enemies: Enemy[] = [...alreadyHere, ...spawned];
   const moves: MovePath[] = [];
 
+  // An enemy on a hex the player cannot see yet is asleep: it neither fires nor
+  // moves until the player's section reaches it. This is what stops an enemy
+  // from striking the instant it becomes visible.
+  const revealed = visibleMap(state).revealed;
+  const awake = (enemy: Enemy): boolean =>
+    revealed.has(hexKey(enemy.position));
+
   // Watchtowers fire first: ending your turn in their radius is fatal.
   for (const enemy of enemies) {
     if (
       enemy.kind === "watchtower" &&
+      awake(enemy) &&
       watchtowerKills(enemy, state.map.player)
     ) {
       return moving(
@@ -648,7 +699,7 @@ export function resolveEnemyPhase(
   const orderAt = (coord: HexCoord): number =>
     sectionOrderAt(state.map.index, coord);
   for (const enemy of [...enemies]) {
-    if (enemy.kind !== "sniper") {
+    if (enemy.kind !== "sniper" || !awake(enemy)) {
       continue;
     }
     if (sniperKills(enemy, state.map.player, state.map.tiles)) {
@@ -663,10 +714,14 @@ export function resolveEnemyPhase(
     }
     let sniper = enemy;
     if (alreadyIds.has(enemy.id)) {
+      const peers = enemies
+        .filter((e) => e.id !== enemy.id)
+        .map((e) => e.position);
       const result = sniperMove(
         sniper,
         state.map.player,
         state.map.tiles,
+        peers,
         doomed,
         orderAt,
       );
@@ -689,7 +744,7 @@ export function resolveEnemyPhase(
   // first to reach you wins. A freshly spawned assassin waits a turn, so the
   // player always gets one turn's warning before it can strike.
   for (const enemy of alreadyHere) {
-    if (enemy.kind !== "assassin") {
+    if (enemy.kind !== "assassin" || !awake(enemy)) {
       continue;
     }
     const peers = enemies

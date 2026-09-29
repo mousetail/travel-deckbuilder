@@ -13,7 +13,7 @@ import type { HexCoord } from "../game/hex";
 import type { Card } from "../game/cards";
 import type { Deck, GameState, Phase } from "../game/state";
 import type { MovePath, Transition } from "../game/transition";
-import { visibleMap } from "../game/fog";
+import { visibleEnemies, visibleMap } from "../game/fog";
 import { dangerZone, enemyDangerZones } from "../game/enemies";
 import { applyFeatureAction, useFeature } from "../game/economy";
 import type { FeatureAction } from "../game/economy";
@@ -230,7 +230,7 @@ export class App {
       tiles: visible.tiles,
       fog: visible.fog,
       player: this.state.map.player,
-      enemies: this.state.enemies,
+      enemies: visibleEnemies(this.state),
       danger: dangerZone(this.state),
       enemyDanger: enemyDangerZones(this.state),
       turn: this.state.turn,

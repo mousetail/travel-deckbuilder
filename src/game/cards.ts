@@ -267,6 +267,17 @@ export const STARTING_DECK: readonly CardSpec[] = [
     [],
     spec("Blaze+", "starting", 0, [move("forest", 2)], [], [], null),
   ),
+  spec(
+    "Stab",
+    "starting",
+    0,
+    [{ kind: "attack", range: 1 }],
+    [{kind: "sleep", reshuffles: 2}],
+    [{kind: "sleep", reshuffles: 2}],
+    spec("Stab+", "starting", 0, [{ kind: "attack", range: 2 }],
+      [{kind: "sleep", reshuffles: 2}],
+      [{kind: "sleep", reshuffles: 2}], null)
+  )
 ];
 
 export const SHOP_CATALOGUE: readonly CardSpec[] = [
@@ -568,13 +579,14 @@ export const SHOP_CATALOGUE: readonly CardSpec[] = [
       "Ambush+",
       "common",
       3,
-      [move("grass", 3), { kind: "attack", range: 0 }],
+      [move("grass", 3), { kind: "attack", range: 1 }],
       [],
       [],
       null,
     ),
   ),
   spec("Volley", "common", 3, [{ kind: "attack", range: 3 }], [sleep(1)], [], null),
+  spec("Silver", "uncommon", 6, [{ "kind": "attack", range: 8 },], [pay(10)], [], null),
   spec(
     "Charge",
     "uncommon",
