@@ -154,6 +154,13 @@ button {
   padding: 18px 28px;
 }
 
+/* The player is standing in an enemy's danger zone: outline the button red so
+   ending the turn here reads as the fatal choice it is. */
+.hud-button.danger {
+  outline: 3px solid #f00;
+  outline-offset: 2px;
+}
+
 /* The coin icon, shown inline wherever an amount of currency is written. */
 .hud-currency .card-symbol-icon,
 .hud-button .card-symbol-icon,

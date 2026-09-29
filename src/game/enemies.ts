@@ -651,6 +651,15 @@ export function dangerZone(state: GameState): Set<string> {
 }
 
 /**
+ * Whether the player is standing on a hex an enemy could strike at the end of
+ * this turn. The end-turn button turns red while this is true, so the player is
+ * warned before committing to a fatal turn.
+ */
+export function playerInDanger(state: GameState): boolean {
+  return dangerZone(state).has(hexKey(state.map.player));
+}
+
+/**
  * Debug aid for the "died outside the danger zone" report. `savedDangerZone` is
  * the zone the player was shown when they ended their turn. If the enemy phase
  * kills them on a hex that zone did not cover, dump the whole board so the state

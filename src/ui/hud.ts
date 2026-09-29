@@ -1,6 +1,7 @@
 import type { GameState } from "../game/state";
 import { endTurnAction } from "../game/economy";
 import type { EndTurnAction } from "../game/economy";
+import { playerInDanger } from "../game/enemies";
 import { playerOnFinish } from "../game/terrain";
 import { coinIcon } from "./card-icons";
 import { setChildren } from "./dom";
@@ -53,6 +54,9 @@ export class Hud {
     const action = endTurnAction(state);
     if (action.kind === "use-feature") {
       button.classList.add("use-feature");
+    }
+    if (playerInDanger(state)) {
+      button.classList.add("danger");
     }
     const label = endTurnLabel(action);
     if (playerOnFinish(state)) {
