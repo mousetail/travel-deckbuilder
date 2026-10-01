@@ -1,4 +1,5 @@
 import type { Card } from "../game/cards";
+import { isIndestructible, mustPlayFirst } from "../game/cards";
 import { cardFace } from "./card-view";
 import { setChildren } from "./dom";
 
@@ -59,6 +60,17 @@ export class HandView {
       return element;
     }
 
+    // A must-play-first card can never be discarded...
+    if (mode.kind === "discard" && mustPlayFirst(card)) {
+      element.classList.add("card-unplayable");
+      return element;
+    }
+    // ...and an indestructible card can never be put to sleep.
+    if (mode.kind === "sleep" && isIndestructible(card)) {
+      element.classList.add("card-unplayable");
+      return element;
+    }
+
     // While choosing a card the whole card is the button, not its modes.
     if (mode.kind === "discard") {
       element.classList.add("discarding");
@@ -84,10 +96,12 @@ export class HandView {
 
     element.addEventListener("mouseenter", () => this.onHover(card));
     element.addEventListener("mouseleave", () => this.onHover(null));
-    element.addEventListener("contextmenu", (event) => {
-      event.preventDefault();
-      this.onDiscard(card);
-    });
+    if (!mustPlayFirst(card)) {
+      element.addEventListener("contextmenu", (event) => {
+        event.preventDefault();
+        this.onDiscard(card);
+      });
+    }
     return element;
   }
 }

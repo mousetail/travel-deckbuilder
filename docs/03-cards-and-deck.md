@@ -29,9 +29,13 @@ export type CardMode =
   | { kind: "discard-hand"; threshold: number; draw: number }
   | { kind: "draw"; count: number }
   | { kind: "recover"; count: number }
-  | { kind: "currency"; amount: number };
+  | { kind: "currency"; amount: number }
+  | { kind: "escalate"; thisTurn: number; permanent: number };
 
 export type Rarity = "starting" | "common" | "uncommon" | "rare";
+
+/** A rule-bending property, shown as a badge and enforced by the game. */
+export type CardTrait = "must-play-first" | "indestructible";
 
 export type Card = {
   id: string;
@@ -39,6 +43,7 @@ export type Card = {
   image: string;   // placeholder until real art exists
   cost: number;    // shop price in currency
   rarity: Rarity;
+  traits: readonly CardTrait[];
   modes: readonly CardMode[];
 };
 ```
@@ -54,6 +59,7 @@ Each mode's meaning:
 | `draw` | Draw `count` cards. |
 | `recover` | Take `count` card(s) from the discard pile into your hand. |
 | `currency` | Gain `amount` currency. |
+| `escalate` | Raise every enemy's movement speed by `thisTurn` this turn and `permanent` permanently. |
 
 ## 2. Card specs vs. card instances
 
@@ -67,6 +73,7 @@ export type CardSpec = {
   image: string;
   cost: number;
   rarity: Rarity;
+  traits: readonly CardTrait[];
   modes: readonly CardMode[];
 };
 
@@ -87,6 +94,7 @@ export function instantiate(spec: CardSpec, id: string): Card {
     image: spec.image,
     cost: spec.cost,
     rarity: spec.rarity,
+    traits: spec.traits,
     modes: spec.modes,
   };
 }
@@ -101,6 +109,10 @@ proposal (tune later); what matters is the structure.
 const move = (terrain: Terrain, distance: number): CardMode => ({ kind: "move", terrain, distance });
 
 export const STARTING_DECK: readonly CardSpec[] = [
+  withTraits(
+    spec("Escalation", "starting", 0, [{ kind: "escalate", thisTurn: 1, permanent: 0.2 }]),
+    ["must-play-first", "indestructible"],
+  ),
   spec("Tredge", "starting", 0, [move("grass", 1)]),
   spec("Tredge", "starting", 0, [move("grass", 1)]),
   spec("Walk",   "starting", 0, [move("grass", 3)]),
@@ -148,7 +160,12 @@ function spec(
   cost: number,
   modes: readonly CardMode[],
 ): CardSpec {
-  return { name, image: "", cost, rarity, modes };
+  return { name, image: "", cost, rarity, traits: [], modes };
+}
+
+/** Attach traits to a spec built by `spec`, which starts with none. */
+function withTraits(spec: CardSpec, traits: readonly CardTrait[]): CardSpec {
+  return { ...spec, traits };
 }
 ```
 
@@ -164,6 +181,21 @@ Rules encoded here, straight from the design:
 
 `image: ""` is the placeholder the design asks for; the UI draws a coloured block
 when `image` is empty.
+
+### Card traits
+
+A **trait** is a rule the engine enforces, independent of the card's modes, and it
+is rendered as a badge in the card's top-right corner (chapter 09). Two exist:
+
+- **`must-play-first`** — while this card is in hand, no other card may be played,
+  and it can never be discarded. Backed by `mustPlayFirst(card)` and
+  `blockedByPriority(hand, card)`, and checked by `beginPlay`/`cardIsPlayable`, the
+  reach queries, and every discard path.
+- **`indestructible`** — the card can never be destroyed (removed from the deck) or
+  put to sleep. Backed by `isIndestructible(card)`, and checked by `chooseRemoveCard`
+  and the sleep targeting.
+
+Any card may carry any trait, and traits survive upgrades. `Escalation` carries both.
 
 ## 4. Deck zones
 

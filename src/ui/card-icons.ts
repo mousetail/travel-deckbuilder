@@ -4,6 +4,8 @@ import scoutUrl from "../images/card-icons/scout.svg";
 import upgradeUrl from "../images/card-icons/upgrade.svg";
 import temporaryUrl from "../images/card-icons/temporary.svg";
 import teleportUrl from "../images/card-icons/teleport.svg";
+import playsFirstUrl from "../images/card-icons/plays-first.svg";
+import indestructibleUrl from "../images/card-icons/indestructible.svg";
 
 /** Play-cost coin, shown on Millionaire's play line. */
 export const COIN_ICON = coinUrl;
@@ -17,6 +19,10 @@ export const UPGRADE_ICON = upgradeUrl;
 export const TEMPORARY_ICON = temporaryUrl;
 /** Hookshot's teleport mode. */
 export const TELEPORT_ICON = teleportUrl;
+/** The badge for a card that must be played before any other. */
+export const PLAYS_FIRST_ICON = playsFirstUrl;
+/** The badge for a card that cannot be destroyed or put to sleep. */
+export const INDESTRUCTIBLE_ICON = indestructibleUrl;
 
 /** The coin icon as an inline element, for writing an amount of currency. */
 export function coinIcon(): HTMLImageElement {

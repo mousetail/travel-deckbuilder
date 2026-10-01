@@ -25,6 +25,31 @@ There's also "dirt" which can be passed by any movement card and impassible whic
 
 # Cards
 
+## Card Traits
+
+Some cards carry a **trait**: a rule-bending property shown as a badge on the card face (top-right) and enforced by the game. Traits are general — any card may carry any of them, and they survive upgrades.
+
+- **Must play first** (orange badge): while this card is in your hand, no other card may be played, and this card can never be discarded.
+- **Indestructible** (green badge): this card can never be destroyed (removed from your deck) or put to sleep.
+
+`Escalation` carries both traits.
+
+## Escalation
+
+`Escalation` is a starting card, not a shop card, and it is the game's difficulty
+ramp:
+
+- **Escalation** (starting): raises every enemy's movement speed by 1 this turn and
+  0.2 permanently. Snipers take half the ramp, so they stay slower than assassins.
+  Carries the must-play-first and indestructible traits.
+
+It replaces the old turn-number ramp: enemies no longer get faster with the turn
+number, so the only way the threat grows is the player drawing and playing
+`Escalation`. Acting each turn therefore means paying the enemy-speed tax first.
+
+For comparison, a build flag (`DIFFICULTY_SCALING` in `src/game/config.ts`) can
+switch the whole game back to the turn-number ramp.
+
 # Basic Movement Cards
 
 Basic movement cards move some number of spaces over the given terrain. The basic movement cards are as follows:
@@ -102,7 +127,7 @@ The map has "spawn points" which can spawn different kinds of enemies. An enemy 
 - High cost of crossing a terrain type boundary, mimicking a player who would have to play a second card.
 - Assasins chase the player and kill them if they can end their turn on the players space
 
-Assasins get faster over time (dependin on turn number)
+Assassins and snipers do not get faster with the turn number. Instead, the starting `Escalation` card raises every enemy's speed: +1 for the turn it is played and +0.2 permanently. It carries the must-play-first and indestructible traits, so it cannot be dodged by discarding, removing, or sleeping it — acting each turn means paying the ramp.
 
 ## Watch Towers
 
@@ -142,11 +167,13 @@ Some tiles allow you to upgrade your deck.
 
 Graphics style is retro/pixel art. There are some images in src/images showing the texture of the terrain types.
 
-The full screen is the map with the UI hovering above it. Cards look a bit like playing cards, with a symbolic representation in the top left corner. Each card has a name, an image (leave this as placeholder)
+The full screen is the map with the UI hovering above it. Cards look a bit like playing cards, with a symbolic representation in the top left corner. Each card has a name, an image (leave this as placeholder), and a stack of small badges in the top-right corner: one per trait, then the sleep counter and the temporary-upgrade sigil. Badge art lives in `src/images/card-icons/` as small SVGs.
 
 Cards are shown in a "fan" pattern, slightly angled to the left and the right.
 
-To the left of your cards is your draw pile with a number indicating how many cards are in it. To the right your discard pile. You can click your discard pile or draw pile to see exactly what cards are in it.
+To the left of your cards is your draw pile with a number indicating how many cards are in it. To the right your discard pile. You can click your discard pile or draw pile to see exactly what cards are in them.
+
+The top-right of the HUD shows the turn number, the current depth, and the current enemy movement speed. When a temporary effect is boosting or slowing enemies this turn, its signed value is shown in parentheses, e.g. `enemy speed 1.2 (+1)`; with nothing temporary it is omitted.
 
 UI is mostly black and white, thick borders, no border radius. The map itself is allowed to have color.
 

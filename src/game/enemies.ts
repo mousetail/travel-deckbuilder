@@ -1,4 +1,5 @@
 import type { IdFactory } from "./cards";
+import { DIFFICULTY_SCALING } from "./config";
 import {
   AXIAL_DIRECTIONS,
   addHex,
@@ -76,14 +77,60 @@ export const TERRAIN_MOVE_COST: Record<Terrain, number> = {
  */
 export const TERRAIN_BOUNDARY_COST = 4;
 
-/** Assassins get faster the deeper the player is. */
-export function assassinMovementFor(turn: number): number {
-  return 1 + Math.floor(turn / 8);
+/** Base movement points per enemy turn, before any difficulty ramp. */
+export const ASSASSIN_BASE_MOVEMENT = 1;
+export const SNIPER_BASE_MOVEMENT = 1;
+
+/** Turns after which the turn-based scheme grants an enemy another step. */
+const ASSASSIN_TURN_PERIOD = 8;
+const SNIPER_TURN_PERIOD = 16;
+
+/** Movement an enemy of `kind` gains from the turn number alone. */
+function turnSpeedBonus(kind: EnemyKind, turn: number): number {
+  switch (kind) {
+    case "assassin":
+      return Math.floor(turn / ASSASSIN_TURN_PERIOD);
+    case "sniper":
+      return Math.floor(turn / SNIPER_TURN_PERIOD);
+    case "watchtower":
+      return 0;
+  }
 }
 
-/** Snipers are slower than assassins, and speed up more gradually. */
-export function sniperMovementFor(turn: number): number {
-  return 1 + Math.floor(turn / 16);
+/**
+ * Extra movement `enemy` gets beyond its base for the coming enemy phase. This
+ * is the one seam between the two difficulty schemes (see `config.ts`): in
+ * `"card"` mode it is Escalation's permanent ramp plus the one-turn bump, and
+ * in `"turn"` mode it is the enemy's turn-number bonus. Snipers are slower than
+ * assassins, so in card mode they take half the ramp (their base is unchanged).
+ */
+export function enemySpeedBonusFor(state: GameState, enemy: Enemy): number {
+  if (DIFFICULTY_SCALING === "turn") {
+    return turnSpeedBonus(enemy.kind, state.turn);
+  }
+  const ramp = state.enemySpeedBonus + state.enemySpeedThisTurn;
+  return enemy.kind === "sniper" ? ramp / 2 : ramp;
+}
+
+/**
+ * The standing enemy movement shown in the HUD: base plus the permanent ramp.
+ * It describes assassins, the faster kind; snipers are slower in both schemes
+ * (half the card ramp, or a longer turn period). Both share a base, so one
+ * figure otherwise suffices.
+ */
+export function permanentEnemyMovement(state: GameState): number {
+  if (DIFFICULTY_SCALING === "turn") {
+    return ASSASSIN_BASE_MOVEMENT + turnSpeedBonus("assassin", state.turn);
+  }
+  return ASSASSIN_BASE_MOVEMENT + state.enemySpeedBonus;
+}
+
+/** Enemy movement that applies only this turn, from Escalation or any effect. */
+export function temporaryEnemyMovement(state: GameState): number {
+  if (DIFFICULTY_SCALING === "turn") {
+    return 0;
+  }
+  return state.enemySpeedThisTurn;
 }
 
 /**
@@ -260,10 +307,11 @@ export function takeAssassinTurn(
   tiles: ReadonlyMap<string, Tile>,
   maxDistance: number,
   peers: readonly HexCoord[],
+  speedBonus: number,
 ): AssassinTurn {
   const result = chase(
     assassin.position,
-    assassin.movement,
+    assassin.movement + speedBonus,
     player,
     tiles,
     maxDistance,
@@ -277,13 +325,10 @@ export function takeAssassinTurn(
   };
 }
 
-/**
- * Build one enemy of `kind` at `position`, with movement scaled to `turn`.
- */
+/** Build one enemy of `kind` at `position` with its base movement. */
 export function makeEnemy(
   kind: EnemyKind,
   position: HexCoord,
-  turn: number,
   ids: IdFactory,
 ): Enemy {
   switch (kind) {
@@ -292,14 +337,14 @@ export function makeEnemy(
         kind: "assassin",
         id: ids(),
         position,
-        movement: assassinMovementFor(turn),
+        movement: ASSASSIN_BASE_MOVEMENT,
       };
     case "sniper":
       return {
         kind: "sniper",
         id: ids(),
         position,
-        movement: sniperMovementFor(turn),
+        movement: SNIPER_BASE_MOVEMENT,
         aim: null,
       };
     case "watchtower":
@@ -320,7 +365,6 @@ export function makeEnemy(
  */
 export function instantEnemies(
   tiles: ReadonlyMap<string, Tile>,
-  turn: number,
   ids: IdFactory,
 ): Enemy[] {
   const spawned: Enemy[] = [];
@@ -328,7 +372,7 @@ export function instantEnemies(
     if (tile.spawnKind === null || tile.spawnDelay !== 0) {
       continue;
     }
-    spawned.push(makeEnemy(tile.spawnKind, parseHexKey(key), turn, ids));
+    spawned.push(makeEnemy(tile.spawnKind, parseHexKey(key), ids));
   }
   return spawned;
 }
@@ -352,7 +396,7 @@ export function spawnEnemies(
     if (tile.spawnTurn !== currentTurn + 1) {
       continue;
     }
-    spawned.push(makeEnemy(tile.spawnKind, parseHexKey(key), currentTurn, ids));
+    spawned.push(makeEnemy(tile.spawnKind, parseHexKey(key), ids));
   }
   return spawned;
 }
@@ -458,9 +502,14 @@ function sniperMove(
   peers: readonly HexCoord[],
   doomed: number,
   orderAt: (coord: HexCoord) => number,
+  speedBonus: number,
 ): { position: HexCoord; path: HexCoord[] } {
   const costAt = terrainCostAt(tiles, sniper.position);
-  const reachable = hexesWithinCost(sniper.position, sniper.movement, costAt);
+  const reachable = hexesWithinCost(
+    sniper.position,
+    sniper.movement + speedBonus,
+    costAt,
+  );
   let best: HexCoord | null = null;
   let bestRank: readonly number[] | null = null;
   for (const coord of reachable) {
@@ -610,6 +659,7 @@ function enemyDanger(
   enemy: Enemy,
   sightTiles: ReadonlyMap<string, Tile>,
   moveTiles: ReadonlyMap<string, Tile>,
+  speedBonus: number,
 ): Set<string> {
   const zone = new Set<string>();
   if (enemy.kind === "watchtower") {
@@ -625,7 +675,7 @@ function enemyDanger(
   } else {
     for (const coord of hexesWithinCost(
       enemy.position,
-      enemy.movement,
+      enemy.movement + speedBonus,
       terrainCostAt(moveTiles, enemy.position),
     )) {
       zone.add(hexKey(coord));
@@ -657,6 +707,7 @@ export function enemyDangerZones(state: GameState): Map<string, Set<string>> {
       enemy,
       state.map.tiles,
       awake ? visible.tiles : state.map.tiles,
+      enemySpeedBonusFor(state, enemy),
     );
     if (!awake) {
       const wakes =
@@ -849,6 +900,7 @@ export function resolveEnemyPhase(
         peers,
         doomed,
         orderAt,
+        enemySpeedBonusFor(state, sniper),
       );
       if (result.path.length > 1) {
         moves.push({
@@ -881,6 +933,7 @@ export function resolveEnemyPhase(
       visible,
       maxDistance,
       peers,
+      enemySpeedBonusFor(state, enemy),
     );
     if (turn.path.length > 1) {
       moves.push({ mover: { kind: "enemy", id: enemy.id }, path: turn.path });

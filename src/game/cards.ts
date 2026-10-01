@@ -1,3 +1,4 @@
+import { DIFFICULTY_SCALING } from "./config";
 import type { Terrain } from "./terrain";
 
 export type MoveMode =
@@ -22,7 +23,8 @@ export type CardMode =
   | { kind: "sleep-card"; reshuffles: number }
   | { kind: "search"; count: number }
   | { kind: "trivial-terrain"; turns: number }
-  | { kind: "upgrade-hand" };
+  | { kind: "upgrade-hand" }
+  | { kind: "escalate"; thisTurn: number; permanent: number };
 
 /**
  * A side effect that fires as part of a card's action. Sleeping is an effect of
@@ -38,6 +40,17 @@ export type CardEffect =
   | { kind: "draw"; count: number };
 
 export type Rarity = "starting" | "common" | "uncommon" | "rare";
+
+/**
+ * A rule-bending property a card carries. Traits are shown as badges on the
+ * card face and enforced by the game rules, and any card may carry any of them.
+ *
+ * - `must-play-first`: no other card may be played while this one is in hand,
+ *   and this card can never be discarded.
+ * - `indestructible`: the card can never be destroyed (removed from the deck)
+ *   or put to sleep.
+ */
+export type CardTrait = "must-play-first" | "indestructible";
 
 /**
  * Shop/gift draw weights, kept next to `Rarity`. `starting` is 0 so a starting
@@ -56,6 +69,7 @@ export type Card = {
   image: string;
   cost: number;
   rarity: Rarity;
+  traits: readonly CardTrait[];
   modes: readonly CardMode[];
   /** Effects that fire when the card is played, alongside its mode. */
   onPlay: readonly CardEffect[];
@@ -79,6 +93,7 @@ export type CardSpec = {
   image: string;
   cost: number;
   rarity: Rarity;
+  traits: readonly CardTrait[];
   modes: readonly CardMode[];
   onPlay: readonly CardEffect[];
   onDiscard: readonly CardEffect[];
@@ -102,6 +117,7 @@ export function instantiate(spec: CardSpec, id: string): Card {
     image: spec.image,
     cost: spec.cost,
     rarity: spec.rarity,
+    traits: spec.traits,
     modes: spec.modes,
     onPlay: spec.onPlay,
     onDiscard: spec.onDiscard,
@@ -128,6 +144,33 @@ export function moveModeValue(mode: MoveMode): number {
   return mode.kind === "move" ? mode.distance : mode.range;
 }
 
+/** Whether `card` carries `trait`. */
+export function hasTrait(card: Card, trait: CardTrait): boolean {
+  return card.traits.includes(trait);
+}
+
+/**
+ * A card that must be played before any other card in the hand and can never be
+ * discarded. While one is in hand it gates every other play, so the player pays
+ * its cost before acting.
+ */
+export function mustPlayFirst(card: Card): boolean {
+  return hasTrait(card, "must-play-first");
+}
+
+/** A card that can never be destroyed (removed) or put to sleep. */
+export function isIndestructible(card: Card): boolean {
+  return hasTrait(card, "indestructible");
+}
+
+/** Whether a must-play-first card in `hand` blocks playing `card` right now. */
+export function blockedByPriority(
+  hand: readonly Card[],
+  card: Card,
+): boolean {
+  return !mustPlayFirst(card) && hand.some(mustPlayFirst);
+}
+
 /**
  * Swap in the upgraded form as a temporary upgrade, remembering the permanent
  * form so it can be reverted when the card leaves the hand. A card with no
@@ -139,6 +182,8 @@ export function temporaryUpgradeCard(card: Card): Card {
   }
   return {
     ...instantiate(card.upgradedForm, card.id),
+    // Traits belong to the card's identity, so an upgrade keeps them.
+    traits: card.traits,
     baseSpec: card.baseSpec,
     temporaryUpgrade: true,
     sleeping: card.sleeping,
@@ -233,7 +278,26 @@ const upgradeHand: CardMode = { kind: "upgrade-hand" };
 
 const teleport = (range: number): CardMode => ({ kind: "teleport", range });
 
+// Escalation replaces the old turn-number enemy-speed ramp: it cannot be
+// discarded or removed, and while it is in hand no other card may be played, so
+// each time it is drawn the player must pay the enemy-speed tax first.
+const ESCALATION_SPEC: CardSpec = withTraits(
+  spec(
+    "Escalation",
+    "starting",
+    0,
+    [{ kind: "escalate", thisTurn: 1, permanent: 0.2 }],
+    [],
+    [],
+    null,
+  ),
+  ["must-play-first", "indestructible"],
+);
+
 export const STARTING_DECK: readonly CardSpec[] = [
+  // In turn-scaling mode the ramp is the turn number itself, so the card would
+  // have nothing to do and is left out of the deck.
+  ...(DIFFICULTY_SCALING === "card" ? [ESCALATION_SPEC] : []),
   spec(
     "Tredge",
     "starting",
@@ -665,9 +729,15 @@ function spec(
     image: "",
     cost,
     rarity,
+    traits: [],
     modes,
     onPlay,
     onDiscard,
     upgradedForm,
   };
+}
+
+/** Attach traits to a spec built by `spec`, which starts with none. */
+function withTraits(spec: CardSpec, traits: readonly CardTrait[]): CardSpec {
+  return { ...spec, traits };
 }

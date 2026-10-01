@@ -1,8 +1,8 @@
 import type { Card } from "./cards";
-import { SHOP_CATALOGUE, instantiate } from "./cards";
+import { SHOP_CATALOGUE, instantiate, isIndestructible } from "./cards";
 import { gainCurrency, spendCurrency } from "./currency";
 import type { Deck } from "./deck";
-import { addPurchase, deckSize } from "./deck";
+import { addPurchase, allCards, deckSize } from "./deck";
 import { hexKey } from "./hex";
 import type { HexCoord } from "./hex";
 import { SHOP_STOCK_SIZE, rollShopStock } from "./shop";
@@ -206,6 +206,7 @@ export function upgradeCard(card: Card): Card {
   }
   return {
     ...instantiate(card.upgradedForm, card.id),
+    traits: card.traits,
     sleeping: card.sleeping,
   };
 }
@@ -310,6 +311,11 @@ export function chooseSmithCard(state: GameState, cardId: string): Transition {
 
 export function chooseRemoveCard(state: GameState, cardId: string): Transition {
   if (state.phase.kind !== "pending-remove") {
+    return still(state);
+  }
+  // An indestructible card can never be removed from the deck.
+  const target = allCards(state.deck).find((card) => card.id === cardId);
+  if (target === undefined || isIndestructible(target)) {
     return still(state);
   }
   const deck = removeCardFromDeck(state.deck, cardId);

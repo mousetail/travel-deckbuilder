@@ -1,6 +1,9 @@
 import type { Card, CardMode } from "./cards";
 import {
   applyDiscardCostScaling,
+  blockedByPriority,
+  isIndestructible,
+  mustPlayFirst,
   playCost,
   temporaryUpgradeCard,
 } from "./cards";
@@ -118,6 +121,7 @@ export function applyHandMode(
     case "search":
     case "trivial-terrain":
     case "upgrade-hand":
+    case "escalate":
       throw new Error(`not a hand mode: ${mode.kind}`);
   }
 }
@@ -178,8 +182,10 @@ export function modeIsAvailable(
     case "recover":
       return state.deck.discard.some((c) => c.sleeping <= 0);
     case "sleep-card":
-      // Needs another card in hand to put to sleep.
-      return state.deck.hand.some((c) => c.id !== card.id);
+      // Needs another, destructible card in hand to put to sleep.
+      return state.deck.hand.some(
+        (c) => c.id !== card.id && !isIndestructible(c),
+      );
     case "draw":
     case "draw-discard":
       return (
@@ -201,6 +207,8 @@ export function modeIsAvailable(
       return state.deck.draw.length > 0;
     case "trivial-terrain":
       return true;
+    case "escalate":
+      return true;
     case "upgrade-hand":
       return state.deck.hand.some(
         (c) =>
@@ -214,6 +222,9 @@ export function modeIsAvailable(
 /** Whether any of `card`'s modes could be played right now. */
 export function cardIsPlayable(state: GameState, card: Card): boolean {
   if (state.currency < playCost(card)) {
+    return false;
+  }
+  if (blockedByPriority(state.deck.hand, card)) {
     return false;
   }
   return card.modes.some((mode) => modeIsAvailable(state, card, mode));
@@ -233,6 +244,9 @@ export function beginPlay(state: GameState, card: Card): Transition {
     return still(state);
   }
   if (!cardIsPlayable(state, card)) {
+    return still(state);
+  }
+  if (blockedByPriority(state.deck.hand, card)) {
     return still(state);
   }
 
@@ -350,6 +364,23 @@ function playInstant(state: GameState, card: Card, mode: CardMode): Transition {
       );
       return still(played);
     }
+    case "escalate": {
+      const played = spent(
+        state,
+        discardPlayed(state.deck, card),
+        state.rng,
+        card,
+        [],
+      );
+      return still({
+        ...played,
+        // Rounded to a tenth so repeated 0.2 steps stay clean against the
+        // quarter-step terrain costs the danger zone compares against.
+        enemySpeedBonus:
+          Math.round((played.enemySpeedBonus + mode.permanent) * 10) / 10,
+        enemySpeedThisTurn: played.enemySpeedThisTurn + mode.thisTurn,
+      });
+    }
     case "move":
     case "attack":
     case "teleport":
@@ -418,13 +449,17 @@ export function discardForChoice(state: GameState, card: Card): Transition {
   if (phase.kind !== "pending-discard") {
     return still(state);
   }
+  if (mustPlayFirst(card)) {
+    return still(state);
+  }
   const deck = discardFromHand(state.deck, card);
   const withEffect = applyOnDiscard(
     { ...state, deck, stats: countDiscarded(state.stats, [card]) },
     [card],
   );
   const remaining = phase.count - 1;
-  if (remaining <= 0 || deck.hand.length === 0) {
+  const discardable = withEffect.deck.hand.some((c) => !mustPlayFirst(c));
+  if (remaining <= 0 || !discardable) {
     return still({ ...withEffect, phase: { kind: "playing" } });
   }
   return still({
@@ -440,6 +475,9 @@ export function sleepForChoice(state: GameState, card: Card): Transition {
     return still(state);
   }
   if (!state.deck.hand.some((c) => c.id === card.id)) {
+    return still(state);
+  }
+  if (isIndestructible(card)) {
     return still(state);
   }
   return still({
@@ -598,6 +636,9 @@ export function discardCard(state: GameState, card: Card): Transition {
   if (state.phase.kind !== "playing") {
     return still(state);
   }
+  if (mustPlayFirst(card)) {
+    return still(state);
+  }
   const deck = discardFromHand(state.deck, card);
   return still(
     applyOnDiscard(
@@ -615,6 +656,7 @@ export function startTurn(state: GameState): GameState {
     rng: drawn.rng,
     stats: countDrawn(state.stats, drawn.drawn),
     terrainTrivialTurns: Math.max(0, state.terrainTrivialTurns - 1),
+    enemySpeedThisTurn: 0,
     turnState: {
       cardsPlayedThisTurn: 0,
       distanceThisTurn: 0,

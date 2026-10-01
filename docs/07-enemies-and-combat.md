@@ -212,7 +212,6 @@ import type { IdFactory } from "./cards";
 
 export function instantEnemies(
   tiles: ReadonlyMap<string, Tile>,
-  turn: number,
   ids: IdFactory,
 ): Enemy[] {
   const spawned: Enemy[] = [];
@@ -220,7 +219,7 @@ export function instantEnemies(
     if (tile.spawnKind === null || tile.spawnDelay !== 0) {
       continue;
     }
-    spawned.push(makeEnemy(tile.spawnKind, parseHexKey(key), turn, ids));
+    spawned.push(makeEnemy(tile.spawnKind, parseHexKey(key), ids));
   }
   return spawned;
 }
@@ -245,28 +244,45 @@ export function spawnEnemies(
     if (tile.spawnTurn !== currentTurn + 1) {
       continue;
     }
-    spawned.push(makeEnemy(tile.spawnKind, parseHexKey(key), currentTurn, ids));
+    spawned.push(makeEnemy(tile.spawnKind, parseHexKey(key), ids));
   }
   return spawned;
 }
 ```
 
-Scaling ("further in, multiple spawn at once and get faster") is expressed purely
-by the authored spawns — how many a band's templates carry and their delays — and
-by the movement curves, e.g.:
+Scaling ("further in, multiple spawn at once") is expressed purely by the
+authored spawns — how many a band's templates carry and their delays. Enemy
+speed itself now comes from the `Escalation` starting card rather than the turn
+number: every enemy carries a flat base budget, and the card adds a one-turn
+bump and a permanent bonus that reaches every enemy (old and new).
+
+Both schemes live behind one feature flag in `game/config.ts`:
 
 ```ts
-export function assassinMovementFor(turn: number): number {
-  return 1 + Math.floor(turn / 8);
-}
+export type DifficultyScaling = "card" | "turn";
+export const DIFFICULTY_SCALING: DifficultyScaling = "card";
+```
 
-/** Snipers are slower than assassins, and speed up more gradually. */
-export function sniperMovementFor(turn: number): number {
-  return 1 + Math.floor(turn / 16);
+The one seam between them is `enemySpeedBonusFor`, which returns Escalation's
+bonus in `"card"` mode and the enemy's turn-number bonus in `"turn"` mode:
+
+```ts
+export function enemySpeedBonusFor(state: GameState, enemy: Enemy): number {
+  if (DIFFICULTY_SCALING === "turn") {
+    return turnSpeedBonus(enemy.kind, state.turn);
+  }
+  const ramp = state.enemySpeedBonus + state.enemySpeedThisTurn;
+  return enemy.kind === "sniper" ? ramp / 2 : ramp;
 }
 ```
 
-Keep the curves in one place so chapter 10 can tune them.
+Snipers are slower than assassins, so in card mode they take half the ramp
+(their base stays 1); in turn mode they already have a longer period.
+
+In `"turn"` mode the `Escalation` card is left out of the starting deck, since it
+would have nothing to do. The bonus is added wherever movement is spent —
+`chase`, `sniperMove` and the danger zone — so the threat shown to the player
+always matches the enemy phase.
 
 ## 6. Watchtowers and snipers
 
@@ -284,8 +300,8 @@ export function watchtowerKills(watchtower: Watchtower, player: HexCoord): boole
 }
 ```
 
-Snipers walk on `sniperMovementFor`, **away** from the player (they are weak up
-close) and never onto the section that is about to be streamed away — a sniper
+Snipers walk on their base movement plus **half** the current enemy-speed bonus,
+**away** from the player (they are weak up close) and never onto the section that is about to be streamed away — a sniper
 left there is simply deleted. Then they aim along the hex direction closest to
 the player; when the player sits exactly between two directions, the one with the
 longer line wins. A sniper shoots the whole ray from its own hex outward,

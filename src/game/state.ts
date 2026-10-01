@@ -108,6 +108,10 @@ export type GameState = {
   stats: RunStats;
   /** Turns left (including this one) that every tile costs 1 to enter. */
   terrainTrivialTurns: number;
+  /** Cumulative enemy movement added by Escalation, kept across turns. */
+  enemySpeedBonus: number;
+  /** Extra enemy movement granted by Escalation for this turn only. */
+  enemySpeedThisTurn: number;
   /** Odd events seen this run, for the end-of-run report. */
   anomalies: readonly Anomaly[];
 };

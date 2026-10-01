@@ -1,10 +1,4 @@
-import {
-  AXIAL_DIRECTIONS,
-  addHex,
-  hexDistance,
-  hexKey,
-  parseHexKey,
-} from "./hex";
+import { hexDistance, hexKey, parseHexKey } from "./hex";
 import type { HexCoord } from "./hex";
 import { hexSide } from "./hexagon";
 import { advanceMap, armSection, buildMapIndex } from "./map";
@@ -267,7 +261,7 @@ export function ensureAhead(state: GameState): GameState {
   let changed = false;
 
   while (records.length < state.playerSectionOrder + AHEAD) {
-    const advanced = advanceMap(tiles, records, cursor, state.turn, state.ids);
+    const advanced = advanceMap(tiles, records, cursor, state.ids);
     if (advanced === null) {
       break;
     }

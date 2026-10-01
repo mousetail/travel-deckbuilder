@@ -1,9 +1,11 @@
-import type { Card, CardEffect, CardMode } from "../game/cards";
+import type { Card, CardEffect, CardMode, CardTrait } from "../game/cards";
 import type { Terrain } from "../game/terrain";
 import { ATTACK_ICON, SLEEP_ICON, TERRAIN_ICON } from "../game/terrain";
 import { setChildren } from "./dom";
 import {
   COIN_ICON,
+  INDESTRUCTIBLE_ICON,
+  PLAYS_FIRST_ICON,
   SCOUT_ICON,
   SEARCH_ICON,
   TELEPORT_ICON,
@@ -28,9 +30,12 @@ export function symbolNodes(card: Card): Node[] {
  * effect. Each line draws the same symbol the card shows, then spells it out.
  */
 export function cardTooltipRows(card: Card): HTMLElement[] {
-  const rows = card.modes.map((mode) =>
-    tooltipRow(modeSymbolNodes(mode), describeMode(mode)),
+  const rows = card.traits.map((trait) =>
+    tooltipRow(traitSymbolNodes(trait), [text(describeTrait(trait))]),
   );
+  for (const mode of card.modes) {
+    rows.push(tooltipRow(modeSymbolNodes(mode), describeMode(mode)));
+  }
   for (const effect of card.onPlay) {
     rows.push(tooltipRow(effectNodes(effect), [text(describeEffect(effect))]));
   }
@@ -88,7 +93,22 @@ function modeSymbolNodes(mode: CardMode): Node[] {
       return symbolIcon(UPGRADE_ICON, "");
     case "teleport":
       return symbolIcon(TELEPORT_ICON, `${mode.range}`);
+    case "escalate":
+      return [text(`+${mode.thisTurn}/${mode.permanent}`)];
   }
+}
+
+/** The badge symbol for a card trait, matching the badge on the card face. */
+export function traitSymbolNodes(trait: CardTrait): Node[] {
+  const url = trait === "must-play-first" ? PLAYS_FIRST_ICON : INDESTRUCTIBLE_ICON;
+  return symbolIcon(url, "");
+}
+
+/** What a card trait means, spelled out for the hover tooltip. */
+export function describeTrait(trait: CardTrait): string {
+  return trait === "must-play-first"
+    ? "Must be played before any other card; cannot be discarded"
+    : "Cannot be destroyed or put to sleep";
 }
 
 /** The visual for a card effect, without its trigger. */
@@ -171,6 +191,12 @@ export function describeMode(mode: CardMode): Node[] {
       return [text("Upgrades all other cards in your hand")];
     case "teleport":
       return [text(`Teleport to an enemy within ${mode.range} tiles`)];
+    case "escalate":
+      return [
+        text(
+          `Enemies gain +${mode.thisTurn} speed this turn and +${mode.permanent} permanently. Must be played before any other card and cannot be discarded.`,
+        ),
+      ];
   }
 }
 

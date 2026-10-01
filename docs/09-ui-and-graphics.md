@@ -66,7 +66,10 @@ events:
 }
 ```
 
-- **Top bar:** currency, turn number, difficulty.
+- **Top bar:** currency, turn number, depth, and the current enemy movement speed.
+  When a temporary effect is boosting or slowing enemies this turn, its signed value
+  is shown in parentheses, e.g. `enemy speed 1.2 (+1)`; with nothing temporary the
+  parenthesised part is omitted.
 - **Bottom bar:** draw pile (left), the hand fan (centre), discard pile (right), and
   the end-turn / use-upgrade button.
 
@@ -166,6 +169,42 @@ created once per render with `replaceChildren`, never mutated piecemeal.
 > flexbox's natural overlap and centring genuinely fit; using `grid` here would need
 > explicit column placement for every card. If your team prefers strict grid, use
 > `display: grid; grid-auto-flow: column;` with the same negative margins.
+
+### Card badges
+
+A card stacks small badges in its top-right corner: one per trait (chapter 03), then
+the sleep counter and the temporary-upgrade sigil. They go in a single absolutely
+positioned column so several can share a card without overlapping:
+
+```ts
+function cardBadges(card: Card): HTMLElement | null {
+  const badges: HTMLElement[] = card.traits.map((trait) => traitBadge(trait));
+  if (card.sleeping > 0) badges.push(sleepBadge(card.sleeping));
+  if (card.temporaryUpgrade) badges.push(temporaryBadge());
+  if (badges.length === 0) return null;
+  const container = document.createElement("div");
+  container.classList.add("card-badges");
+  container.replaceChildren(...badges);
+  return container;
+}
+```
+
+```css
+.card .card-badges {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+```
+
+Badge icons are small SVGs from `src/images/card-icons/` (`plays-first.svg`,
+`indestructible.svg`, `temporary.svg`, …). Each trait badge tints per rule; the sleep
+and temporary badges keep their existing colours. Blank placeholder SVGs are committed
+as-is for an artist to fill in.
 
 ## 5. Draw and discard piles
 

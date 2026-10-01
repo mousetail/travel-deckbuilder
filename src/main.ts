@@ -50,6 +50,8 @@ function startGame(): void {
     },
     stats: startingStats(allCards(deck), startSection.id, 1, startingCurrency),
     terrainTrivialTurns: 0,
+    enemySpeedBonus: 0,
+    enemySpeedThisTurn: 0,
     anomalies: [],
   };
 

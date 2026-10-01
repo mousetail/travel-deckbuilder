@@ -1,7 +1,11 @@
 import type { GameState } from "../game/state";
 import { endTurnAction } from "../game/economy";
 import type { EndTurnAction } from "../game/economy";
-import { playerInDanger } from "../game/enemies";
+import {
+  permanentEnemyMovement,
+  playerInDanger,
+  temporaryEnemyMovement,
+} from "../game/enemies";
 import { playerOnFinish } from "../game/terrain";
 import { coinIcon } from "./card-icons";
 import { setChildren } from "./dom";
@@ -32,6 +36,7 @@ export class Hud {
     setChildren(progress, [
       text(`Turn ${state.turn}`),
       text(` · depth ${state.playerSectionOrder}`),
+      text(` · enemy speed ${formatEnemySpeed(state)}`),
     ]);
 
     setChildren(this.layer, [currency, hint, progress]);
@@ -107,6 +112,26 @@ function endTurnPrefix(bonus: number): Node[] {
 
 function text(content: string): Text {
   return document.createTextNode(content);
+}
+
+/** Enemy speed is a multiple of 0.1; drop a trailing `.0` for whole numbers. */
+function formatSpeed(value: number): string {
+  const rounded = Math.round(value * 10) / 10;
+  return rounded.toFixed(1).replace(/\.0$/, "");
+}
+
+/**
+ * The standing enemy speed, with a signed parenthesised aside only while a
+ * temporary modifier is active: `1`, `1.2 (+1)`, `2.4 (-0.5)`.
+ */
+function formatEnemySpeed(state: GameState): string {
+  const permanent = formatSpeed(permanentEnemyMovement(state));
+  const temporary = temporaryEnemyMovement(state);
+  if (temporary === 0) {
+    return permanent;
+  }
+  const sign = temporary > 0 ? "+" : "-";
+  return `${permanent} (${sign}${formatSpeed(Math.abs(temporary))})`;
 }
 
 function hintFor(state: GameState): string {

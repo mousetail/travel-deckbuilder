@@ -497,7 +497,6 @@ function placeSection(
   records: readonly SectionRecord[],
   frontier: MapFrontier,
   distance: number,
-  turn: number,
   rng: Rng,
   ids: IdFactory,
   queue: readonly string[],
@@ -689,7 +688,7 @@ function placeSection(
 
     // Delay-0 spawns appear the moment the section is stamped, so the player can
     // see them (and their danger zone) before they can fire.
-    const enemies = instantEnemies(sectionTiles, turn, ids);
+    const enemies = instantEnemies(sectionTiles, ids);
 
     return {
       record,
@@ -729,7 +728,6 @@ export function advanceMap(
   tiles: ReadonlyMap<string, Tile>,
   records: readonly SectionRecord[],
   cursor: MapCursor,
-  turn: number,
   ids: IdFactory,
 ): AdvanceResult | null {
   if (cursor.finished) {
@@ -741,7 +739,6 @@ export function advanceMap(
     records,
     cursor.frontier,
     cursor.distance,
-    turn,
     cursor.rng,
     ids,
     cursor.queue,
@@ -793,7 +790,7 @@ export function generateMap(
   };
 
   for (let i = 0; i < sectionCount; i += 1) {
-    const advanced = advanceMap(tiles, records, cursor, startTurn, ids);
+    const advanced = advanceMap(tiles, records, cursor, ids);
     if (advanced === null) {
       break;
     }

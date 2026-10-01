@@ -1,6 +1,6 @@
 import type { Card, CardSpec } from "../game/cards";
 import { allCards } from "../game/deck";
-import { instantiate } from "../game/cards";
+import { instantiate, isIndestructible } from "../game/cards";
 import type { FeatureAction } from "../game/economy";
 import type { GameState } from "../game/state";
 import { COIN_ICON } from "./card-icons";
@@ -293,6 +293,7 @@ export class FeatureView {
     const nodes: Node[] = [this.title("Remove a card")];
     const cardNodes: HTMLElement[] = [];
     for (const card of allCards(state.deck)) {
+      if (isIndestructible(card)) continue;
       cardNodes.push(
         this.cardChoice(card, null, false, () => {
           this.removePreviewCardId = card.id;

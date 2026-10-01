@@ -1,6 +1,6 @@
 import type { AttackMode, Card, MoveMode } from "./cards";
-import { moveModeValue, playCost } from "./cards";
-import { enemiesInRange, terrainCostAt } from "./enemies";
+import { blockedByPriority, moveModeValue, playCost } from "./cards";
+import { enemiesInRange, enemySpeedBonusFor, terrainCostAt } from "./enemies";
 import type { Enemy } from "./enemies";
 import { equalsHex, findPathByCost, hexDistance, hexKey } from "./hex";
 import type { HexCoord } from "./hex";
@@ -112,7 +112,9 @@ export type HandReach = {
 };
 
 export function handReach(state: GameState): HandReach {
-  const cards = state.deck.hand.map((card) => cardReach(state, card));
+  const cards = state.deck.hand
+    .filter((card) => !blockedByPriority(state.deck.hand, card))
+    .map((card) => cardReach(state, card));
   const seenTiles = new Set<string>();
   const reachable: HexCoord[] = [];
   const seenEnemies = new Set<string>();
@@ -161,6 +163,9 @@ export function bestMove(state: GameState, to: HexCoord): MovePlan | null {
     if (state.currency < playCost(card)) {
       continue;
     }
+    if (blockedByPriority(state.deck.hand, card)) {
+      continue;
+    }
     for (const move of cardReach(state, card).moves) {
       if (!move.reachable.some((coord) => equalsHex(coord, to))) {
         continue;
@@ -200,6 +205,9 @@ export function bestAttackCard(state: GameState, enemyId: string): Card | null {
   let bestValue = Infinity;
   for (const card of state.deck.hand) {
     if (state.currency < playCost(card)) {
+      continue;
+    }
+    if (blockedByPriority(state.deck.hand, card)) {
       continue;
     }
     const value = attackValueTo(state, card, enemyId);
@@ -277,7 +285,7 @@ export function hoverPaths(state: GameState, to: HexCoord): HoverPath[] {
     );
     if (
       found === null ||
-      found.cost > enemy.movement ||
+      found.cost > enemy.movement + enemySpeedBonusFor(state, enemy) ||
       found.path.length < 2
     ) {
       continue;

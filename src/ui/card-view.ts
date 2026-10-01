@@ -1,9 +1,11 @@
-import type { Card, CardEffect } from "../game/cards";
+import type { Card, CardEffect, CardTrait } from "../game/cards";
 import {
   describeEffect,
+  describeTrait,
   effectNodes,
   sleepNodes,
   symbolNodes,
+  traitSymbolNodes,
 } from "./card-text";
 import { attachCardTooltip } from "./card-tooltip";
 import { TEMPORARY_ICON } from "./card-icons";
@@ -55,11 +57,9 @@ export function cardFace(card: Card, face: CardFace): HTMLElement {
   const nodes: Node[] = [symbol, name, art];
   nodes.push(...effectLines("play", card.onPlay, "card-on-play"));
   nodes.push(...effectLines("discard", card.onDiscard, "card-on-discard"));
-  if (card.sleeping > 0) {
-    nodes.push(sleepBadge(card.sleeping));
-  }
-  if (card.temporaryUpgrade) {
-    nodes.push(temporaryBadge());
+  const badges = cardBadges(card);
+  if (badges !== null) {
+    nodes.push(badges);
   }
   setChildren(root, nodes);
   attachCardTooltip(root, card);
@@ -82,6 +82,38 @@ function effectLines(
     line.title = `When ${trigger}ed: ${describeEffect(effect)}`;
     return line;
   });
+}
+
+/**
+ * The badges pinned to a card's top-right corner, stacked so they never overlap:
+ * one per trait, then the sleep counter and the temporary-upgrade sigil.
+ */
+function cardBadges(card: Card): HTMLElement | null {
+  const badges: HTMLElement[] = card.traits.map((trait) => traitBadge(trait));
+  if (card.sleeping > 0) {
+    badges.push(sleepBadge(card.sleeping));
+  }
+  if (card.temporaryUpgrade) {
+    badges.push(temporaryBadge());
+  }
+  if (badges.length === 0) {
+    return null;
+  }
+  const container = document.createElement("div");
+  container.classList.add("card-badges");
+  setChildren(container, badges);
+  return container;
+}
+
+/** The badge for a rule-bending trait, with a title spelling the rule out. */
+function traitBadge(trait: CardTrait): HTMLElement {
+  const badge = document.createElement("div");
+  badge.classList.add(
+    trait === "must-play-first" ? "card-plays-first" : "card-indestructible",
+  );
+  badge.title = describeTrait(trait);
+  badge.append(...traitSymbolNodes(trait));
+  return badge;
 }
 
 /** How many reshuffles a sleeping card still has to sit out. */

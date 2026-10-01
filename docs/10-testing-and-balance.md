@@ -112,13 +112,17 @@ export const BALANCE = {
   startCurrency: 0,
   shopStock: 3,
   shopRerollCost: 2,
-  assassinBaseMovement: 2,
-  assassinMovementPerTurns: 8,   // +1 movement every this many turns
-  sniperMovementPerTurns: 16,    // snipers speed up more slowly
+  enemyBaseMovement: 1,
+  escalationThisTurn: 1,         // enemy speed added for the turn Escalation is played
+  escalationPermanent: 0.2,      // enemy speed added for good, per Escalation play
   watchtowerRadius: 3,
   difficultyPerSection: 1,
 } as const;
 ```
+
+The turn-number alternative (assassins gain +1 movement every 8 turns, snipers
+every 16) lives behind the `DIFFICULTY_SCALING` flag in `game/config.ts`; set it to
+`"turn"` to compare the two curves without touching any other code.
 
 The values above are a starting point. Tune them with a quick harness rather than by
 hand: simulate many games with a simple greedy bot (always take the shortest
@@ -137,9 +141,11 @@ killed outright.
 
 Curve guidance from the design:
 
-- **Assassin count and speed** both scale with turns. Keep the two independent: more
-  pressure from *numbers* reads as "swarm", more pressure from *speed* reads as
-  "hunted". Mix them across difficulty bands to get both feelings.
+- **Enemy count scales with map depth; enemy speed scales with `Escalation`.** Keep
+  the two independent: more pressure from *numbers* reads as "swarm", more pressure
+  from *speed* reads as "hunted". The player sets the speed pace by how often they
+  draw and play `Escalation`, so `escalationPermanent` controls how fast a long game
+  turns lethal and `escalationThisTurn` sets the per-turn floor.
 - **Terrain difficulty** should gate the player, not the assassins: the *player* needs
   mountain cards to reach the rarest upgrades, while assassins merely move slowly
   there. So the amount of mountain/water on later sections is a direct lever on how
