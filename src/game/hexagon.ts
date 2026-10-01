@@ -38,11 +38,17 @@ const SIDE_HEX: readonly ((radius: number, i: number) => HexCoord)[] = [
   (radius, i) => ({ q: i, r: -radius }),
 ];
 
-export function hexSide(side: number, radius: number): HexCoord[] {
+export function hexSide(
+  side: number,
+  radius: number,
+  inset: number | null = null,
+): HexCoord[] {
+  const edgeSide = inset ? inset : 0;
+
   const make = SIDE_HEX[side];
   const results: HexCoord[] = [];
-  for (let i = 0; i <= radius; i += 1) {
-    results.push(make(radius, i));
+  for (let i = 0; i <= radius + edgeSide; i += 1) {
+    results.push(make(radius - edgeSide, i - edgeSide));
   }
   return results;
 }

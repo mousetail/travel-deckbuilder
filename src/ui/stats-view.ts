@@ -121,16 +121,18 @@ function bestRunTab(history: History): HTMLElement {
   return group([heading("Best and furthest run"), table(columns, rows)]);
 }
 
-const SCORE_ROWS: readonly (readonly [string, (scores: RunScores) => number])[] =
-  [
-    ["Tiles visited", (s) => s.tilesVisited],
-    ["Cards played", (s) => s.cardsPlayed],
-    ["Cards drawn", (s) => s.cardsDrawn],
-    ["Enemies killed", (s) => s.enemiesKilled],
-    ["Sites visited", (s) => s.sitesVisited],
-    ["Currency gained", (s) => s.currencyGained],
-    ["Currency spent", (s) => s.currencySpent],
-  ];
+const SCORE_ROWS: readonly (readonly [
+  string,
+  (scores: RunScores) => number,
+])[] = [
+  ["Tiles visited", (s) => s.tilesVisited],
+  ["Cards played", (s) => s.cardsPlayed],
+  ["Cards drawn", (s) => s.cardsDrawn],
+  ["Enemies killed", (s) => s.enemiesKilled],
+  ["Sites visited", (s) => s.sitesVisited],
+  ["Currency gained", (s) => s.currencyGained],
+  ["Currency spent", (s) => s.currencySpent],
+];
 
 function cardsTab(career: CareerStats): HTMLElement {
   if (career.cards.length === 0) {
@@ -163,9 +165,7 @@ function cardRow(card: CareerCard): readonly string[] {
     `${card.taken}`,
     `${card.upgraded}`,
     `${card.removed}`,
-    card.runsWithCard === 0
-      ? "—"
-      : `${Math.round(cardWinRate(card) * 100)}%`,
+    card.runsWithCard === 0 ? "—" : `${Math.round(cardWinRate(card) * 100)}%`,
     card.runsWithCard === 0 ? "—" : cardAverageSections(card).toFixed(1),
   ];
 }

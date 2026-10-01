@@ -68,7 +68,11 @@ function encode(career: CareerStats): string {
 function decode(raw: string): CareerStats {
   const lines = raw.split("\n");
   const [marker, overallLine, recordsLine] = lines;
-  if (marker !== FORMAT || overallLine === undefined || recordsLine === undefined) {
+  if (
+    marker !== FORMAT ||
+    overallLine === undefined ||
+    recordsLine === undefined
+  ) {
     return emptyCareer();
   }
   const overall = parseNumbers(overallLine.split(","), 7);

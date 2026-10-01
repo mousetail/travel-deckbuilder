@@ -66,7 +66,7 @@ const TERRAIN_LABEL: Record<string, string> = {
   m: "mountain",
   d: "dirt",
   "#": "impassible",
-  'e': 'finish'
+  e: "finish",
 };
 
 const COST_LABEL: Record<string, string> = {

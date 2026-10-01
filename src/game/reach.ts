@@ -267,10 +267,7 @@ export function hoverPaths(state: GameState, to: HexCoord): HoverPath[] {
   }
   const visible = visibleMap(state).tiles;
   for (const enemy of state.enemies) {
-    if (
-      enemy.kind !== "assassin" ||
-      !visible.has(hexKey(enemy.position))
-    ) {
+    if (enemy.kind !== "assassin" || !visible.has(hexKey(enemy.position))) {
       continue;
     }
     const found = findPathByCost(
@@ -278,7 +275,11 @@ export function hoverPaths(state: GameState, to: HexCoord): HoverPath[] {
       to,
       terrainCostAt(visible, enemy.position),
     );
-    if (found === null || found.cost > enemy.movement || found.path.length < 2) {
+    if (
+      found === null ||
+      found.cost > enemy.movement ||
+      found.path.length < 2
+    ) {
       continue;
     }
     paths.push({ kind: "enemy", path: found.path });

@@ -4,10 +4,7 @@ import { setChildren } from "./dom";
 
 /** What clicking a hand card does right now. */
 export type HandMode =
-  | { kind: "play" }
-  | { kind: "discard" }
-  | { kind: "sleep" }
-  | { kind: "none" };
+  { kind: "play" } | { kind: "discard" } | { kind: "sleep" } | { kind: "none" };
 
 /** The fanned hand: one card per held card; the card itself is the button. */
 export class HandView {

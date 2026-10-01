@@ -1,5 +1,10 @@
 import type { Card, CardEffect } from "../game/cards";
-import { describeEffect, effectNodes, sleepNodes, symbolNodes } from "./card-text";
+import {
+  describeEffect,
+  effectNodes,
+  sleepNodes,
+  symbolNodes,
+} from "./card-text";
 import { attachCardTooltip } from "./card-tooltip";
 import { TEMPORARY_ICON } from "./card-icons";
 import { setChildren } from "./dom";

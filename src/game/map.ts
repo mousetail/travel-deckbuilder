@@ -24,6 +24,7 @@ export type SectionRecord = {
   entryEdge: number;
   /** Direction the player is meant to leave through. */
   exitEdge: number;
+  radius: number;
 };
 
 export type SectionTemplate = {
@@ -50,7 +51,7 @@ export const TERRAIN_BY_CHAR: Record<string, Terrain> = {
   m: "mountain",
   d: "dirt",
   "#": "impassible",
-  'e': 'finish',
+  e: "finish",
 };
 
 /** Overlay layer: what sits on top of the terrain. "." is nothing. */
@@ -680,6 +681,7 @@ function placeSection(
       footprint: [...sectionTiles.keys()].map(parseHexKey),
       entryEdge: frontier.entryEdge,
       exitEdge: worldExit,
+      radius: template.radius,
     };
 
     const rawTurn = normalize(worldExit - frontier.entryEdge - 3);

@@ -275,12 +275,18 @@ export const STARTING_DECK: readonly CardSpec[] = [
     "starting",
     0,
     [{ kind: "attack", range: 1 }],
-    [{kind: "sleep", reshuffles: 2}],
-    [{kind: "sleep", reshuffles: 2}],
-    spec("Stab+", "starting", 0, [{ kind: "attack", range: 2 }],
-      [{kind: "sleep", reshuffles: 2}],
-      [{kind: "sleep", reshuffles: 2}], null)
-  )
+    [{ kind: "sleep", reshuffles: 2 }],
+    [{ kind: "sleep", reshuffles: 2 }],
+    spec(
+      "Stab+",
+      "starting",
+      0,
+      [{ kind: "attack", range: 2 }],
+      [{ kind: "sleep", reshuffles: 2 }],
+      [{ kind: "sleep", reshuffles: 2 }],
+      null,
+    ),
+  ),
 ];
 
 export const SHOP_CATALOGUE: readonly CardSpec[] = [
@@ -498,15 +504,7 @@ export const SHOP_CATALOGUE: readonly CardSpec[] = [
     [],
     null,
   ),
-  spec(
-    "Recall",
-    "uncommon",
-    3,
-    [{ kind: "recover", count: 1 }],
-    [],
-    [],
-    null,
-  ),
+  spec("Recall", "uncommon", 3, [{ kind: "recover", count: 1 }], [], [], null),
   spec(
     "Slumber",
     "rare",
@@ -588,8 +586,24 @@ export const SHOP_CATALOGUE: readonly CardSpec[] = [
       null,
     ),
   ),
-  spec("Volley", "common", 3, [{ kind: "attack", range: 3 }], [sleep(1)], [], null),
-  spec("Silver", "uncommon", 6, [{ "kind": "attack", range: 8 },], [pay(7)], [], null),
+  spec(
+    "Volley",
+    "common",
+    3,
+    [{ kind: "attack", range: 3 }],
+    [sleep(1)],
+    [],
+    null,
+  ),
+  spec(
+    "Silver",
+    "uncommon",
+    6,
+    [{ kind: "attack", range: 8 }],
+    [pay(7)],
+    [],
+    null,
+  ),
   spec(
     "Charge",
     "uncommon",
@@ -616,7 +630,15 @@ export const SHOP_CATALOGUE: readonly CardSpec[] = [
     [{ kind: "currency", amount: 2 }],
     [],
     [],
-    spec("Trade+", "common", 2, [{ kind: "currency", amount: 3 }], [], [], null),
+    spec(
+      "Trade+",
+      "common",
+      2,
+      [{ kind: "currency", amount: 3 }],
+      [],
+      [],
+      null,
+    ),
   ),
   spec(
     "Mine",
@@ -625,15 +647,7 @@ export const SHOP_CATALOGUE: readonly CardSpec[] = [
     [move("mountain", 1)],
     [],
     [currency(1)],
-    spec(
-      "Mine+",
-      "common",
-      2,
-      [move("mountain", 2)],
-      [],
-      [currency(2)],
-      null,
-    ),
+    spec("Mine+", "common", 2, [move("mountain", 2)], [], [currency(2)], null),
   ),
 ];
 

@@ -1,4 +1,10 @@
-import { hexDistance, hexKey, parseHexKey } from "./hex";
+import {
+  AXIAL_DIRECTIONS,
+  addHex,
+  hexDistance,
+  hexKey,
+  parseHexKey,
+} from "./hex";
 import type { HexCoord } from "./hex";
 import { hexSide } from "./hexagon";
 import { advanceMap, armSection, buildMapIndex } from "./map";
@@ -31,18 +37,6 @@ export function liveSectionOrderId(index: MapIndex, coord: HexCoord): number {
   return index.sections.findIndex((section) => section.id === id);
 }
 
-/** Radius of a section, recovered from its footprint. */
-function radiusOf(record: SectionRecord): number {
-  let max = 0;
-  for (const coord of record.footprint) {
-    const d = hexDistance(record.origin, coord);
-    if (d > max) {
-      max = d;
-    }
-  }
-  return max;
-}
-
 /**
  * How many rows of the next section are visible, from its entry edge inward.
  * Raise it to let the player see further ahead; the fog opacity ramp follows.
@@ -55,26 +49,32 @@ export const FOG_DEPTH = 3;
  * the edge: 0 is the row the player steps onto next, higher is further away.
  */
 export function forwardRows(record: SectionRecord): FogHex[] {
-  const radius = radiusOf(record);
-  const edge = hexSide(record.entryEdge, radius).map((local) => ({
-    q: record.origin.q + local.q,
-    r: record.origin.r + local.r,
-  }));
-  const results: FogHex[] = [];
-  for (const coord of record.footprint) {
-    let depth = -1;
-    for (const edgeHex of edge) {
-      const d = hexDistance(coord, edgeHex);
-      if (d < FOG_DEPTH && (depth === -1 || d < depth)) {
-        depth = d;
-      }
-    }
-    if (depth !== -1) {
-      results.push({ coord, depth });
-    }
-  }
-  return results;
+  return new Array(FOG_DEPTH).fill(0).flatMap((_, i) =>
+    hexSide(record.entryEdge, record.radius, i).map(
+      (coord) =>
+        ({
+          coord: {
+            q: record.origin.q + coord.q,
+            r: record.origin.r + coord.r,
+          },
+          depth: i,
+        }) satisfies FogHex,
+    ),
+  );
 }
+
+/**
+ * The direction arrows drawn just past the fog sliver. Each sits one row beyond
+ * the deepest visible row — where the next row would be, so it never covers a
+ * hex that is actually drawn — and points the way the player travels, inward
+ * from the entry edge.
+ */
+export type FogEdge = {
+  /** One hex per deepest visible row hex, on the row the player steps onto next. */
+  hexes: readonly HexCoord[];
+  /** The hex step the player travels, from the entry edge inward. */
+  direction: number;
+};
 
 /** A section is live while its tiles are still on the map. */
 function isLive(index: MapIndex, section: SectionRecord): boolean {
@@ -132,12 +132,13 @@ export type VisibleMap = {
   tiles: Map<string, Tile>;
   /** Fog hexes, keyed by hex, valued by their depth from the entry edge. */
   fog: ReadonlyMap<string, number>;
+  /** Direction arrows drawn just past the fog sliver, or null if none. */
+  fogEdge: FogEdge | null;
 };
 
 /**
  * The tiles the player should see: every hex of the fully visible sections plus
- * the fog sliver of the next. Hexes outside the window are simply absent, so
- * they disappear from the render for free.
+ * the fog sliver of the next.
  */
 export function visibleMap(state: GameState): VisibleMap {
   const visibility = computeVisibility(
@@ -158,7 +159,20 @@ export function visibleMap(state: GameState): VisibleMap {
       tiles.set(key, tile);
     }
   }
-  return { tiles, fog };
+  const next = state.map.index.sections[state.playerSectionOrder + 1];
+  return {
+    tiles,
+    fog,
+    fogEdge: next
+      ? {
+          hexes: hexSide(next.entryEdge, next.radius, FOG_DEPTH).map((i) => ({
+            q: next.origin.q + i.q,
+            r: next.origin.r + i.r,
+          })),
+          direction: next.entryEdge,
+        }
+      : null,
+  };
 }
 
 /**

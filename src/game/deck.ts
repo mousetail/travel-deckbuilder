@@ -120,7 +120,11 @@ export function discardPlayed(deck: Deck, card: Card): Deck {
 }
 
 /** Move a card from the hand to the discard pile, asleep for `reshuffles`. */
-export function sleepFromHand(deck: Deck, card: Card, reshuffles: number): Deck {
+export function sleepFromHand(
+  deck: Deck,
+  card: Card,
+  reshuffles: number,
+): Deck {
   const without = removeFromHand(deck, card);
   return toDiscard(without, [{ ...card, sleeping: reshuffles }]);
 }

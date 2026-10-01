@@ -13,8 +13,10 @@ import type { Tile } from "../game/terrain";
 import { enemyName } from "../game/enemies";
 import type { Enemy } from "../game/enemies";
 import { FOG_DEPTH } from "../game/fog";
+import type { FogEdge } from "../game/fog";
 import type { HoverPath } from "../game/reach";
 import type { Mover } from "../game/transition";
+import arrowUrl from "../images/arrow.svg";
 import targetUrl from "../images/terrain-icons/target.png";
 import { setChildren } from "./dom";
 import { iconSlotElements } from "./tile-icons";
@@ -34,6 +36,8 @@ export type MapViewState = {
   tiles: ReadonlyMap<string, Tile>;
   /** Fog hexes, keyed by hex, valued by their depth from the entry edge. */
   fog: ReadonlyMap<string, number>;
+  /** Direction arrows drawn just past the fog sliver, or null if none. */
+  fogEdge: FogEdge | null;
   player: HexCoord;
   enemies: readonly Enemy[];
   /** Hexes an enemy could strike at the end of this turn. */
@@ -310,13 +314,10 @@ function outlineSvg(
   maxX += OUTLINE_PAD;
   maxY += OUTLINE_PAD;
 
-  const svg = positionedSvg(
-    minX,
-    minY,
-    maxX - minX,
-    maxY - minY,
-    ["map-outline", className],
-  );
+  const svg = positionedSvg(minX, minY, maxX - minX, maxY - minY, [
+    "map-outline",
+    className,
+  ]);
   for (const edge of edges) {
     const line = document.createElementNS(SVG_NS, "line");
     line.setAttribute("x1", `${edge.a.x - minX}`);
@@ -570,7 +571,13 @@ export class MapView {
   render(view: MapViewState): void {
     const nodes: Node[] = [];
     for (const [key, tile] of view.tiles) {
-      nodes.push(this.hexElement(key, tile, view.fog.get(key), view.trivialTerrain));
+      nodes.push(
+        this.hexElement(key, tile, view.fog.get(key), view.trivialTerrain),
+      );
+    }
+
+    if (view.fogEdge !== null) {
+      nodes.push(...this.fogArrows(view.fogEdge));
     }
 
     this.dangerOutline = outlineSvg(
@@ -796,6 +803,34 @@ export class MapView {
     return element;
   }
 
+  /**
+   * The direction arrows past the fog: one per hex of the far edge, tiled edge
+   * to edge so they read as a single line, each pointing the way the player
+   * travels. They sit on the row beyond the fog, so they cover no drawn hex.
+   */
+  private fogArrows(edge: FogEdge): HTMLElement[] {
+    const width = SQRT3 * HEX_SIZE;
+    const angle = this.fogArrowAngle(edge);
+    return edge.hexes.map((coord) => {
+      const element = document.createElement("img");
+      element.classList.add("fog-arrow");
+      element.src = arrowUrl;
+      element.alt = "";
+      element.style.width = `${width}px`;
+      element.style.height = `${width}px`;
+      const pixel = hexToPixel(coord);
+      element.style.transform = `translate(${pixel.x}px, ${pixel.y}px) translate(-50%, -50%) rotate(${angle}deg)`;
+      return element;
+    });
+  }
+
+  /**
+   * The rotation that makes the arrows point
+   */
+  private fogArrowAngle(edge: FogEdge): number {
+    return edge.direction * 60 - 120;
+  }
+
   private enemyElement(enemy: Enemy): HTMLElement {
     const element = document.createElement("div");
     element.classList.add("enemy", `enemy-${enemy.kind}`);
@@ -870,7 +905,7 @@ export class MapView {
     const active =
       this.activeHighlight === null
         ? null
-        : this.highlightGroups.get(this.activeHighlight) ?? null;
+        : (this.highlightGroups.get(this.activeHighlight) ?? null);
     for (const [key, group] of this.highlightGroups) {
       const shown = key === this.activeHighlight;
       if (group.outline !== null) {
@@ -892,7 +927,9 @@ export class MapView {
   private updateHoverCursor(): void {
     const hoveredEnemy = this.hoveredEnemyId();
     const targeted = hoveredEnemy !== null && this.killable.has(hoveredEnemy);
-    this.layer.style.cursor = targeted ? `url("${targetUrl}") 8 8, pointer` : "";
+    this.layer.style.cursor = targeted
+      ? `url("${targetUrl}") 8 8, pointer`
+      : "";
   }
 }
 

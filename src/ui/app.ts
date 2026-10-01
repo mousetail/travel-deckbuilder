@@ -5,7 +5,11 @@ import type { HandMode } from "./hand-view";
 import { Hud } from "./hud";
 import { FeatureView } from "./feature-view";
 import { pileButton, pileOverlay, searchOverlay } from "./pile-view";
-import { CardAnimator, deckDiff, RESHUFFLE_DRAW_DELAY_MS } from "./card-animations";
+import {
+  CardAnimator,
+  deckDiff,
+  RESHUFFLE_DRAW_DELAY_MS,
+} from "./card-animations";
 import type { DeckDiff } from "./card-animations";
 import { setChildren } from "./dom";
 import { hexKey, hexToPixel } from "../game/hex";
@@ -256,6 +260,7 @@ export class App {
     this.mapView.render({
       tiles: visible.tiles,
       fog: visible.fog,
+      fogEdge: visible.fogEdge,
       player: this.state.map.player,
       enemies: visibleEnemies(this.state),
       danger: dangerZone(this.state),

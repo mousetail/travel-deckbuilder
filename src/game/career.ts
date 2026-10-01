@@ -57,7 +57,10 @@ export function emptyCareer(): CareerStats {
   };
 }
 
-export function runOutcome(reason: GameOverReason, stats: RunStats): RunOutcome {
+export function runOutcome(
+  reason: GameOverReason,
+  stats: RunStats,
+): RunOutcome {
   return {
     victory: reason.kind === "victory",
     deathCause: deathCauseOf(reason),
@@ -108,14 +111,17 @@ function countDeath(deaths: DeathCounts, cause: DeathCause): DeathCounts {
 function foldRecords(career: RunRecords, run: RunRecords): RunRecords {
   const least =
     career.leastCardsInDeck === null || run.leastCardsInDeck === null
-      ? career.leastCardsInDeck ?? run.leastCardsInDeck
+      ? (career.leastCardsInDeck ?? run.leastCardsInDeck)
       : Math.min(career.leastCardsInDeck, run.leastCardsInDeck);
   return {
     mostCardsPlayedInTurn: Math.max(
       career.mostCardsPlayedInTurn,
       run.mostCardsPlayedInTurn,
     ),
-    mostDistanceInTurn: Math.max(career.mostDistanceInTurn, run.mostDistanceInTurn),
+    mostDistanceInTurn: Math.max(
+      career.mostDistanceInTurn,
+      run.mostDistanceInTurn,
+    ),
     mostEnemiesKilledInTurn: Math.max(
       career.mostEnemiesKilledInTurn,
       run.mostEnemiesKilledInTurn,
@@ -231,5 +237,7 @@ export function cardWinRate(card: CareerCard): number {
 }
 
 export function cardAverageSections(card: CareerCard): number {
-  return card.runsWithCard === 0 ? 0 : card.sectionsWithCard / card.runsWithCard;
+  return card.runsWithCard === 0
+    ? 0
+    : card.sectionsWithCard / card.runsWithCard;
 }

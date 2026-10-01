@@ -68,7 +68,8 @@ function watch(): void {
     }
     const under = document.elementFromPoint(pointer.x, pointer.y);
     const element = under instanceof Element ? under.closest(".card") : null;
-    const card = element instanceof HTMLElement ? cards.get(element) : undefined;
+    const card =
+      element instanceof HTMLElement ? cards.get(element) : undefined;
     if (element instanceof HTMLElement && card !== undefined) {
       show(element, card);
     } else {

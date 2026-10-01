@@ -746,6 +746,15 @@ button {
   }
 }
 
+/* Direction arrows just past the fog sliver, tiled edge to edge into a single
+   line that points the way the player travels. */
+.fog-arrow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+
 /* Up to four icons per tile, in a 2×2 grid that never overlaps. The terrain's
    cost icon comes first, then the feature's. */
 .hex-icon {

@@ -89,7 +89,14 @@ export class CardAnimator {
   reshuffle(from: DOMRect, to: DOMRect, count: number): void {
     const ghosts = Math.min(count, MAX_RESHUFFLE_GHOSTS);
     for (let i = 0; i < ghosts; i += 1) {
-      this.fly(cardBack(), from, to, i * RESHUFFLE_STAGGER_MS, RESHUFFLE_MS, -30);
+      this.fly(
+        cardBack(),
+        from,
+        to,
+        i * RESHUFFLE_STAGGER_MS,
+        RESHUFFLE_MS,
+        -30,
+      );
     }
   }
 

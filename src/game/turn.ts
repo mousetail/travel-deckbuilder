@@ -264,8 +264,7 @@ function playInstant(state: GameState, card: Card, mode: CardMode): Transition {
     case "recover": {
       const applied = applyHandMode(state.deck, mode, state.rng);
       const discarded =
-        mode.kind === "discard-hand" &&
-        state.deck.hand.length >= mode.threshold
+        mode.kind === "discard-hand" && state.deck.hand.length >= mode.threshold
           ? state.deck.hand
           : [];
       // The played card is discarded by the effect too, but it counts as played.
@@ -495,7 +494,10 @@ export function resolveAttack(state: GameState, enemyId: string): Transition {
   ) {
     return still(state);
   }
-  const paid = payForPlay(gainCurrency(state, bountyFor(target), "combat"), card);
+  const paid = payForPlay(
+    gainCurrency(state, bountyFor(target), "combat"),
+    card,
+  );
   const killedThisTurn = paid.turnState.enemiesKilledThisTurn + 1;
   const playedThisTurn = paid.turnState.cardsPlayedThisTurn + 1;
   const stats = recordCardsPlayedInTurn(
@@ -624,7 +626,10 @@ export function startTurn(state: GameState): GameState {
   };
   // Surviving the enemy phase on the finish tile wins the run.
   if (playerOnFinish(next)) {
-    return { ...next, phase: { kind: "game-over", reason: { kind: "victory" } } };
+    return {
+      ...next,
+      phase: { kind: "game-over", reason: { kind: "victory" } },
+    };
   }
   return next;
 }
@@ -638,11 +643,7 @@ export function endTurn(state: GameState): Transition {
   // enemy phase checks its kills against this, so a death on a hex that was not
   // marked dangerous can be reported.
   const savedDangerZone = dangerZone(paid);
-  const resolved = resolveEnemyPhase(
-    paid,
-    visibleReach(paid),
-    savedDangerZone,
-  );
+  const resolved = resolveEnemyPhase(paid, visibleReach(paid), savedDangerZone);
   if (resolved.state.phase.kind === "game-over") {
     return resolved;
   }

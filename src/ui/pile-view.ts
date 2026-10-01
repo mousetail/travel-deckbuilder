@@ -106,7 +106,11 @@ export function searchOverlay(
   setChildren(
     list,
     cards.map((card, index) => {
-      const face = cardFace(card, { index, count: cards.length, viewOnly: false });
+      const face = cardFace(card, {
+        index,
+        count: cards.length,
+        viewOnly: false,
+      });
       face.classList.add("searchable");
       face.addEventListener("click", () => onChoose(card));
       return face;

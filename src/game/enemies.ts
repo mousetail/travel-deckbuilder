@@ -710,8 +710,7 @@ function deathTransition(
   anomalies: readonly Anomaly[],
 ): Transition {
   const anomaly = unexplainedDeath(state, savedDangerZone, reason);
-  const nextAnomalies =
-    anomaly === null ? anomalies : [...anomalies, anomaly];
+  const nextAnomalies = anomaly === null ? anomalies : [...anomalies, anomaly];
   return moving(
     {
       ...state,
@@ -796,8 +795,7 @@ export function resolveEnemyPhase(
   // an enemy may not path through or onto an invisible tile, since that would
   // only put it back to sleep.
   const visible = visibleMap(state).tiles;
-  const awake = (enemy: Enemy): boolean =>
-    visible.has(hexKey(enemy.position));
+  const awake = (enemy: Enemy): boolean => visible.has(hexKey(enemy.position));
 
   // Watchtowers fire first: ending your turn in their radius is fatal.
   for (const enemy of enemies) {

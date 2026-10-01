@@ -77,10 +77,6 @@
     "........",
     "......."
   ],
-  "entryEdges": [
-    3
-  ],
-  "exitEdges": [
-    0
-  ]
+  "entryEdges": [3],
+  "exitEdges": [0]
 }

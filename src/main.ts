@@ -18,7 +18,7 @@ const root = requireElementById("app", HTMLDivElement);
 
 function startGame(): void {
   const ids = counterIds("id");
-  const seed = Math.random() * 1000 | 0;
+  const seed = (Math.random() * 1000) | 0;
   const generated = generateMap(seed, 3, 1, ids);
   const deck = buildDeck(STARTING_DECK, ids, generated.cursor.rng);
   const startSection = generated.records[0];

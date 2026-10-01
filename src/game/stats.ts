@@ -236,7 +236,10 @@ export function countCurrencyGain(
   if (amount <= 0) {
     return stats;
   }
-  const currency = { ...stats.currency, gained: stats.currency.gained + amount };
+  const currency = {
+    ...stats.currency,
+    gained: stats.currency.gained + amount,
+  };
   switch (source) {
     case "cards":
       currency.gainedFromCards += amount;
@@ -296,7 +299,9 @@ export function countUpgrade(stats: RunStats, cardId: string): RunStats {
   const upgraded: RunStats = {
     ...stats,
     cards: stats.cards.map((record) =>
-      record.id === cardId ? { ...record, upgraded: record.upgraded + 1 } : record,
+      record.id === cardId
+        ? { ...record, upgraded: record.upgraded + 1 }
+        : record,
     ),
     upgradedCardIds: [...stats.upgradedCardIds, cardId],
   };
@@ -347,7 +352,10 @@ function raise(stats: RunStats, key: MaxRecordKey, value: number): RunStats {
   return { ...stats, records };
 }
 
-export function recordCardsPlayedInTurn(stats: RunStats, value: number): RunStats {
+export function recordCardsPlayedInTurn(
+  stats: RunStats,
+  value: number,
+): RunStats {
   return raise(stats, "mostCardsPlayedInTurn", value);
 }
 
