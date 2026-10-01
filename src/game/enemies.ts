@@ -164,19 +164,24 @@ export type ChaseResult = {
  * The hex an assassin aims for when it cannot reach the player this turn: the
  * spot nearest to the player that is not on or within `ASSASSIN_SPACING` of a
  * peer, so chasers do not pile onto the same approach. Ties break toward the
- * assassin, so it does not cross the map for an equally close spot. Falls back
- * to the player's own hex if every spot nearby is crowded.
+ * assassin, so it does not cross the map for an equally close spot. Only tiles
+ * in `tiles` are considered, so an invisible tile is never a destination. Falls
+ * back to the player's own hex if every spot nearby is crowded.
  */
 function chaseTarget(
   player: HexCoord,
   from: HexCoord,
   peers: readonly HexCoord[],
   maxDistance: number,
+  tiles: ReadonlyMap<string, Tile>,
 ): HexCoord {
   let best = player;
   let bestToPlayer = Infinity;
   let bestToFrom = Infinity;
   for (const coord of hexesInRange(player, maxDistance)) {
+    if (!tiles.has(hexKey(coord))) {
+      continue;
+    }
     if (peers.some((peer) => hexDistance(coord, peer) <= ASSASSIN_SPACING)) {
       continue;
     }
@@ -204,10 +209,11 @@ export function chase(
   from: HexCoord,
   movement: number,
   player: HexCoord,
-  costAt: StepCost,
+  tiles: ReadonlyMap<string, Tile>,
   maxDistance: number,
   peers: readonly HexCoord[],
 ): ChaseResult {
+  const costAt = terrainCostAt(tiles, from);
   const toPlayer = findPathByCost(from, player, costAt);
   if (toPlayer !== null && toPlayer.cost <= movement) {
     return {
@@ -218,7 +224,7 @@ export function chase(
     };
   }
 
-  const target = chaseTarget(player, from, peers, maxDistance);
+  const target = chaseTarget(player, from, peers, maxDistance, tiles);
   let toTarget = findPathByCost(from, target, costAt);
   if (toTarget === null) {
     // The nearest clear spot may sit across impassible ground; fall back to the
@@ -251,7 +257,7 @@ export function chase(
 export function takeAssassinTurn(
   assassin: Assassin,
   player: HexCoord,
-  costAt: StepCost,
+  tiles: ReadonlyMap<string, Tile>,
   maxDistance: number,
   peers: readonly HexCoord[],
 ): AssassinTurn {
@@ -259,7 +265,7 @@ export function takeAssassinTurn(
     assassin.position,
     assassin.movement,
     player,
-    costAt,
+    tiles,
     maxDistance,
     peers,
   );
@@ -595,10 +601,15 @@ export function terrainCostAt(
 /**
  * Every hex one enemy could strike at the end of this turn: an assassin's reach
  * within its movement, a sniper's line of sight, a watchtower's lethal radius.
+ *
+ * An assassin's reach is movement, so it is confined to `moveTiles` (the tiles
+ * the enemy may actually walk on). A sniper's line of sight is physical, so it
+ * uses `sightTiles` and is not limited by the fog.
  */
 function enemyDanger(
   enemy: Enemy,
-  tiles: ReadonlyMap<string, Tile>,
+  sightTiles: ReadonlyMap<string, Tile>,
+  moveTiles: ReadonlyMap<string, Tile>,
 ): Set<string> {
   const zone = new Set<string>();
   if (enemy.kind === "watchtower") {
@@ -607,7 +618,7 @@ function enemyDanger(
     }
   } else if (enemy.kind === "sniper") {
     if (enemy.aim !== null) {
-      for (const coord of sniperLine(enemy.position, enemy.aim, tiles)) {
+      for (const coord of sniperLine(enemy.position, enemy.aim, sightTiles)) {
         zone.add(hexKey(coord));
       }
     }
@@ -615,7 +626,7 @@ function enemyDanger(
     for (const coord of hexesWithinCost(
       enemy.position,
       enemy.movement,
-      terrainCostAt(tiles, enemy.position),
+      terrainCostAt(moveTiles, enemy.position),
     )) {
       zone.add(hexKey(coord));
     }
@@ -637,8 +648,17 @@ export function enemyDangerZones(state: GameState): Map<string, Set<string>> {
   const fogOrder = state.playerSectionOrder + 1;
   const zones = new Map<string, Set<string>>();
   for (const enemy of state.enemies) {
-    const zone = enemyDanger(enemy, state.map.tiles);
-    if (!visible.tiles.has(hexKey(enemy.position))) {
+    const awake = visible.tiles.has(hexKey(enemy.position));
+    // An awake enemy moves only within the visible window, so its reach is
+    // computed on those tiles. A sleeping enemy is still confined to its own
+    // (invisible) section, so it keeps the full tile map and is filtered to the
+    // fog sliver below.
+    const zone = enemyDanger(
+      enemy,
+      state.map.tiles,
+      awake ? visible.tiles : state.map.tiles,
+    );
+    if (!awake) {
       const wakes =
         sectionOrderAt(state.map.index, enemy.position) === fogOrder;
       for (const key of zone) {
@@ -772,7 +792,9 @@ export function resolveEnemyPhase(
 
   // An enemy the player cannot see yet is asleep: it neither fires nor moves
   // until it enters the visible window. Enemies in the fog sliver are visible,
-  // so they act like any other.
+  // so they act like any other. Movement is confined to the visible window too:
+  // an enemy may not path through or onto an invisible tile, since that would
+  // only put it back to sleep.
   const visible = visibleMap(state).tiles;
   const awake = (enemy: Enemy): boolean =>
     visible.has(hexKey(enemy.position));
@@ -825,7 +847,7 @@ export function resolveEnemyPhase(
       const result = sniperMove(
         sniper,
         state.map.player,
-        state.map.tiles,
+        visible,
         peers,
         doomed,
         orderAt,
@@ -858,7 +880,7 @@ export function resolveEnemyPhase(
     const turn = takeAssassinTurn(
       enemy,
       state.map.player,
-      terrainCostAt(state.map.tiles, enemy.position),
+      visible,
       maxDistance,
       peers,
     );

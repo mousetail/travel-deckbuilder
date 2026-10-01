@@ -103,6 +103,9 @@ export class Editor {
   private brush: Brush;
   /** Timer shown in the enemy-timer input and placed by its brush. */
   private enemyTimer: number;
+  /** Live references so selection can update in place without a full rebuild. */
+  private listEl: HTMLElement | null = null;
+  private mainEl: HTMLElement | null = null;
 
   constructor(root: HTMLElement, onExit: () => void) {
     this.root = root;
@@ -171,11 +174,13 @@ export class Editor {
     });
     const sidebar = el("div", "editor-sidebar");
     setChildren(sidebar, [list]);
+    this.listEl = list;
     return sidebar;
   }
 
   private main(): HTMLElement {
     const main = el("div", "editor-main");
+    this.mainEl = main;
     const template = this.templates[this.selected];
     if (template === undefined) {
       const empty = el("div", "editor-empty");
@@ -597,8 +602,15 @@ export class Editor {
   }
 
   private select(index: number): void {
+    if (index === this.selected) {
+      return;
+    }
     this.selected = index;
-    this.render();
+    // Update the sidebar and main panel in place so the sidebar keeps its scroll.
+    this.listEl
+      ?.querySelectorAll<HTMLElement>(".editor-list-item")
+      .forEach((item, i) => item.classList.toggle("active", i === index));
+    this.mainEl?.replaceWith(this.main());
   }
 
   private setBrush(brush: Brush): void {
@@ -626,6 +638,13 @@ export class Editor {
     if (row === undefined) {
       return;
     }
+    if (
+      brush.type === "overlay" &&
+      brush.value !== "." &&
+      !this.overlayFits(template, rowIndex, column, brush.value)
+    ) {
+      return;
+    }
     const chars = row.split("");
     chars[column] = brush.value;
     const next = [...rows];
@@ -642,6 +661,22 @@ export class Editor {
       template.cost = next;
     }
     this.render();
+  }
+
+  /**
+   * A tile shows at most four icons and an overlay takes one of those slots, so
+   * an overlay cannot be added when the terrain already fills all four.
+   */
+  private overlayFits(
+    template: SectionTemplate,
+    rowIndex: number,
+    column: number,
+    overlayChar: string,
+  ): boolean {
+    const terrain = TERRAIN_BY_CHAR[template.terrain[rowIndex][column]];
+    const cost = COST_BY_CHAR[template.cost[rowIndex][column]];
+    const feature = FEATURE_BY_CHAR[overlayChar];
+    return tileIcons(terrain, cost, feature).length <= 4;
   }
 
   private setRadius(radius: number): void {

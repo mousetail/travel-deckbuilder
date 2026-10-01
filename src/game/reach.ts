@@ -276,7 +276,7 @@ export function hoverPaths(state: GameState, to: HexCoord): HoverPath[] {
     const found = findPathByCost(
       enemy.position,
       to,
-      terrainCostAt(state.map.tiles, enemy.position),
+      terrainCostAt(visible, enemy.position),
     );
     if (found === null || found.cost > enemy.movement || found.path.length < 2) {
       continue;

@@ -239,7 +239,7 @@ function mirrorTemplate(template: SectionTemplate): SectionTemplate {
 export const FINISH_TEMPLATE: SectionTemplate = finishTile;
 
 /** The difficulty at which the finish section is attempted. */
-export const FINISH_DIFFICULTY = 4;
+export const FINISH_DIFFICULTY = 5;
 
 export const SECTION_TEMPLATES: readonly SectionTemplate[] = [
   ...tiles,

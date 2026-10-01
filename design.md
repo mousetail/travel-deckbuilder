@@ -89,37 +89,36 @@ You may freely discard any number of cards you like without playing them. Or you
 
 A card can be asleep for N reshuffles. A sleeping card sits in the discard pile but is skipped by every reshuffle; each reshuffle ticks its counter down by one, and once it reaches 0 the card wakes and rejoins the draw pile. Sleeping cards are shown in the discard pile with the number of reshuffles they still have to sit out.
 
-Sleeping is an effect of a card's action, not a fixed property: a card can sleep itself when played (a drawback on hand-cycling and long-range combat cards) or when discarded. The amount is set per card so it can be balanced individually, and it is shown on the card face as a play or discard line with a moon icon and the count.
-
-- Hand-cycling cards (Forage, Gamble, Survey, Insight) sleep 2 when played.
-- Long-range combat cards (Volley, Charge) sleep 1 when played.
-- Discarding a card by hand never puts it to sleep unless the card's discard action says so.
-
-The rare "put a card to sleep" card is the exception: it puts a chosen card from your hand to sleep for 4 reshuffles, and if you discard the card itself it goes to sleep for 4 reshuffles instead. This lets a player park an unwanted card without spending a rare deck-removal site.
-
-The "Take 1 card from your discard pile" card cannot recover a sleeping card; it recovers the top-most awake card instead.
+Various cards can cause sleeping. Some cards sleep themselves on discard as a balancing mechanic. Some cards can cause other cards to sleep.
 
 # Combat
 
-Each map tile has a timer. If the map tile is still present after a certain number of turns, an assasin will spawn on the tile. When the player ends their turn, any assasins will move and if they can reach the player the player dies and the game is over.
+The map has "spawn points" which can spawn different kinds of enemies. An enemy can either spawn immediatly or on a timer. Enemy types include:
 
-Assasins have to consider terrain when moving and can also move faster over easier terrain. If an assasin can not reach the player they will pathfind towards the leading edge of the map, potentially cutting the player off.
+## Assasins
 
-Further in the game, multiple assasins will spawn at the same time. They also get faster.
+- Typically have relatively long spawn timers causing them to spawn behind the player
+- Have realtively high movement speed
+- High cost of crossing a terrain type boundary, mimicking a player who would have to play a second card.
+- Assasins chase the player and kill them if they can end their turn on the players space
 
-In addition, there are watchtowers. They spawn in fixed positions on the map. Only appearing later in the game. If the player ends their turn within a certain radius of the watchtower, they die.
+Assasins get faster over time (dependin on turn number)
 
-Both assasins and watchtowers can be killed with a combat card. Or if they disappear off the trailing edge of the screen.
+## Watch Towers
+
+Watch towers typically spawn on map start. They have a certain radius, and can shoot the player if they end their turn within that radius. They can not move.
+
+## Snipers
+
+Snipers appear in higher difficulty levels, typically in numbers. They move like an assasin but have lower movement speed. They generally run away from the player, while attempting to avoid being cut off from the map edge and also respecting spacing.
+
+Snipers aim at a certain direction (one of the 6 map hexes). At the end of the snipers turn, they aim in a direction (towards the player, ideally the longest line of sight). If the player ends their next turn in that line, they are shot and die.
 
 # Map Generation
 
 The map has a hexagonical grid and consists of winding sections of had coded tiles. The terrain in a labarynthine structure.
 
-Each pre-generated terrain tile has a difficulty associated with it. The further in the game the more difficult the tiles get. More advanced upgrades and obstacles like watchtowers only appear on more difficult ones.
-
-Each pregenerated tile has a side length of 4 hexagons.
-
-There are special pregenerated tiles which are 2x the size.
+Each pre-generated terrain tile has a difficulty associated with it. The further in the game the more difficult the tiles get. More advanced upgrades and enemies like watchtowers and snipers only appear on more difficult ones.
 
 In general, most pregenerated tiles have a grass path following the outer curve, or winding back and forth a bit for straight paths. Forest and water provide shortcuts and can surround upgrades. Mountains surround rarer upgrades and are out of the way, requring not only taking a long route but having rare mountain cards in your deck.
 
@@ -134,8 +133,8 @@ You start with some number of currency. You can earn currency in a number of way
 You generally need to end your turn on an upgrade tile to use use it. The end turn button will be replaced by a "use upgrade" button.
 
 Some tiles allow you to upgrade your deck.
-- Shops allow you to spend money to buy cards. Shops stock 3 cards, biassed by rarity and you can also spend money to reroll what the shop sells.
-- Smith allows you to upgrade a card, generally adding +1 to movement. The range of combat cards can not be upgraded.
+- Shops allow you to spend money to buy cards. Shops stock 4 cards, biassed by rarity and you can also spend money to reroll what the shop sells.
+- Smith allows you to upgrade a card. Each card has a hardcoded "+" version.
 - A space that allows removing a card from your deck (rare)
 - A space that gives you a random card (uncommon and up). Player can choose to take it and leave it.
 
@@ -153,12 +152,13 @@ UI is mostly black and white, thick borders, no border radius. The map itself is
 
 # Fog of War and tile addition/removal
 
-Generally, 3 tiles are visible.
+Generally, a few tiles are visible.
 - The tile the player is on
-- The previous tile
-- The first 2 rows of the next tile (fog of war)
+- The tiles behind it, up to `SECTIONS_BEHIND` of them
+- The first `FOG_DEPTH` rows of the next tile (fog of war), each row dimmed a little
+  more than the one in front of it
 
-If the player reaches the next tile, the tile is entirely revealed and the tile now two behind the player is removed including any assasins. This doesn't end the players turn. The player can never go back there.
+If the player reaches the next tile, the tile is entirely revealed and the tiles more than `SECTIONS_BEHIND` behind the player are removed including any assasins. This doesn't end the players turn. The player can never go back there.
 
 Even though the tile is removed, the game still keeps track if it's position to prevent the path from winding there and reaching that position again.
 
