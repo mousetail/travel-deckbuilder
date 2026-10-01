@@ -1,19 +1,21 @@
 # 06 — Fog of war & tile streaming
 
-**Goal:** only three sections are ever relevant — the one you are on, the one behind,
-and the leading two rows of the one ahead. Reveal the next section as you reach it,
-delete the one now two behind (with everything on it), but remember where it was.
+**Goal:** only a few sections are ever relevant — the one you are on, the
+`SECTIONS_BEHIND` sections behind, and the leading `FOG_DEPTH` rows of the one
+ahead. Reveal the next section as you reach it, delete the sections now
+`SECTIONS_BEHIND + 1` behind (with everything on them), but remember where they were.
 
 ## 1. What is visible
 
 From the design doc:
 
-- Generally **3 tiles (sections) are visible**:
+- Generally a few **tiles (sections) are visible**:
   1. the section the player is on,
-  2. the previous section,
-  3. the first 2 rows of the next section (fog of war).
+  2. the `SECTIONS_BEHIND` sections behind it,
+  3. the first `FOG_DEPTH` rows of the next section (fog of war).
 - When the player *reaches* the next section, it becomes fully revealed, and the
-  section now two behind is **removed, including any assassins on it**.
+  section now `SECTIONS_BEHIND + 1` behind is **removed, including any assassins on
+  it**.
 - Reaching a new section does **not** end the turn.
 - The player can never go back.
 - The removed section's **position is still remembered** so the path cannot wind back
@@ -51,39 +53,64 @@ export function liveSectionOrderId(index: MapIndex, coord: HexCoord): number {
 
 ## 3. Deriving the visible window
 
-Given the player's section index `i`, the three visible sections are
-`i - 1`, `i` (fully), and the **first two rows** of `i + 1`. "Rows" here means the
-two hex-rows nearest the player's entry edge into section `i + 1`. Because sections
-are hexagonal and entered along an edge, the natural definition is: the hexes of
-section `i + 1` whose distance to the *entry edge centroid* is at most 2 in the
-entry direction. Simpler and robust: expose a per-template list of "entry rows"
-computed at stamp time as the hexes within 1 step of the entry edge, and reveal
-those while the player is still in `i`.
+Given the player's section index `i`, the fully visible sections are `i` and the
+`SECTIONS_BEHIND` sections behind it, plus the **first `FOG_DEPTH` rows** of
+`i + 1`. "Rows" here means the hex-rows nearest the player's entry edge into
+section `i + 1`. Because sections are hexagonal and entered along an edge, the
+natural definition is: the hexes of section `i + 1` whose distance to the *entry
+edge centroid* is at most `FOG_DEPTH` in the entry direction. Simpler and robust:
+expose a per-template list of "entry rows" computed at stamp time as the hexes
+within `FOG_DEPTH - 1` steps of the entry edge, and reveal those while the player
+is still in `i`.
+
+The fog depth is a single constant, `FOG_DEPTH`, so the sliver can be widened or
+narrowed in one place. Each peeked hex carries its **depth** from the entry edge
+(0 is the row the player steps onto next). The renderer maps depth to opacity, so
+the nearest row is the clearest and the furthest the faintest, and raising
+`FOG_DEPTH` adds a gradation rather than needing new styles. Seeing further ahead
+lets the player read the terrain they are about to walk into and pick a movement
+card of the right size rather than overshooting.
 
 ```ts
+/** How many rows of the next section are visible, from its entry edge inward. */
+export const FOG_DEPTH = 3;
+
+/**
+ * How many sections behind the player stay on the map. The section this many
+ * behind is the oldest live one, and is dropped as soon as the player advances.
+ */
+export const SECTIONS_BEHIND = 1;
+
+export type FogHex = {
+  coord: HexCoord;
+  /** 0 is the row the player steps onto next; higher is further away. */
+  depth: number;
+};
+
 export type Visibility = {
   /** Section ids fully visible. */
   full: readonly string[];
   /** Hexes visible in the not-yet-entered section (the fog-of-war sliver). */
-  peek: readonly HexCoord[];
+  peek: readonly FogHex[];
 };
 
 export function computeVisibility(
   index: MapIndex,
   playerSectionOrder: number,
-  forwardRows: (section: SectionRecord) => readonly HexCoord[],
+  forwardRows: (section: SectionRecord) => readonly FogHex[],
 ): Visibility {
   const full: string[] = [];
-  const previous = index.sections[playerSectionOrder - 1];
-  const current = index.sections[playerSectionOrder];
+  for (
+    let order = playerSectionOrder - SECTIONS_BEHIND;
+    order <= playerSectionOrder;
+    order += 1
+  ) {
+    const section = index.sections[order];
+    if (section !== undefined && section.footprint.length > 0) {
+      full.push(section.id);
+    }
+  }
   const next = index.sections[playerSectionOrder + 1];
-
-  if (previous !== undefined && previous.footprint.length > 0) {
-    full.push(previous.id);
-  }
-  if (current !== undefined) {
-    full.push(current.id);
-  }
   const peek = next !== undefined ? forwardRows(next) : [];
   return { full, peek };
 }
@@ -91,15 +118,15 @@ export function computeVisibility(
 
 `forwardRows` is a small helper that selects the hexes of the next section adjacent
 to the edge the player will enter from. Store it per section record (`entryEdge`)
-and compute the two rows as `hexesInRange(entryEdgeCentroid, 2)` intersected with the
-section footprint.
+and compute the rows as the hexes within `FOG_DEPTH - 1` steps of the edge,
+intersected with the section footprint, tagging each hex with its distance.
 
 ## 4. Removing the trailing section
 
 When the player's section index increases:
 
-1. The previous section becomes fully visible.
-2. The section at `playerSectionOrder - 2` (now two behind) is removed.
+1. The section just entered becomes fully visible.
+2. Every section more than `SECTIONS_BEHIND` behind is removed.
 
 Removal means: delete every hex in its footprint from `tiles`, drop it from
 `hexToSection`, and **remove any enemies standing on it**. Keep its `SectionRecord`
@@ -111,7 +138,7 @@ export type StreamResult = {
   tiles: Map<string, Tile>;
   index: MapIndex;
   enemies: Enemy[];
-  removed: SectionRecord | null;
+  removed: readonly SectionRecord[];
 };
 
 export function streamToSection(
@@ -120,11 +147,18 @@ export function streamToSection(
   enemies: readonly Enemy[],
   playerSectionOrder: number,
 ): StreamResult {
-  const stale = index.sections[playerSectionOrder - 2];
-  if (stale === undefined) {
-    return { tiles, index, enemies: [...enemies], removed: null };
+  const stale = index.sections.filter(
+    (_, order) => order <= playerSectionOrder - SECTIONS_BEHIND - 1,
+  );
+  if (stale.length === 0) {
+    return { tiles, index, enemies: [...enemies], removed: [] };
   }
-  const staleHexes = new Set(stale.footprint.map(hexKey));
+  const staleHexes = new Set<string>();
+  for (const section of stale) {
+    for (const coord of section.footprint) {
+      staleHexes.add(hexKey(coord));
+    }
+  }
   const nextTiles = new Map(tiles);
   for (const key of staleHexes) {
     nextTiles.delete(key);
@@ -187,16 +221,18 @@ and 07), which is why the arming happens here rather than at generation.
 ## 6. Rendering the window
 
 `MapView.render` should be given only the visible tiles (from the live sections plus
-the `peek` hexes), so it never has to know about streaming. Render the peek hexes with
-a `fog` class (dimmed, per the "limited colours" guideline) so the player reads them
-as not-yet-accessible. Because hexes outside the window are simply absent from the
-input map, they disappear for free.
+the `peek` hexes), so it never has to know about streaming. Render each peek hex with
+a `fog` class and an opacity derived from its depth, so the player reads it as
+not-yet-accessible and the rows fade out the further they are from the player. Keep
+to one discrete step per row rather than a smooth gradient, per the "limited colours"
+guideline. Because hexes outside the window are simply absent from the input map,
+they disappear for free.
 
 ## 7. Sleeping enemies
 
 An enemy is only ever as visible as the hex it stands on. `visibleMap` already
-knows which hexes are revealed and which are the fog sliver, so it also exposes
-the `revealed` set and a `visibleEnemies` filter:
+knows which hexes are in the window — the fully visible sections plus the fog
+sliver — so it exposes that set as `tiles`, and a `visibleEnemies` filter:
 
 ```ts
 export function visibleEnemies(state: GameState): Enemy[] {
@@ -207,11 +243,13 @@ export function visibleEnemies(state: GameState): Enemy[] {
 
 An enemy on a hex outside the window is **asleep**: it is not rendered, and the
 enemy phase skips it entirely — it neither fires nor moves. This is what stops an
-enemy from striking the instant its section scrolls into view.
+enemy from striking the instant its section scrolls into view. An enemy in the
+fog sliver, by contrast, *is* visible, so it is awake and acts like any other:
+it fires, moves, and shows its full danger zone.
 
 There is one edge case. Stepping onto the leading edge of the fogged section
-reveals that whole section, waking every enemy in it — and they act that same
-enemy phase, so the player could die with no warning. To keep that fair, a
+reveals that whole section, waking every hidden enemy in it — and they act that
+same enemy phase, so the player could die with no warning. To keep that fair, a
 sleeping enemy's **danger zone is still drawn, but only over the fog sliver of
 the section it stands in**: those are exactly the hexes the player could end a
 turn on to wake it. Anywhere else it is harmless until it wakes, so nothing is
@@ -224,7 +262,7 @@ export function enemyDangerZones(state: GameState): Map<string, Set<string>> {
   const zones = new Map<string, Set<string>>();
   for (const enemy of state.enemies) {
     const zone = enemyDanger(enemy, state.map.tiles);
-    if (!visible.revealed.has(hexKey(enemy.position))) {
+    if (!visible.tiles.has(hexKey(enemy.position))) {
       const wakes = sectionOrderAt(state.map.index, enemy.position) === fogOrder;
       for (const key of zone) {
         if (!wakes || !visible.fog.has(key)) {
@@ -241,8 +279,9 @@ export function enemyDangerZones(state: GameState): Map<string, Set<string>> {
 ## 8. Milestone
 
 - Walking from one section into the next reveals it fully and dims the following
-  two rows.
-- Two sections behind is gone: its hexes no longer render and its enemies vanish.
+  three rows, each fainter than the last.
+- Sections more than `SECTIONS_BEHIND` behind are gone: their hexes no longer
+  render and their enemies vanish.
 - Moving forward then trying to walk back is impossible (the hexes no longer exist),
   yet generation never places a new section over the remembered footprint.
 - Reaching a new section does not end the turn or refill the hand.

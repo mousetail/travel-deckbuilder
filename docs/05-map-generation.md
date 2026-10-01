@@ -309,7 +309,7 @@ chapter 10.
 Two guard rails that save a lot of pain:
 
 - **Always stamp before you need it.** Generate the section ahead of the player, so
-  the leading two rows exist the moment they become visible (chapter 06).
+  the leading three rows exist the moment they become visible (chapter 06).
 - **Assert connectivity.** After stamping, run `findPath` from the section's entry
   hex to its exit hex using the *starting deck's* terrains (grass + forest). If no
   path exists, the section is a dead end for an early player; reject it and retry

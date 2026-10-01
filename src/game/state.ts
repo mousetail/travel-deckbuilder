@@ -52,13 +52,31 @@ export type GameOverReason =
  * Something that should not normally happen, recorded so an end-of-run report
  * can flag it for the developers.
  */
-export type Anomaly = {
-  kind: "death-outside-danger-zone";
-  reason: "assassin" | "sniper" | "watchtower";
-  turn: number;
-  /** The map section the player was in when they died. */
-  sectionOrder: number;
-};
+export type Anomaly =
+  | {
+      kind: "death-outside-danger-zone";
+      reason: "assassin" | "sniper" | "watchtower";
+      turn: number;
+      /** The map section the player was in when they died. */
+      sectionOrder: number;
+    }
+  | {
+      kind: "assassin-did-not-move";
+      turn: number;
+      assassinId: string;
+      position: HexCoord;
+      player: HexCoord;
+      distanceToPlayer: number;
+      movement: number;
+      peers: readonly HexCoord[];
+      /** Whether a hex within the assassin's movement budget was closer to the player. */
+      closerReachable: boolean;
+      /** Whether such a closer hex was also clear of every peer, so the assassin
+       * could legally have ended its move nearer the player. */
+      closerClearReachable: boolean;
+      /** Whether peer spacing turned a move that would have advanced into a stop. */
+      blockedByPeers: boolean;
+    };
 
 /** Per-turn bookkeeping, reset at the start of every turn. */
 export type TurnState = {

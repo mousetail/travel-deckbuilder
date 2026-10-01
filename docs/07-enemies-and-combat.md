@@ -364,8 +364,8 @@ export function resolveEnemyPhase(state: GameState, maxDistance: number): Transi
   let enemies: Enemy[] = [...alreadyHere, ...spawned];
   const moves: MovePath[] = [];
 
-  const revealed = visibleMap(state).revealed;
-  const awake = (enemy: Enemy) => revealed.has(hexKey(enemy.position));
+  const visible = visibleMap(state).tiles;
+  const awake = (enemy: Enemy) => visible.has(hexKey(enemy.position));
 
   // Watchtowers fire first: ending your turn in their radius is fatal.
   for (const enemy of enemies) {

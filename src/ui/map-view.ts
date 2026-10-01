@@ -12,7 +12,7 @@ import { TERRAIN_TEXTURE, tileIcons } from "../game/terrain";
 import type { Tile } from "../game/terrain";
 import { enemyName } from "../game/enemies";
 import type { Enemy } from "../game/enemies";
-import type { FogLevel } from "../game/fog";
+import { FOG_DEPTH } from "../game/fog";
 import type { HoverPath } from "../game/reach";
 import type { Mover } from "../game/transition";
 import targetUrl from "../images/terrain-icons/target.png";
@@ -32,7 +32,8 @@ export type HighlightGroup = {
 
 export type MapViewState = {
   tiles: ReadonlyMap<string, Tile>;
-  fog: ReadonlyMap<string, FogLevel>;
+  /** Fog hexes, keyed by hex, valued by their depth from the entry edge. */
+  fog: ReadonlyMap<string, number>;
   player: HexCoord;
   enemies: readonly Enemy[];
   /** Hexes an enemy could strike at the end of this turn. */
@@ -64,6 +65,15 @@ const DRAG_THRESHOLD = 4;
 const MIN_ZOOM = 0.4;
 const MAX_ZOOM = 2.5;
 const ZOOM_RATE = 0.0015;
+
+/**
+ * How opaque a fog hex is, by its depth from the entry edge: the nearest row is
+ * brightest, the furthest dimmest. The ramp follows `FOG_DEPTH`, so raising the
+ * fog depth adds a gradation rather than needing new styles.
+ */
+function fogOpacity(depth: number): number {
+  return (FOG_DEPTH - depth) / (FOG_DEPTH + 1);
+}
 
 /** A pointer press that may become a pan. */
 type DragState = {
@@ -745,13 +755,14 @@ export class MapView {
   private hexElement(
     key: string,
     tile: Tile,
-    fog: FogLevel | undefined,
+    fog: number | undefined,
     trivialTerrain: boolean,
   ): HTMLElement {
     const element = document.createElement("div");
     element.classList.add("hex", `terrain-${tile.terrain}`);
     if (fog !== undefined) {
-      element.classList.add(`fog-${fog}`);
+      element.classList.add("fog");
+      element.style.setProperty("--fog-opacity", `${fogOpacity(fog)}`);
     }
     if (trivialTerrain) {
       element.classList.add("trivial-terrain");

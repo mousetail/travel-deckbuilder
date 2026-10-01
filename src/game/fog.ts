@@ -11,6 +11,12 @@ import type { Tile } from "./terrain";
 /** How many sections beyond the player's own must always exist. */
 const AHEAD = 3;
 
+/**
+ * How many sections behind the player stay on the map. The section this many
+ * behind is the oldest live one, and is dropped as soon as the player advances.
+ */
+export const SECTIONS_BEHIND = 2;
+
 /** Id of the live section containing `coord`, or null. */
 export function sectionAt(index: MapIndex, coord: HexCoord): string | null {
   return index.hexToSection.get(hexKey(coord)) ?? null;
@@ -38,9 +44,15 @@ function radiusOf(record: SectionRecord): number {
 }
 
 /**
- * The two rows of `record` nearest its entry edge — the sliver revealed while
- * the player is still in the previous section. The entry edge itself is `near`
- * (the player steps onto it next); the row behind it is `far`.
+ * How many rows of the next section are visible, from its entry edge inward.
+ * Raise it to let the player see further ahead; the fog opacity ramp follows.
+ */
+export const FOG_DEPTH = 3;
+
+/**
+ * The rows of `record` nearest its entry edge — the sliver revealed while the
+ * player is still in the previous section. Each hex carries its distance from
+ * the edge: 0 is the row the player steps onto next, higher is further away.
  */
 export function forwardRows(record: SectionRecord): FogHex[] {
   const radius = radiusOf(record);
@@ -50,17 +62,15 @@ export function forwardRows(record: SectionRecord): FogHex[] {
   }));
   const results: FogHex[] = [];
   for (const coord of record.footprint) {
-    let distance = -1;
+    let depth = -1;
     for (const edgeHex of edge) {
       const d = hexDistance(coord, edgeHex);
-      if (d <= 1 && (distance === -1 || d < distance)) {
-        distance = d;
+      if (d < FOG_DEPTH && (depth === -1 || d < depth)) {
+        depth = d;
       }
     }
-    if (distance === 0) {
-      results.push({ coord, level: "near" });
-    } else if (distance === 1) {
-      results.push({ coord, level: "far" });
+    if (depth !== -1) {
+      results.push({ coord, depth });
     }
   }
   return results;
@@ -75,12 +85,11 @@ function isLive(index: MapIndex, section: SectionRecord): boolean {
   return index.hexToSection.get(hexKey(first)) === section.id;
 }
 
-/** How dimmed a fog hex is: `near` is the entry edge, `far` the row behind it. */
-export type FogLevel = "near" | "far";
-
+/** A hex in the fog sliver, with how many rows it sits from the entry edge. */
 export type FogHex = {
   coord: HexCoord;
-  level: FogLevel;
+  /** 0 is the row the player steps onto next; higher is further away. */
+  depth: number;
 };
 
 export type Visibility = {
@@ -92,36 +101,37 @@ export type Visibility = {
 
 /**
  * The visible window is a function of the player's section, not of individual
- * hex distances: the previous section, the current one, and the first two rows
- * of the next.
+ * hex distances: the `SECTIONS_BEHIND` sections behind, the current one, and the
+ * first `FOG_DEPTH` rows of the next.
  */
 export function computeVisibility(
   index: MapIndex,
   playerSectionOrder: number,
 ): Visibility {
   const full: string[] = [];
-  const previous = index.sections[playerSectionOrder - 1];
-  const current = index.sections[playerSectionOrder];
+  for (
+    let order = playerSectionOrder - SECTIONS_BEHIND;
+    order <= playerSectionOrder;
+    order += 1
+  ) {
+    const section = index.sections[order];
+    if (section !== undefined && isLive(index, section)) {
+      full.push(section.id);
+    }
+  }
   const next = index.sections[playerSectionOrder + 1];
-
-  if (previous !== undefined && isLive(index, previous)) {
-    full.push(previous.id);
-  }
-  if (current !== undefined && isLive(index, current)) {
-    full.push(current.id);
-  }
   const peek = next !== undefined ? forwardRows(next) : [];
   return { full, peek };
 }
 
 export type VisibleMap = {
-  tiles: Map<string, Tile>;
-  fog: ReadonlyMap<string, FogLevel>;
   /**
-   * Hexes of the fully revealed sections. An enemy standing here is awake and
-   * acts this turn; one in the fog sliver is visible but still asleep.
+   * Every hex the player can see: the fully visible sections plus the fog
+   * sliver. An enemy standing on one of these is awake and acts this turn.
    */
-  revealed: ReadonlySet<string>;
+  tiles: Map<string, Tile>;
+  /** Fog hexes, keyed by hex, valued by their depth from the entry edge. */
+  fog: ReadonlyMap<string, number>;
 };
 
 /**
@@ -135,28 +145,26 @@ export function visibleMap(state: GameState): VisibleMap {
     state.playerSectionOrder,
   );
   const full = new Set(visibility.full);
-  const fog = new Map<string, FogLevel>();
+  const fog = new Map<string, number>();
   for (const hex of visibility.peek) {
-    fog.set(hexKey(hex.coord), hex.level);
+    fog.set(hexKey(hex.coord), hex.depth);
   }
   const tiles = new Map<string, Tile>();
-  const revealed = new Set<string>();
   for (const [key, tile] of state.map.tiles) {
     const sectionId = state.map.index.hexToSection.get(key);
     if (sectionId !== undefined && full.has(sectionId)) {
       tiles.set(key, tile);
-      revealed.add(key);
     } else if (fog.has(key)) {
       tiles.set(key, tile);
     }
   }
-  return { tiles, fog, revealed };
+  return { tiles, fog };
 }
 
 /**
  * The enemies standing on a hex the player can currently see. An enemy on a
- * hex outside the window is hidden: it neither renders nor acts until the
- * player's section reaches it.
+ * hex outside the window is hidden: it neither renders nor acts until it enters
+ * the window (the fog sliver of the next section, or a revealed section).
  */
 export function visibleEnemies(state: GameState): Enemy[] {
   const visible = visibleMap(state).tiles;
@@ -196,9 +204,9 @@ export type StreamResult = {
 };
 
 /**
- * Drop every section more than one behind the player: its tiles, its index
- * entries, and any enemies standing on it. The `SectionRecord` (and its
- * footprint) is kept forever so generation never winds back into it.
+ * Drop every section more than `SECTIONS_BEHIND` behind the player: its tiles,
+ * its index entries, and any enemies standing on it. The `SectionRecord` (and
+ * its footprint) is kept forever so generation never winds back into it.
  */
 export function streamToSection(
   tiles: ReadonlyMap<string, Tile>,
@@ -207,7 +215,7 @@ export function streamToSection(
   playerSectionOrder: number,
 ): StreamResult {
   const stale = index.sections.filter(
-    (_, order) => order <= playerSectionOrder - 2,
+    (_, order) => order <= playerSectionOrder - SECTIONS_BEHIND - 1,
   );
   if (stale.length === 0) {
     return { tiles: new Map(tiles), index, enemies: [...enemies], removed: [] };
@@ -283,8 +291,8 @@ export function leadingEdge(state: GameState): HexCoord {
 
 /**
  * React to a completed move: if the player crossed into a new section, reveal
- * it, drop the section now two behind, and keep the map generated ahead.
- * Reaching a new section never ends the turn.
+ * it, drop the sections now `SECTIONS_BEHIND` behind, and keep the map generated
+ * ahead. Reaching a new section never ends the turn.
  */
 export function onPlayerMoved(state: GameState): GameState {
   const order = liveSectionOrderId(state.map.index, state.map.player);

@@ -738,14 +738,11 @@ button {
     filter: brightness(0.5);
   }
 
-  /* The not-yet-entered sliver of the next section. The entry edge is where the
-     player steps next, so it is dimmed less than the row behind it. */
-  &.fog-near {
-    opacity: 0.6;
-  }
-
-  &.fog-far {
-    opacity: 0.3;
+  /* The not-yet-entered sliver of the next section. Rows fade with distance from
+     the entry edge, where the player steps next; the opacity is set per hex from
+     the fog depth. */
+  &.fog {
+    opacity: var(--fog-opacity);
   }
 }
 

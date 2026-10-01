@@ -265,11 +265,11 @@ export function hoverPaths(state: GameState, to: HexCoord): HoverPath[] {
   if (player !== null) {
     paths.push({ kind: "player", path: player });
   }
-  const revealed = visibleMap(state).revealed;
+  const visible = visibleMap(state).tiles;
   for (const enemy of state.enemies) {
     if (
       enemy.kind !== "assassin" ||
-      !revealed.has(hexKey(enemy.position))
+      !visible.has(hexKey(enemy.position))
     ) {
       continue;
     }

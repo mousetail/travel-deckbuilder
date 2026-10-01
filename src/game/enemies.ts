@@ -11,7 +11,7 @@ import {
   parseHexKey,
 } from "./hex";
 import type { HexCoord, StepCost } from "./hex";
-import { visibleMap } from "./fog";
+import { SECTIONS_BEHIND, visibleMap } from "./fog";
 import type { Anomaly, GameState, MapIndex } from "./state";
 import type { EnemyKind, Terrain, Tile } from "./terrain";
 import { moving } from "./transition";
@@ -146,6 +146,8 @@ export type AssassinTurn = {
   killedPlayer: boolean;
   /** The hexes the assassin walked, start and end included. */
   path: readonly HexCoord[];
+  /** Whether peer spacing turned a move that would have advanced into a stop. */
+  blockedByPeers: boolean;
 };
 
 /** The outcome of one chaser's move: where it ended, and whether it caught you. */
@@ -154,6 +156,8 @@ export type ChaseResult = {
   killedPlayer: boolean;
   /** The hexes walked, start and end included. */
   path: readonly HexCoord[];
+  /** Whether peer spacing turned a move that would have advanced into a stop. */
+  blockedByPeers: boolean;
 };
 
 /**
@@ -206,7 +210,12 @@ export function chase(
 ): ChaseResult {
   const toPlayer = findPathByCost(from, player, costAt);
   if (toPlayer !== null && toPlayer.cost <= movement) {
-    return { position: player, killedPlayer: true, path: toPlayer.path };
+    return {
+      position: player,
+      killedPlayer: true,
+      path: toPlayer.path,
+      blockedByPeers: false,
+    };
   }
 
   const target = chaseTarget(player, from, peers, maxDistance);
@@ -217,7 +226,12 @@ export function chase(
     toTarget = findPathByCost(from, player, costAt);
   }
   if (toTarget === null) {
-    return { position: from, killedPlayer: false, path: [from] };
+    return {
+      position: from,
+      killedPlayer: false,
+      path: [from],
+      blockedByPeers: false,
+    };
   }
   const advanced = advanceAlongPath(toTarget.path, movement, costAt);
   const path = retreatFromPeers(advanced.path, peers);
@@ -225,6 +239,7 @@ export function chase(
     position: path[path.length - 1] ?? from,
     killedPlayer: false,
     path,
+    blockedByPeers: advanced.path.length > 1 && path.length <= 1,
   };
 }
 
@@ -252,6 +267,7 @@ export function takeAssassinTurn(
     assassin: { ...assassin, position: result.position },
     killedPlayer: result.killedPlayer,
     path: result.path,
+    blockedByPeers: result.blockedByPeers,
   };
 }
 
@@ -622,7 +638,7 @@ export function enemyDangerZones(state: GameState): Map<string, Set<string>> {
   const zones = new Map<string, Set<string>>();
   for (const enemy of state.enemies) {
     const zone = enemyDanger(enemy, state.map.tiles);
-    if (!visible.revealed.has(hexKey(enemy.position))) {
+    if (!visible.tiles.has(hexKey(enemy.position))) {
       const wakes =
         sectionOrderAt(state.map.index, enemy.position) === fogOrder;
       for (const key of zone) {
@@ -671,15 +687,16 @@ function deathTransition(
   moves: readonly MovePath[],
   savedDangerZone: ReadonlySet<string>,
   reason: "assassin" | "sniper" | "watchtower",
+  anomalies: readonly Anomaly[],
 ): Transition {
   const anomaly = unexplainedDeath(state, savedDangerZone, reason);
-  const anomalies =
-    anomaly === null ? state.anomalies : [...state.anomalies, anomaly];
+  const nextAnomalies =
+    anomaly === null ? anomalies : [...anomalies, anomaly];
   return moving(
     {
       ...state,
       enemies,
-      anomalies,
+      anomalies: nextAnomalies,
       phase: { kind: "game-over", reason: { kind: reason } },
     },
     moves,
@@ -751,13 +768,14 @@ export function resolveEnemyPhase(
   const alreadyHere = state.enemies;
   let enemies: Enemy[] = [...alreadyHere, ...spawned];
   const moves: MovePath[] = [];
+  let anomalies = state.anomalies;
 
-  // An enemy on a hex the player cannot see yet is asleep: it neither fires nor
-  // moves until the player's section reaches it. This is what stops an enemy
-  // from striking the instant it becomes visible.
-  const revealed = visibleMap(state).revealed;
+  // An enemy the player cannot see yet is asleep: it neither fires nor moves
+  // until it enters the visible window. Enemies in the fog sliver are visible,
+  // so they act like any other.
+  const visible = visibleMap(state).tiles;
   const awake = (enemy: Enemy): boolean =>
-    revealed.has(hexKey(enemy.position));
+    visible.has(hexKey(enemy.position));
 
   // Watchtowers fire first: ending your turn in their radius is fatal.
   for (const enemy of enemies) {
@@ -772,6 +790,7 @@ export function resolveEnemyPhase(
         moves,
         savedDangerZone,
         "watchtower",
+        anomalies,
       );
     }
   }
@@ -781,7 +800,7 @@ export function resolveEnemyPhase(
   // player saw during their turn is exactly the line that fires. A freshly
   // spawned sniper has no aim yet, so it only takes up a line this turn.
   const alreadyIds = new Set(alreadyHere.map((enemy) => enemy.id));
-  const doomed = state.playerSectionOrder - 1;
+  const doomed = state.playerSectionOrder - SECTIONS_BEHIND;
   const orderAt = (coord: HexCoord): number =>
     sectionOrderAt(state.map.index, coord);
   for (const enemy of [...enemies]) {
@@ -789,7 +808,14 @@ export function resolveEnemyPhase(
       continue;
     }
     if (sniperKills(enemy, state.map.player, state.map.tiles)) {
-      return deathTransition(state, enemies, moves, savedDangerZone, "sniper");
+      return deathTransition(
+        state,
+        enemies,
+        moves,
+        savedDangerZone,
+        "sniper",
+        anomalies,
+      );
     }
     let sniper = enemy;
     if (alreadyIds.has(enemy.id)) {
@@ -849,9 +875,10 @@ export function resolveEnemyPhase(
         moves,
         savedDangerZone,
         "assassin",
+        anomalies,
       );
     }
   }
 
-  return moving({ ...state, enemies }, moves);
+  return moving({ ...state, enemies, anomalies }, moves);
 }
