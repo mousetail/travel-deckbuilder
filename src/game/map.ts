@@ -9,7 +9,7 @@ import type { Enemy } from "./enemies";
 import type { Rng } from "./rng";
 import { pick, shuffle } from "./rng";
 import { SHOP_STOCK_SIZE, rollGift, rollShopStock } from "./shop";
-import type { MapIndex } from "./state";
+import type { Anomaly, MapIndex } from "./state";
 import tiles from "./tiles.json";
 import finishTile from "./finish.json";
 
@@ -237,11 +237,10 @@ function mirrorTemplate(template: SectionTemplate): SectionTemplate {
 /**
  * The finish section, kept out of the random pool: it is placed deliberately
  * once the map reaches its final difficulty, and nothing is generated after it.
+ * Its `difficulty` is the single source of truth for when that happens: once
+ * `placeSection`'s `maxDifficulty` reaches it, the finish is attempted.
  */
 export const FINISH_TEMPLATE: SectionTemplate = finishTile;
-
-/** The difficulty at which the finish section is attempted. */
-export const FINISH_DIFFICULTY = 5;
 
 export const SECTION_TEMPLATES: readonly SectionTemplate[] = [
   ...tiles,
@@ -288,6 +287,23 @@ export type GeneratedMap = {
   player: HexCoord;
   cursor: MapCursor;
   enemies: Enemy[];
+  /** Sections that had to be placed from the panic fallback pool. */
+  panics: PanicPlacement[];
+};
+
+/**
+ * Details of a section that could only be placed from the panic fallback pool,
+ * after the normal difficulty-band attempts were exhausted. This should not
+ * normally happen, so callers surface it as an anomaly.
+ */
+export type PanicPlacement = {
+  /** How many sections existed when the panic fallback was used. */
+  distance: number;
+  /** The template that was placed from the panic pool. */
+  templateId: string;
+  radius: number;
+  /** Radius of the section it joined onto. */
+  frontierRadius: number;
 };
 
 export type AdvanceResult = {
@@ -295,11 +311,23 @@ export type AdvanceResult = {
   records: SectionRecord[];
   cursor: MapCursor;
   enemies: Enemy[];
+  /** Set when this section had to be placed from the panic fallback pool. */
+  panic: PanicPlacement | null;
 };
 
 const MAX_ATTEMPTS = 40;
-const MAX_BAND = 3;
+export const MAX_BAND = 3;
 const SECTIONS_PER_BAND = 5;
+
+// The finish is triggered once `maxDifficulty` (band + 1, capped at MAX_BAND + 1)
+// reaches its difficulty. A finish authored above that ceiling could never be
+// placed, so fail loudly at load instead of silently generating forever.
+if (FINISH_TEMPLATE.difficulty > MAX_BAND + 1) {
+  throw new Error(
+    `finish difficulty ${FINISH_TEMPLATE.difficulty} exceeds the reachable ` +
+      `maximum ${MAX_BAND + 1}`,
+  );
+}
 
 function difficultyBand(distance: number): number {
   return Math.min(Math.floor(distance / SECTIONS_PER_BAND), MAX_BAND);
@@ -394,6 +422,8 @@ type Placement = {
   enemies: Enemy[];
   /** Whether this placement was the finish section. */
   finished: boolean;
+  /** Details of the panic fallback, or null if a normal template was placed. */
+  panic: PanicPlacement | null;
 };
 
 /**
@@ -538,10 +568,10 @@ function placeSection(
 
   let currentRng = rng;
   let bag = queue;
-  // Once the map reaches the finish difficulty, the first attempt of every
-  // section is the finish itself; if it cannot fit, a normal section is placed
-  // and the finish is tried again at the next frontier.
-  const finishMode = maxDifficulty >= FINISH_DIFFICULTY;
+  // Once the map reaches the finish's own difficulty, the first attempt of
+  // every section is the finish itself; if it cannot fit, a normal section is
+  // placed and the finish is tried again at the next frontier.
+  const finishMode = maxDifficulty >= finish.difficulty;
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
     const panicMode = attempt > (MAX_ATTEMPTS * 3) / 4;
     const useFinish = finishMode && attempt === 0;
@@ -704,6 +734,14 @@ function placeSection(
       queue: bag,
       enemies,
       finished: useFinish,
+      panic: panicMode
+        ? {
+            distance,
+            templateId: template.id,
+            radius: template.radius,
+            frontierRadius: frontier.radius,
+          }
+        : null,
     };
   }
 
@@ -759,6 +797,7 @@ export function advanceMap(
       finished: placed.finished,
     },
     enemies: placed.enemies,
+    panic: placed.panic,
   };
 }
 
@@ -771,6 +810,7 @@ export function generateMap(
   let tiles = new Map<string, Tile>();
   let records: SectionRecord[] = [];
   let enemies: Enemy[] = [];
+  let panics: PanicPlacement[] = [];
 
   let rng = { seed };
 
@@ -799,6 +839,9 @@ export function generateMap(
     records = advanced.records;
     cursor = advanced.cursor;
     enemies = [...enemies, ...advanced.enemies];
+    if (advanced.panic !== null) {
+      panics = [...panics, advanced.panic];
+    }
   }
 
   let player: HexCoord = { q: 0, r: 0 };
@@ -811,7 +854,19 @@ export function generateMap(
     cursor = { ...cursor, rng: start.rng };
   }
 
-  return { tiles, records, player, cursor, enemies };
+  return { tiles, records, player, cursor, enemies, panics };
+}
+
+/** Turn a panic placement into the anomaly recorded for the end-of-run report. */
+export function panicAnomaly(panic: PanicPlacement, turn: number): Anomaly {
+  return {
+    kind: "map-panic",
+    turn,
+    sectionOrder: panic.distance,
+    templateId: panic.templateId,
+    radius: panic.radius,
+    frontierRadius: panic.frontierRadius,
+  };
 }
 
 /**

@@ -26,7 +26,14 @@ export class ConsumablesView {
     const nodes = state.consumables.map((consumable) =>
       this.slot(state, consumable, interactive),
     );
-    setChildren(this.layer, nodes);
+    setChildren(this.layer, [this.header(), ...nodes]);
+  }
+
+  private header(): HTMLElement {
+    const header = document.createElement("div");
+    header.classList.add("consumables-header");
+    header.textContent = "Consumables";
+    return header;
   }
 
   private slot(

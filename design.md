@@ -31,8 +31,9 @@ Some cards carry a **trait**: a rule-bending property shown as a badge on the ca
 
 - **Must play first** (orange badge): while this card is in your hand, no other card may be played, and this card can never be discarded.
 - **Indestructible** (green badge): this card can never be destroyed (removed from your deck) or put to sleep.
+- **Shy** (teal badge): whenever the deck is shuffled, this card sinks to the bottom, so it is the last card drawn. This includes the opening deal: you never start with a shy card while at least a full hand of non-shy cards is available.
 
-`Escalation` carries both traits.
+`Escalation` carries all three traits.
 
 ## Escalation
 
@@ -40,8 +41,8 @@ Some cards carry a **trait**: a rule-bending property shown as a badge on the ca
 ramp:
 
 - **Escalation** (starting): raises every enemy's movement speed by 1 this turn and
-  0.2 permanently. Snipers take half the ramp, so they stay slower than assassins.
-  Carries the must-play-first and indestructible traits.
+  1/5 permanently. Snipers take half the ramp, so they stay slower than assassins.
+  Carries the must-play-first, indestructible, and shy traits.
 
 It replaces the old turn-number ramp: enemies no longer get faster with the turn
 number, so the only way the threat grows is the player drawing and playing
@@ -127,7 +128,7 @@ The map has "spawn points" which can spawn different kinds of enemies. An enemy 
 - High cost of crossing a terrain type boundary, mimicking a player who would have to play a second card.
 - Assasins chase the player and kill them if they can end their turn on the players space
 
-Assassins and snipers do not get faster with the turn number. Instead, the starting `Escalation` card raises every enemy's speed: +1 for the turn it is played and +0.2 permanently. It carries the must-play-first and indestructible traits, so it cannot be dodged by discarding, removing, or sleeping it — acting each turn means paying the ramp.
+Assassins and snipers do not get faster with the turn number. Instead, the starting `Escalation` card raises every enemy's speed: +1 for the turn it is played and +1/5 permanently. It carries the must-play-first and indestructible traits, so it cannot be dodged by discarding, removing, or sleeping it — acting each turn means paying the ramp.
 
 ## Watch Towers
 
@@ -162,12 +163,33 @@ Some tiles allow you to upgrade your deck.
 - Smith allows you to upgrade a card. Each card has a hardcoded "+" version.
 - A space that allows removing a card from your deck (rare)
 - A space that gives you a random card (uncommon and up). Player can choose to take it and leave it.
+- A space that offers a consumable (rare). Two random consumables are offered and the player keeps one. See [Consumables](#consumables).
+
+# Consumables
+
+Consumables are single-use items that sit outside your deck. You can hold up to 3 at a time, shown down the left center edge of the screen. Click one to use it: a consumable may be used at any point during your turn, before or after playing cards, and even while a shop or other upgrade window is open. You start each run with one random consumable. There is no way to discard a consumable without using it.
+
+A consumable can only be used if it would do something. A retreat with no safe space to land on, a freeze with no enemy in range, or a mimic while one is already out is simply not offered.
+
+Consumables are picked up from a rare upgrade space: ending your turn on it offers 2 random consumables, and you choose one to keep. You can still see what the space offers while holding 3, but you must use a consumable to make room before you can take one.
+
+The consumables:
+
+- **Reshuffle** — Shuffle all cards from your deck, hand, and discard pile together, wake every sleeping card, then draw 4 cards.
+- **Retreat** — Teleport backwards to a safe space on grass: the closest grass tile in the section behind the one you are on. A space is safe if no enemy could strike it at the end of this turn.
+- **Freeze** — Every enemy within 8 spaces freezes and will not move next turn. A frozen enemy can still attack if it does not need to move to do so.
+- **Slow** — Reduce enemy movement speed by 2 this turn. Disabled when the game uses the turn-number difficulty ramp, which ignores temporary speed changes.
+- **Mimic** — Place a mimic on your current position. Enemies chase the mimic instead of you while it is closer to them than you are. It lasts until the section it stands on is destroyed.
+- **Trailblaze** — Cards can cross any kind of terrain this turn, making any movement card interchangeable with another. Impassible is still impassible.
+- **Barricade** — Raise a one-way wall around the section you are in. Enemies and the player cannot move or shoot into the section, but may leave or shoot outwards. Walls are permanent and sit on individual hex edges rather than whole sections, so later cards can wall off arbitrary areas. A wall is only removed when the tiles it sits on leave the map.
 
 # Graphics Style
 
 Graphics style is retro/pixel art. There are some images in src/images showing the texture of the terrain types.
 
 The full screen is the map with the UI hovering above it. Cards look a bit like playing cards, with a symbolic representation in the top left corner. Each card has a name, an image (leave this as placeholder), and a stack of small badges in the top-right corner: one per trait, then the sleep counter and the temporary-upgrade sigil. Badge art lives in `src/images/card-icons/` as small SVGs.
+
+Consumables are shown down the left center edge of the screen as a small vertical strip of icons. Hovering one shows its name and effect; clicking it uses it.
 
 Cards are shown in a "fan" pattern, slightly angled to the left and the right.
 

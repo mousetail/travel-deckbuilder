@@ -9,7 +9,7 @@ import { buildDeck } from "./game/deck";
 import { allCards } from "./game/deck";
 import { counterIds, STARTING_DECK } from "./game/cards";
 import { rollConsumableOptions } from "./game/consumables";
-import { buildMapIndex, generateMap } from "./game/map";
+import { buildMapIndex, generateMap, panicAnomaly } from "./game/map";
 import { ensureAhead } from "./game/fog";
 import { startingStats } from "./game/stats";
 import { startTurn } from "./game/turn";
@@ -59,7 +59,7 @@ function startGame(): void {
     frozenEnemyIds: [],
     anyTerrainTurns: 0,
     walls: [],
-    anomalies: [],
+    anomalies: generated.panics.map((panic) => panicAnomaly(panic, 1)),
   };
 
   const app = new App(

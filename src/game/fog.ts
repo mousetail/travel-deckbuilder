@@ -1,7 +1,7 @@
 import { hexDistance, hexKey, parseHexKey } from "./hex";
 import type { HexCoord } from "./hex";
 import { hexSide } from "./hexagon";
-import { advanceMap, armSection, buildMapIndex } from "./map";
+import { advanceMap, armSection, buildMapIndex, panicAnomaly } from "./map";
 import type { SectionRecord } from "./map";
 import type { Enemy } from "./enemies";
 import type { GameState, MapIndex, Mimic } from "./state";
@@ -258,6 +258,7 @@ export function ensureAhead(state: GameState): GameState {
   let records = state.map.index.sections;
   let cursor = state.map.cursor;
   let enemies = state.enemies;
+  let anomalies = state.anomalies;
   let changed = false;
 
   while (records.length < state.playerSectionOrder + AHEAD) {
@@ -269,6 +270,11 @@ export function ensureAhead(state: GameState): GameState {
     records = advanced.records;
     cursor = advanced.cursor;
     enemies = [...enemies, ...advanced.enemies];
+    // The generator should not need the panic fallback; if it does, record it
+    // so the end-of-run report can flag the seed.
+    if (advanced.panic !== null) {
+      anomalies = [...anomalies, panicAnomaly(advanced.panic, state.turn)];
+    }
     changed = true;
   }
 
@@ -278,6 +284,7 @@ export function ensureAhead(state: GameState): GameState {
   return {
     ...state,
     enemies,
+    anomalies,
     map: { ...state.map, tiles, cursor, index: buildMapIndex(records, tiles) },
   };
 }

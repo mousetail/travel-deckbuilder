@@ -79,6 +79,17 @@ export type Anomaly =
       closerClearReachable: boolean;
       /** Whether peer spacing turned a move that would have advanced into a stop. */
       blockedByPeers: boolean;
+    }
+  | {
+      kind: "map-panic";
+      turn: number;
+      /** How many sections existed when the panic fallback was used. */
+      sectionOrder: number;
+      /** The template that was placed from the panic pool. */
+      templateId: string;
+      /** Its radius, and the radius of the section it joined onto. */
+      radius: number;
+      frontierRadius: number;
     };
 
 /** The decoy a Mimic consumable leaves behind. */

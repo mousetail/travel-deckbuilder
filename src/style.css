@@ -166,6 +166,12 @@ button {
   pointer-events: auto;
 }
 
+.consumables-header {
+  color: white;
+  justify-self: start;
+  font-weight: bold;
+}
+
 .consumable-slot {
   position: relative;
   display: grid;
