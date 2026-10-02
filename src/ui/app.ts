@@ -4,6 +4,7 @@ import { HandView } from "./hand-view";
 import type { HandMode } from "./hand-view";
 import { Hud } from "./hud";
 import { FeatureView } from "./feature-view";
+import { ConsumablesView } from "./consumables-view";
 import { pileButton, pileOverlay, searchOverlay } from "./pile-view";
 import {
   CardAnimator,
@@ -21,6 +22,7 @@ import { visibleEnemies, visibleMap } from "../game/fog";
 import { dangerZone, enemyDangerZones } from "../game/enemies";
 import { applyFeatureAction, useFeature } from "../game/economy";
 import type { FeatureAction } from "../game/economy";
+import { useConsumable, mimicPosition } from "../game/consumables";
 import { runScores } from "../game/stats";
 import { foldRun, runOutcome } from "../game/career";
 import { loadHistory, recordRun, saveHistory } from "./stats-store";
@@ -69,12 +71,14 @@ export class App {
   private readonly handView: HandView;
   private readonly hud: Hud;
   private readonly featureView: FeatureView;
+  private readonly consumablesView: ConsumablesView;
   private readonly middle: HTMLElement;
   private readonly bottomBar: HTMLElement;
   private readonly handLayer: HTMLElement;
   private readonly drawSlot: HTMLElement;
   private readonly discardSlot: HTMLElement;
   private readonly actionSlot: HTMLElement;
+  private readonly consumablesSlot: HTMLElement;
   private readonly cardAnimator: CardAnimator;
   /** The deck as of the last render, so card movements can be animated. */
   private previousDeck: Deck;
@@ -120,8 +124,13 @@ export class App {
     this.drawSlot = element("div", "pile-slot");
     this.discardSlot = element("div", "pile-slot");
     this.actionSlot = element("div", "hud-action");
+    this.consumablesSlot = element("div", "hud-consumables");
 
-    setChildren(middleRow, [this.middle, this.actionSlot]);
+    setChildren(middleRow, [
+      this.middle,
+      this.consumablesSlot,
+      this.actionSlot,
+    ]);
     setChildren(bottomBar, [this.drawSlot, this.handLayer, this.discardSlot]);
     setChildren(hudLayer, [topBar, middleRow, bottomBar]);
     this.bottomBar = bottomBar;
@@ -155,6 +164,9 @@ export class App {
       this.middle,
       (action) => this.handleFeatureAction(action),
       restart,
+    );
+    this.consumablesView = new ConsumablesView(this.consumablesSlot, (id) =>
+      this.handleUseConsumable(id),
     );
   }
 
@@ -270,9 +282,12 @@ export class App {
       highlights: this.highlightGroups(),
       activeHighlight: this.activeHighlightKey(),
       killable: this.killableEnemies(),
+      walls: this.state.walls,
+      mimic: mimicPosition(this.state),
     });
     this.renderHand();
     this.hud.render(this.state);
+    this.consumablesView.render(this.state, this.animating);
     if (isModalPhase(this.state.phase)) {
       setChildren(this.actionSlot, []);
     } else {
@@ -379,6 +394,7 @@ export class App {
       case "pending-card":
       case "pending-remove":
       case "pending-gain":
+      case "pending-consumable":
       case "shop":
       case "smith":
       case "game-over":
@@ -676,6 +692,13 @@ export class App {
     }
     this.apply(applyFeatureAction(this.state, action));
   }
+
+  private handleUseConsumable(id: string): void {
+    if (this.animating) {
+      return;
+    }
+    this.apply(useConsumable(this.state, id));
+  }
 }
 
 function element(tag: "div", className: string): HTMLDivElement {
@@ -690,6 +713,7 @@ function isModalPhase(phase: Phase): boolean {
     case "smith":
     case "pending-remove":
     case "pending-gain":
+    case "pending-consumable":
     case "game-over":
       return true;
     case "playing":

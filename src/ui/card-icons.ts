@@ -6,6 +6,9 @@ import temporaryUrl from "../images/card-icons/temporary.svg";
 import teleportUrl from "../images/card-icons/teleport.svg";
 import playsFirstUrl from "../images/card-icons/plays-first.svg";
 import indestructibleUrl from "../images/card-icons/indestructible.svg";
+import shyUrl from "../images/card-icons/shy.svg";
+import escalateUrl from "../images/card-icons/escalate.svg";
+import escalateTempUrl from "../images/card-icons/escalate-temp.svg";
 
 /** Play-cost coin, shown on Millionaire's play line. */
 export const COIN_ICON = coinUrl;
@@ -23,6 +26,12 @@ export const TELEPORT_ICON = teleportUrl;
 export const PLAYS_FIRST_ICON = playsFirstUrl;
 /** The badge for a card that cannot be destroyed or put to sleep. */
 export const INDESTRUCTIBLE_ICON = indestructibleUrl;
+/** The badge for a card that sinks to the bottom of the draw pile. */
+export const SHY_ICON = shyUrl;
+/** Escalation's permanent speed ramp. */
+export const ESCALATE_ICON = escalateUrl;
+/** Escalation's one-turn speed ramp. */
+export const ESCALATE_TEMP_ICON = escalateTempUrl;
 
 /** The coin icon as an inline element, for writing an amount of currency. */
 export function coinIcon(): HTMLImageElement {

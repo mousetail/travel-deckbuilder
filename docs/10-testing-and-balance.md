@@ -114,7 +114,7 @@ export const BALANCE = {
   shopRerollCost: 2,
   enemyBaseMovement: 1,
   escalationThisTurn: 1,         // enemy speed added for the turn Escalation is played
-  escalationPermanent: 0.2,      // enemy speed added for good, per Escalation play
+  escalationPermanentReciprocal: 5, // permanent enemy speed added per play is 1/this
   watchtowerRadius: 3,
   difficultyPerSection: 1,
 } as const;
@@ -144,8 +144,10 @@ Curve guidance from the design:
 - **Enemy count scales with map depth; enemy speed scales with `Escalation`.** Keep
   the two independent: more pressure from *numbers* reads as "swarm", more pressure
   from *speed* reads as "hunted". The player sets the speed pace by how often they
-  draw and play `Escalation`, so `escalationPermanent` controls how fast a long game
-  turns lethal and `escalationThisTurn` sets the per-turn floor.
+  draw and play `Escalation`, so `escalationPermanentReciprocal` controls how fast a
+  long game turns lethal and `escalationThisTurn` sets the per-turn floor. The
+  permanent ramp is stored as a reciprocal (1/5, 1/6, 1/7, …) so fractions can be
+  tried without decimal drift.
 - **Terrain difficulty** should gate the player, not the assassins: the *player* needs
   mountain cards to reach the rarest upgrades, while assassins merely move slowly
   there. So the amount of mountain/water on later sections is a direct lever on how

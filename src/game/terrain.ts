@@ -11,6 +11,7 @@ import shopUrl from "../images/shop.png";
 import smithUrl from "../images/smith.png";
 import removeCardUrl from "../images/map-icons/delete-card.svg";
 import gainCardUrl from "../images/map-icons/add-card.svg";
+import consumableUrl from "../images/map-icons/consumable.svg";
 import coinUrl from "../images/card-icons/coin.svg";
 import grassIconUrl from "../images/terrain-icons/grass.svg";
 import treeUrl from "../images/terrain-icons/tree.svg";
@@ -89,6 +90,7 @@ export type TileFeature =
   | { kind: "smith" }
   | { kind: "remove-card" }
   | { kind: "gain-card"; card: Card | null }
+  | { kind: "consumable" }
   | { kind: "coin"; value: number }
   /** Rolled into one of `options` when the section is placed; never in play. */
   | { kind: "random"; tier: UpgradeTier; options: readonly TileFeature[] };
@@ -148,6 +150,8 @@ export function featureVisual(feature: TileFeature): FeatureVisual {
       return { kind: "image", url: removeCardUrl };
     case "gain-card":
       return { kind: "image", url: gainCardUrl };
+    case "consumable":
+      return { kind: "image", url: consumableUrl };
     case "random":
       return { kind: "random", tier: feature.tier };
   }

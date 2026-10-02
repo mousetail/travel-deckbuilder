@@ -174,8 +174,12 @@ export function modeIsAvailable(
   switch (mode.kind) {
     case "attack":
       return (
-        enemiesInRange(visibleEnemies(state), state.map.player, mode.range)
-          .length > 0
+        enemiesInRange(
+          visibleEnemies(state),
+          state.map.player,
+          mode.range,
+          state.walls,
+        ).length > 0
       );
     case "discard-hand":
       return state.deck.hand.length >= mode.threshold;
@@ -198,6 +202,8 @@ export function modeIsAvailable(
         mode.distance,
         mode.terrain,
         movementTileAt(state),
+        state.walls,
+        state.anyTerrainTurns > 0,
       );
       return reachable.some((coord) => !equalsHex(coord, state.map.player));
     }
@@ -374,10 +380,10 @@ function playInstant(state: GameState, card: Card, mode: CardMode): Transition {
       );
       return still({
         ...played,
-        // Rounded to a tenth so repeated 0.2 steps stay clean against the
-        // quarter-step terrain costs the danger zone compares against.
+        // The permanent ramp is stored as a reciprocal so balance can try
+        // fractions like 1/6 or 1/7 without decimal drift.
         enemySpeedBonus:
-          Math.round((played.enemySpeedBonus + mode.permanent) * 10) / 10,
+          played.enemySpeedBonus + 1 / mode.permanentReciprocal,
         enemySpeedThisTurn: played.enemySpeedThisTurn + mode.thisTurn,
       });
     }
@@ -578,6 +584,8 @@ export function resolveMoveTo(state: GameState, to: HexCoord): Transition {
           mode.terrain,
           movementTileAt(state),
           mode.distance,
+          state.walls,
+          state.anyTerrainTurns > 0,
         );
   const destination = path[path.length - 1];
   const distance =
@@ -624,6 +632,7 @@ export function cancelPending(state: GameState): Transition {
     case "pending-search":
     case "pending-remove":
     case "pending-gain":
+    case "pending-consumable":
     case "shop":
     case "smith":
     case "game-over":
@@ -656,6 +665,7 @@ export function startTurn(state: GameState): GameState {
     rng: drawn.rng,
     stats: countDrawn(state.stats, drawn.drawn),
     terrainTrivialTurns: Math.max(0, state.terrainTrivialTurns - 1),
+    anyTerrainTurns: Math.max(0, state.anyTerrainTurns - 1),
     enemySpeedThisTurn: 0,
     turnState: {
       cardsPlayedThisTurn: 0,

@@ -193,7 +193,7 @@ function cardBadges(card: Card): HTMLElement | null {
 .card .card-badges {
   position: absolute;
   top: 2px;
-  right: 2px;
+  right: -4px;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -201,10 +201,24 @@ function cardBadges(card: Card): HTMLElement | null {
 }
 ```
 
+Every badge shares one `.card-badge` class for its shape (flex row, padding, white
+bold text, 12px icon); the only per-kind rule is the background colour, set by a
+modifier class (`card-plays-first`, `card-indestructible`, `card-shy`,
+`card-sleeping`, `card-temporary`).
+
 Badge icons are small SVGs from `src/images/card-icons/` (`plays-first.svg`,
-`indestructible.svg`, `temporary.svg`, …). Each trait badge tints per rule; the sleep
-and temporary badges keep their existing colours. Blank placeholder SVGs are committed
-as-is for an artist to fill in.
+`indestructible.svg`, `shy.svg`, `temporary.svg`, …). Each trait badge tints per rule;
+the sleep and temporary badges keep their existing colours. Blank placeholder SVGs are
+committed as-is for an artist to fill in.
+
+Escalation's mode symbol uses two icons: `escalate-temp.svg` for the one-turn speed
+ramp and `escalate.svg` for the permanent one. The permanent value is drawn as a
+stacked fraction (`.card-fraction`, e.g. 1/5) rather than `1/5` inline, to save
+horizontal space. The hover tooltip gives each ramp its own row, so the two are
+explained separately.
+
+The tooltip lists a card's own icons first (its modes, then its play/discard
+effects), then a horizontal rule, then one row per trait explaining the badges.
 
 ## 5. Draw and discard piles
 

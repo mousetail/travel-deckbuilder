@@ -154,6 +154,60 @@ button {
   padding: 18px 28px;
 }
 
+/* The held-consumable strip down the left centre edge. It sits above the modal
+   overlays so a consumable can still be used with a shop or pickup open. */
+.hud-consumables {
+  grid-column: 1;
+  grid-row: 1;
+  justify-self: start;
+  align-self: center;
+  display: grid;
+  gap: 8px;
+  pointer-events: auto;
+}
+
+.consumable-slot {
+  position: relative;
+  display: grid;
+}
+
+.consumable-button {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  padding: 4px;
+}
+
+.consumable-icon {
+  width: 32px;
+  height: 32px;
+  image-rendering: pixelated;
+}
+
+.consumable-tooltip {
+  display: none;
+  position: absolute;
+  left: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+  width: 200px;
+  padding: 8px;
+  background: var(--ui-bg);
+  color: var(--ui-fg);
+  border: var(--ui-border) solid var(--ui-fg);
+  z-index: 2;
+}
+
+.consumable-slot:hover .consumable-tooltip {
+  display: grid;
+  gap: 4px;
+}
+
+.consumable-tooltip-name {
+  font-weight: bold;
+}
+
 /* The player is standing in an enemy's danger zone: outline the button red so
    ending the turn here reads as the fatal choice it is. */
 .hud-button.danger {
@@ -422,70 +476,46 @@ button {
   }
 
   /* The badge column pinned to the top-right corner: trait badges first, then
-     the sleep counter and the temporary-upgrade sigil, stacked so several can
-     sit on one card without overlapping. */
+     the sleep counter and the temporary-upgrade sigil. They hang a little past
+     the card's right edge and keep a small gap so several stay readable. */
   & .card-badges {
     position: absolute;
     top: 2px;
-    right: 2px;
+    right: -4px;
     z-index: 2;
     display: flex;
     flex-direction: column;
     align-items: flex-end;
-    gap: 2px;
+    gap: 6px;
   }
 
-  /* A sleeping card's reshuffles-left counter. */
-  & .card-sleeping {
+  /* A badge: the shared shape for trait badges, the sleep counter, and the
+     temporary-upgrade sigil. Only the background colour differs. */
+  & .card-badge {
     display: flex;
     align-items: center;
     gap: 2px;
     padding: 1px 3px;
     font-size: 10px;
     font-weight: bold;
+    color: #fff;
+    height: 20px;
+    background: #7b7bbb;
+    box-shadow: -3px 3px 0 0 #888, 0 3px #888;
+
+    & .card-symbol-icon {
+      width: 16px;
+      height: 16px;
+    }
+  }
+
+  /* The sleep counter and the temporary-upgrade sigil. */
+  & .card-sleeping {
     background: #00c;
-    color: #fff;
-
-    & .card-symbol-icon {
-      width: 10px;
-      height: 10px;
-    }
   }
 
-  /* The sigil marking a temporary upgrade. */
   & .card-temporary {
-    display: flex;
-    align-items: center;
-    padding: 1px 3px;
     background: #a0f;
-    color: #fff;
-
-    & .card-symbol-icon {
-      width: 10px;
-      height: 10px;
-    }
-  }
-
-  /* A trait badge: the same shape as the other badges, tinted per rule. */
-  & .card-plays-first,
-  & .card-indestructible {
-    display: flex;
-    align-items: center;
-    padding: 1px 3px;
-    color: #fff;
-
-    & .card-symbol-icon {
-      width: 10px;
-      height: 10px;
-    }
-  }
-
-  & .card-plays-first {
-    background: #c60;
-  }
-
-  & .card-indestructible {
-    background: #070;
   }
 }
 
@@ -517,6 +547,12 @@ button {
   gap: 6px;
 }
 
+/* Divides a card's own icons from its trait explanations. */
+.card-tooltip-separator {
+  border-top: 1px solid #000;
+  opacity: 0.35;
+}
+
 .card-tooltip-symbol {
   display: flex;
   align-items: center;
@@ -526,6 +562,27 @@ button {
   & .card-symbol-icon {
     width: 16px;
     height: 16px;
+  }
+}
+
+/* A stacked fraction (numerator over denominator), used where a value like 1/7
+   must fit a narrow space. */
+.card-fraction {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  font-size: 9px;
+  font-weight: bold;
+
+  & .card-fraction-numerator {
+    padding: 0 2px;
+    border-bottom: 1px solid currentColor;
+  }
+
+  & .card-fraction-denominator {
+    padding: 0 2px;
   }
 }
 
@@ -626,6 +683,27 @@ button {
 /* A standalone action button that spans the whole overlay width. */
 .feature-button {
   width: 100%;
+}
+
+/* A consumable offered by the pickup space: an icon, its name and its effect. */
+.consumable-choice {
+  display: grid;
+}
+
+.consumable-choice-button {
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+  width: 160px;
+  padding: 12px;
+}
+
+.consumable-choice-name {
+  font-weight: bold;
+}
+
+.consumable-choice-text {
+  text-align: center;
 }
 
 .feature-text {
@@ -859,6 +937,18 @@ button {
   pointer-events: none;
 }
 
+/* The mimic decoy: a dashed, greyed copy of the player marker. */
+.mimic-marker {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 22px;
+  height: 22px;
+  background: #bbb;
+  border: 3px dashed #000;
+  pointer-events: none;
+}
+
 .enemy {
   position: absolute;
   top: 0;
@@ -954,6 +1044,16 @@ button {
   & line,
   & .outline-inner {
     stroke: #f00;
+  }
+}
+
+/* A barricade wall, drawn on the hex edges it blocks. */
+.outline-wall {
+  z-index: 4;
+
+  & line {
+    stroke: #ffd700;
+    stroke-width: 5;
   }
 }
 

@@ -2,6 +2,7 @@ import {
   AXIAL_DIRECTIONS,
   HEX_SIZE,
   addHex,
+  equalsHex,
   hexKey,
   hexToPixel,
   parseHexKey,
@@ -16,6 +17,7 @@ import { FOG_DEPTH } from "../game/fog";
 import type { FogEdge } from "../game/fog";
 import type { HoverPath } from "../game/reach";
 import type { Mover } from "../game/transition";
+import type { WallEdge } from "../game/walls";
 import arrowUrl from "../images/arrow.svg";
 import targetUrl from "../images/terrain-icons/target.png";
 import { setChildren } from "./dom";
@@ -53,6 +55,10 @@ export type MapViewState = {
   activeHighlight: string | null;
   /** Enemies that clicking would kill right now, so the cursor shows a reticle. */
   killable: ReadonlySet<string>;
+  /** Directed hex edges blocked by a wall. */
+  walls: readonly WallEdge[];
+  /** The mimic's tile, or null while none is placed. */
+  mimic: HexCoord | null;
 };
 
 export type Point = { x: number; y: number };
@@ -290,6 +296,65 @@ function insetOutlineLoops(
 }
 
 /** The outline of `hexes` as one SVG, or null when there is nothing to draw. */
+/** The world-pixel segment of a directed wall edge, or null if not adjacent. */
+function wallSegment(edge: WallEdge): { a: Point; b: Point } | null {
+  const direction = AXIAL_DIRECTIONS.findIndex((dir) =>
+    equalsHex(addHex(edge.from, dir), edge.to),
+  );
+  if (direction === -1) {
+    return null;
+  }
+  const corners = hexCorners(hexToPixel(edge.from));
+  const side = (1 - direction + 6) % 6;
+  const a = corners[side];
+  const b = corners[(side + 1) % 6];
+  if (a === undefined || b === undefined) {
+    return null;
+  }
+  return { a, b };
+}
+
+/** Every wall drawn as a thick line on the hex edge it blocks. */
+function wallsSvg(walls: readonly WallEdge[]): SVGSVGElement | null {
+  const segments: { a: Point; b: Point }[] = [];
+  for (const edge of walls) {
+    const segment = wallSegment(edge);
+    if (segment !== null) {
+      segments.push(segment);
+    }
+  }
+  if (segments.length === 0) {
+    return null;
+  }
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const segment of segments) {
+    minX = Math.min(minX, segment.a.x, segment.b.x);
+    maxX = Math.max(maxX, segment.a.x, segment.b.x);
+    minY = Math.min(minY, segment.a.y, segment.b.y);
+    maxY = Math.max(maxY, segment.a.y, segment.b.y);
+  }
+  minX -= OUTLINE_PAD;
+  minY -= OUTLINE_PAD;
+  maxX += OUTLINE_PAD;
+  maxY += OUTLINE_PAD;
+  const svg = positionedSvg(minX, minY, maxX - minX, maxY - minY, [
+    "map-outline",
+    "outline-wall",
+  ]);
+  for (const segment of segments) {
+    const line = document.createElementNS(SVG_NS, "line");
+    line.setAttribute("x1", `${segment.a.x - minX}`);
+    line.setAttribute("y1", `${segment.a.y - minY}`);
+    line.setAttribute("x2", `${segment.b.x - minX}`);
+    line.setAttribute("y2", `${segment.b.y - minY}`);
+    svg.append(line);
+  }
+  return svg;
+}
+
 function outlineSvg(
   hexes: ReadonlySet<string>,
   className: string,
@@ -580,6 +645,15 @@ export class MapView {
       nodes.push(...this.fogArrows(view.fogEdge));
     }
 
+    const visibleWalls = view.walls.filter(
+      (edge) =>
+        view.tiles.has(hexKey(edge.from)) && view.tiles.has(hexKey(edge.to)),
+    );
+    const walls = wallsSvg(visibleWalls);
+    if (walls !== null) {
+      nodes.push(walls);
+    }
+
     this.dangerOutline = outlineSvg(
       this.visibleHexes(view.danger, view.tiles),
       "outline-danger",
@@ -621,6 +695,9 @@ export class MapView {
     }
     this.enemyDanger = new Map(view.enemyDanger);
     this.killable = view.killable;
+    if (view.mimic !== null && view.tiles.has(hexKey(view.mimic))) {
+      nodes.push(this.mimicElement(view.mimic));
+    }
     this.playerNode = this.markerElement(view.player);
     nodes.push(this.playerNode);
 
@@ -843,6 +920,13 @@ export class MapView {
     const element = document.createElement("div");
     element.classList.add("player-marker");
     this.place(element, hexToPixel(player));
+    return element;
+  }
+
+  private mimicElement(mimic: HexCoord): HTMLElement {
+    const element = document.createElement("div");
+    element.classList.add("mimic-marker");
+    this.place(element, hexToPixel(mimic));
     return element;
   }
 

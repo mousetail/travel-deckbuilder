@@ -1,4 +1,5 @@
 import type { Card, IdFactory } from "./cards";
+import type { Consumable } from "./consumables";
 import type { Deck } from "./deck";
 import type { HexCoord } from "./hex";
 import type { Tile } from "./terrain";
@@ -6,6 +7,7 @@ import type { Enemy } from "./enemies";
 import type { SectionRecord, MapCursor } from "./map";
 import type { Rng } from "./rng";
 import type { RunStats } from "./stats";
+import type { WallEdge } from "./walls";
 
 export type { Deck };
 
@@ -37,6 +39,7 @@ export type Phase =
   | { kind: "pending-search"; count: number }
   | { kind: "pending-remove" }
   | { kind: "pending-gain"; card: Card | null }
+  | { kind: "pending-consumable"; options: readonly Consumable[]; position: HexCoord }
   | { kind: "shop"; stock: readonly (Card | null)[]; rerollCost: number }
   | { kind: "smith" }
   | { kind: "game-over"; reason: GameOverReason };
@@ -78,6 +81,11 @@ export type Anomaly =
       blockedByPeers: boolean;
     };
 
+/** The decoy a Mimic consumable leaves behind. */
+export type Mimic =
+  | { kind: "none" }
+  | { kind: "placed"; position: HexCoord };
+
 /** Per-turn bookkeeping, reset at the start of every turn. */
 export type TurnState = {
   cardsPlayedThisTurn: number;
@@ -112,6 +120,16 @@ export type GameState = {
   enemySpeedBonus: number;
   /** Extra enemy movement granted by Escalation for this turn only. */
   enemySpeedThisTurn: number;
+  /** At most three held consumables, used from the left-edge strip. */
+  consumables: readonly Consumable[];
+  /** The decoy enemies may chase instead of the player. */
+  mimic: Mimic;
+  /** Enemies that skip their movement on the next enemy phase. */
+  frozenEnemyIds: readonly string[];
+  /** Turns left (including this one) that cards cross any non-impassible terrain. */
+  anyTerrainTurns: number;
+  /** Directed hex edges that block movement and line of sight. */
+  walls: readonly WallEdge[];
   /** Odd events seen this run, for the end-of-run report. */
   anomalies: readonly Anomaly[];
 };

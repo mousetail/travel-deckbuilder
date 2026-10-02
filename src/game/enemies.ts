@@ -17,6 +17,8 @@ import type { Anomaly, GameState, MapIndex } from "./state";
 import type { EnemyKind, Terrain, Tile } from "./terrain";
 import { moving } from "./transition";
 import type { MovePath, Transition } from "./transition";
+import { lineOfSightBlocked, wallBlocks } from "./walls";
+import type { WallEdge } from "./walls";
 
 export type Assassin = {
   kind: "assassin";
@@ -259,8 +261,9 @@ export function chase(
   tiles: ReadonlyMap<string, Tile>,
   maxDistance: number,
   peers: readonly HexCoord[],
+  walls: readonly WallEdge[],
 ): ChaseResult {
-  const costAt = terrainCostAt(tiles, from);
+  const costAt = terrainCostAt(tiles, from, walls);
   const toPlayer = findPathByCost(from, player, costAt);
   if (toPlayer !== null && toPlayer.cost <= movement) {
     return {
@@ -297,6 +300,21 @@ export function chase(
 }
 
 /**
+ * The hex a chaser heads for: the mimic when it is nearer than the player, so a
+ * placed decoy draws enemies away.
+ */
+function mimicTarget(
+  from: HexCoord,
+  player: HexCoord,
+  mimic: HexCoord | null,
+): HexCoord {
+  if (mimic !== null && hexDistance(from, mimic) < hexDistance(from, player)) {
+    return mimic;
+  }
+  return player;
+}
+
+/**
  * One assassin's move. If it can reach the player this turn the player dies;
  * otherwise it chases the spot nearest the player that is clear of its peers.
  * It never ends its move within `ASSASSIN_SPACING` of a peer.
@@ -308,18 +326,23 @@ export function takeAssassinTurn(
   maxDistance: number,
   peers: readonly HexCoord[],
   speedBonus: number,
+  walls: readonly WallEdge[],
+  mimic: HexCoord | null,
 ): AssassinTurn {
+  const target = mimicTarget(assassin.position, player, mimic);
   const result = chase(
     assassin.position,
     assassin.movement + speedBonus,
-    player,
+    target,
     tiles,
     maxDistance,
     peers,
+    walls,
   );
   return {
     assassin: { ...assassin, position: result.position },
-    killedPlayer: result.killedPlayer,
+    // Reaching the mimic is harmless; only reaching the player is fatal.
+    killedPlayer: result.killedPlayer && equalsHex(target, player),
     path: result.path,
     blockedByPeers: result.blockedByPeers,
   };
@@ -410,19 +433,25 @@ export function sniperLine(
   position: HexCoord,
   direction: number,
   tiles: ReadonlyMap<string, Tile>,
+  walls: readonly WallEdge[],
 ): HexCoord[] {
   const step = AXIAL_DIRECTIONS[direction];
   if (step === undefined) {
     return [];
   }
   const line: HexCoord[] = [];
+  let previous = position;
   let coord = addHex(position, step);
   while (true) {
     const tile = tiles.get(hexKey(coord));
     if (tile === undefined || tile.terrain === "impassible") {
       break;
     }
+    if (wallBlocks(walls, previous, coord)) {
+      break;
+    }
     line.push(coord);
+    previous = coord;
     coord = addHex(coord, step);
   }
   return line;
@@ -433,13 +462,14 @@ export function sniperKills(
   sniper: Sniper,
   player: HexCoord,
   tiles: ReadonlyMap<string, Tile>,
+  walls: readonly WallEdge[],
 ): boolean {
   // Ranged only: the line starts one hex out, so a player sharing the sniper's
   // own hex is never hit.
   if (sniper.aim === null || equalsHex(sniper.position, player)) {
     return false;
   }
-  return sniperLine(sniper.position, sniper.aim, tiles).some((coord) =>
+  return sniperLine(sniper.position, sniper.aim, tiles, walls).some((coord) =>
     equalsHex(coord, player),
   );
 }
@@ -503,8 +533,9 @@ function sniperMove(
   doomed: number,
   orderAt: (coord: HexCoord) => number,
   speedBonus: number,
+  walls: readonly WallEdge[],
 ): { position: HexCoord; path: HexCoord[] } {
-  const costAt = terrainCostAt(tiles, sniper.position);
+  const costAt = terrainCostAt(tiles, sniper.position, walls);
   const reachable = hexesWithinCost(
     sniper.position,
     sniper.movement + speedBonus,
@@ -541,6 +572,7 @@ function aimAt(
   sniper: Sniper,
   player: HexCoord,
   tiles: ReadonlyMap<string, Tile>,
+  walls: readonly WallEdge[],
 ): number {
   const dq = player.q - sniper.position.q;
   const dr = player.r - sniper.position.r;
@@ -560,7 +592,7 @@ function aimAt(
   let best = candidates[0];
   let bestLength = -1;
   for (const d of candidates) {
-    const length = sniperLine(sniper.position, d, tiles).length;
+    const length = sniperLine(sniper.position, d, tiles, walls).length;
     if (length > bestLength) {
       bestLength = length;
       best = d;
@@ -580,9 +612,12 @@ export function enemiesInRange(
   enemies: readonly Enemy[],
   origin: HexCoord,
   range: number,
+  walls: readonly WallEdge[],
 ): Enemy[] {
   return enemies.filter(
-    (enemy) => hexDistance(enemy.position, origin) <= range,
+    (enemy) =>
+      hexDistance(enemy.position, origin) <= range &&
+      !lineOfSightBlocked(walls, origin, enemy.position),
   );
 }
 
@@ -625,9 +660,13 @@ export function bountyFor(enemy: Enemy): number {
 export function terrainCostAt(
   tiles: ReadonlyMap<string, Tile>,
   start: HexCoord,
+  walls: readonly WallEdge[],
 ): StepCost {
   const startKey = hexKey(start);
   return (from, to) => {
+    if (wallBlocks(walls, from, to)) {
+      return Infinity;
+    }
     const tile = tiles.get(hexKey(to));
     if (tile === undefined) {
       return Infinity;
@@ -660,15 +699,24 @@ function enemyDanger(
   sightTiles: ReadonlyMap<string, Tile>,
   moveTiles: ReadonlyMap<string, Tile>,
   speedBonus: number,
+  walls: readonly WallEdge[],
+  mimic: HexCoord | null,
 ): Set<string> {
   const zone = new Set<string>();
   if (enemy.kind === "watchtower") {
     for (const coord of hexesInRange(enemy.position, enemy.radius)) {
-      zone.add(hexKey(coord));
+      if (!lineOfSightBlocked(walls, enemy.position, coord)) {
+        zone.add(hexKey(coord));
+      }
     }
   } else if (enemy.kind === "sniper") {
     if (enemy.aim !== null) {
-      for (const coord of sniperLine(enemy.position, enemy.aim, sightTiles)) {
+      for (const coord of sniperLine(
+        enemy.position,
+        enemy.aim,
+        sightTiles,
+        walls,
+      )) {
         zone.add(hexKey(coord));
       }
     }
@@ -676,8 +724,17 @@ function enemyDanger(
     for (const coord of hexesWithinCost(
       enemy.position,
       enemy.movement + speedBonus,
-      terrainCostAt(moveTiles, enemy.position),
+      terrainCostAt(moveTiles, enemy.position, walls),
     )) {
+      // A mimic draws the assassin away from any hex it is nearer to than the
+      // player would be, so only hexes at least as close to the assassin as the
+      // mimic are fatal: standing there, the player is the nearer target.
+      if (
+        mimic !== null &&
+        hexDistance(enemy.position, coord) > hexDistance(enemy.position, mimic)
+      ) {
+        continue;
+      }
       zone.add(hexKey(coord));
     }
   }
@@ -696,6 +753,7 @@ function enemyDanger(
 export function enemyDangerZones(state: GameState): Map<string, Set<string>> {
   const visible = visibleMap(state);
   const fogOrder = state.playerSectionOrder + 1;
+  const mimic = state.mimic.kind === "placed" ? state.mimic.position : null;
   const zones = new Map<string, Set<string>>();
   for (const enemy of state.enemies) {
     const awake = visible.tiles.has(hexKey(enemy.position));
@@ -708,6 +766,8 @@ export function enemyDangerZones(state: GameState): Map<string, Set<string>> {
       state.map.tiles,
       awake ? visible.tiles : state.map.tiles,
       enemySpeedBonusFor(state, enemy),
+      state.walls,
+      mimic,
     );
     if (!awake) {
       const wakes =
@@ -847,6 +907,8 @@ export function resolveEnemyPhase(
   // only put it back to sleep.
   const visible = visibleMap(state).tiles;
   const awake = (enemy: Enemy): boolean => visible.has(hexKey(enemy.position));
+  const frozen = new Set(state.frozenEnemyIds);
+  const mimic = state.mimic.kind === "placed" ? state.mimic.position : null;
 
   // Watchtowers fire first: ending your turn in their radius is fatal.
   for (const enemy of enemies) {
@@ -878,7 +940,7 @@ export function resolveEnemyPhase(
     if (enemy.kind !== "sniper" || !awake(enemy)) {
       continue;
     }
-    if (sniperKills(enemy, state.map.player, state.map.tiles)) {
+    if (sniperKills(enemy, state.map.player, state.map.tiles, state.walls)) {
       return deathTransition(
         state,
         enemies,
@@ -889,7 +951,8 @@ export function resolveEnemyPhase(
       );
     }
     let sniper = enemy;
-    if (alreadyIds.has(enemy.id)) {
+    // A frozen sniper still fires and re-aims, but does not move.
+    if (alreadyIds.has(enemy.id) && !frozen.has(enemy.id)) {
       const peers = enemies
         .filter((e) => e.id !== enemy.id)
         .map((e) => e.position);
@@ -901,6 +964,7 @@ export function resolveEnemyPhase(
         doomed,
         orderAt,
         enemySpeedBonusFor(state, sniper),
+        state.walls,
       );
       if (result.path.length > 1) {
         moves.push({
@@ -912,7 +976,7 @@ export function resolveEnemyPhase(
     }
     sniper = {
       ...sniper,
-      aim: aimAt(sniper, state.map.player, state.map.tiles),
+      aim: aimAt(sniper, state.map.player, state.map.tiles, state.walls),
     };
     enemies = enemies.map((e) => (e.id === sniper.id ? sniper : e));
   }
@@ -922,6 +986,10 @@ export function resolveEnemyPhase(
   // player always gets one turn's warning before it can strike.
   for (const enemy of alreadyHere) {
     if (enemy.kind !== "assassin" || !awake(enemy)) {
+      continue;
+    }
+    // A frozen assassin cannot move, and cannot attack without moving.
+    if (frozen.has(enemy.id)) {
       continue;
     }
     const peers = enemies
@@ -934,6 +1002,8 @@ export function resolveEnemyPhase(
       maxDistance,
       peers,
       enemySpeedBonusFor(state, enemy),
+      state.walls,
+      mimic,
     );
     if (turn.path.length > 1) {
       moves.push({ mover: { kind: "enemy", id: enemy.id }, path: turn.path });
@@ -953,5 +1023,5 @@ export function resolveEnemyPhase(
     }
   }
 
-  return moving({ ...state, enemies, anomalies }, moves);
+  return moving({ ...state, enemies, anomalies, frozenEnemyIds: [] }, moves);
 }

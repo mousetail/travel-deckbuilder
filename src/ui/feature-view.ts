@@ -1,6 +1,8 @@
 import type { Card, CardSpec } from "../game/cards";
 import { allCards } from "../game/deck";
 import { instantiate, isIndestructible } from "../game/cards";
+import { CONSUMABLE_CAPACITY } from "../game/consumables";
+import type { Consumable } from "../game/consumables";
 import type { FeatureAction } from "../game/economy";
 import type { GameState } from "../game/state";
 import { COIN_ICON } from "./card-icons";
@@ -69,6 +71,8 @@ export class FeatureView {
       }
       case "pending-gain":
         return [this.giftPanel(phase.card)];
+      case "pending-consumable":
+        return [this.consumablePanel(state, phase.options)];
       case "game-over": {
         const main = gameOverPanel(
           phase.reason,
@@ -325,6 +329,57 @@ export class FeatureView {
       }),
     ];
     return this.confirmElement(nodes);
+  }
+
+  /** The pickup space: two rolled consumables, or a skip. Taking is disabled
+   * while the player already holds three, but the offer is still shown. */
+  private consumablePanel(
+    state: GameState,
+    options: readonly Consumable[],
+  ): HTMLElement {
+    const full = state.consumables.length >= CONSUMABLE_CAPACITY;
+    const nodes: Node[] = [this.title("Take a consumable")];
+    nodes.push(
+      this.cardsContainer(
+        options.map((consumable) =>
+          this.consumableChoice(consumable, full, () =>
+            this.onAction({ kind: "take-consumable", consumable }),
+          ),
+        ),
+      ),
+    );
+    nodes.push(
+      this.button("Skip", false, () => this.onAction({ kind: "leave" })),
+    );
+    return this.panelElement(nodes);
+  }
+
+  private consumableChoice(
+    consumable: Consumable,
+    disabled: boolean,
+    onChoose: () => void,
+  ): HTMLElement {
+    const wrapper = document.createElement("div");
+    wrapper.classList.add("consumable-choice");
+    const button = document.createElement("button");
+    button.classList.add("consumable-choice-button");
+    const icon = document.createElement("img");
+    icon.classList.add("consumable-icon");
+    icon.src = consumable.spec.icon;
+    icon.alt = "";
+    const name = document.createElement("div");
+    name.classList.add("consumable-choice-name");
+    name.textContent = consumable.spec.name;
+    const description = document.createElement("div");
+    description.classList.add("consumable-choice-text");
+    description.textContent = consumable.spec.description;
+    setChildren(button, [icon, name, description]);
+    button.disabled = disabled;
+    if (!disabled) {
+      button.addEventListener("click", onChoose);
+    }
+    setChildren(wrapper, [button]);
+    return wrapper;
   }
 
   private giftPanel(card: Card | null): HTMLElement {

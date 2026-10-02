@@ -92,6 +92,11 @@ function endTurnLabel(action: EndTurnAction): Node[] {
             ...endTurnPrefix(action.bonus),
             text(action.feature.card === null ? " & Enter" : " & Take a card"),
           ];
+        case "consumable":
+          return [
+            ...endTurnPrefix(action.bonus),
+            text(" & Take a consumable"),
+          ];
         case "coin":
           return [...endTurnPrefix(action.bonus), text(" & Collect coin")];
         case "none":
@@ -148,6 +153,7 @@ function hintFor(state: GameState): string {
       return "Click a card or reachable tile · right-click to discard";
     case "pending-remove":
     case "pending-gain":
+    case "pending-consumable":
     case "shop":
     case "smith":
     case "game-over":

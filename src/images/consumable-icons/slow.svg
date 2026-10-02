@@ -5,7 +5,7 @@
    viewBox="0 0 16 16"
    version="1.1"
    id="svg1"
-   sodipodi:docname="plays-first.svg"
+   sodipodi:docname="slow.svg"
    inkscape:version="1.4.4 (dcaf3e7d9e, 2026-05-05)"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
    xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
@@ -23,8 +23,8 @@
      inkscape:pagecheckerboard="0"
      inkscape:deskcolor="#d1d1d1"
      inkscape:zoom="51.3125"
-     inkscape:cx="6.9671133"
-     inkscape:cy="6.2850183"
+     inkscape:cx="9.2472594"
+     inkscape:cy="7.1425091"
      inkscape:window-width="1920"
      inkscape:window-height="1008"
      inkscape:window-x="0"
@@ -33,7 +33,7 @@
      inkscape:current-layer="svg1" />
   <!-- Blank placeholder: temporary-upgrade sigil. An artist will fill this in. -->
   <path
-     style="fill:#eb0000;fill-opacity:1;stroke:#000000;stroke-width:1.0941;stroke-miterlimit:10;stroke-dasharray:none;stroke-opacity:1"
-     d="M 8.8274237,0.71433903 3.7631244,5.7786383 H 6.7531166 V 13.122807 H 4.5293099 v 2.092994 H 11.443667 V 12.898557 H 9.5936092 V 0.67696412 Z"
-     id="path6" />
+     style="fill:#00ebdb;fill-opacity:1;stroke:#000000;stroke-width:1.141;stroke-miterlimit:10"
+     d="m 6.2362972,1.8124239 3.546894,-0.019489 V 7.9512784 H 14.421437 L 7.7661389,14.606577 1.6175396,8.4579781 h 4.3848965 z"
+     id="path2" />
 </svg>

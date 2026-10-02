@@ -62,6 +62,7 @@ export const FEATURE_BY_CHAR: Record<string, TileFeature> = {
   R: { kind: "remove-card" },
   G: { kind: "gain-card", card: null },
   c: { kind: "coin", value: 3 },
+  C: { kind: "consumable" },
   // Random upgrades roll one of their options when the section is placed.
   "1": {
     kind: "random",
@@ -79,7 +80,7 @@ export const FEATURE_BY_CHAR: Record<string, TileFeature> = {
   "3": {
     kind: "random",
     tier: "rare",
-    options: [{ kind: "remove-card" }],
+    options: [{ kind: "remove-card" }, { kind: "consumable" }],
   },
 };
 

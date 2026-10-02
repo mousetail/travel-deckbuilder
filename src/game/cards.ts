@@ -24,7 +24,7 @@ export type CardMode =
   | { kind: "search"; count: number }
   | { kind: "trivial-terrain"; turns: number }
   | { kind: "upgrade-hand" }
-  | { kind: "escalate"; thisTurn: number; permanent: number };
+  | { kind: "escalate"; thisTurn: number; permanentReciprocal: number };
 
 /**
  * A side effect that fires as part of a card's action. Sleeping is an effect of
@@ -49,8 +49,11 @@ export type Rarity = "starting" | "common" | "uncommon" | "rare";
  *   and this card can never be discarded.
  * - `indestructible`: the card can never be destroyed (removed from the deck)
  *   or put to sleep.
+ * - `shy`: whenever the deck is shuffled, this card sinks to the bottom, so it
+ *   is the last card drawn. This covers the opening deal as well as every
+ *   reshuffle.
  */
-export type CardTrait = "must-play-first" | "indestructible";
+export type CardTrait = "must-play-first" | "indestructible" | "shy";
 
 /**
  * Shop/gift draw weights, kept next to `Rarity`. `starting` is 0 so a starting
@@ -161,6 +164,11 @@ export function mustPlayFirst(card: Card): boolean {
 /** A card that can never be destroyed (removed) or put to sleep. */
 export function isIndestructible(card: Card): boolean {
   return hasTrait(card, "indestructible");
+}
+
+/** A card that always sinks to the bottom of the draw pile when reshuffled. */
+export function isShy(card: Card): boolean {
+  return hasTrait(card, "shy");
 }
 
 /** Whether a must-play-first card in `hand` blocks playing `card` right now. */
@@ -286,12 +294,12 @@ const ESCALATION_SPEC: CardSpec = withTraits(
     "Escalation",
     "starting",
     0,
-    [{ kind: "escalate", thisTurn: 1, permanent: 0.2 }],
+    [{ kind: "escalate", thisTurn: 1, permanentReciprocal: 7 }],
     [],
     [],
     null,
   ),
-  ["must-play-first", "indestructible"],
+  ["must-play-first", "indestructible", "shy"],
 );
 
 export const STARTING_DECK: readonly CardSpec[] = [

@@ -1,5 +1,10 @@
 import type { Card } from "./cards";
 import { SHOP_CATALOGUE, instantiate, isIndestructible } from "./cards";
+import {
+  CONSUMABLE_CAPACITY,
+  rollConsumableOptions,
+} from "./consumables";
+import type { Consumable } from "./consumables";
 import { gainCurrency, spendCurrency } from "./currency";
 import type { Deck } from "./deck";
 import { addPurchase, allCards, deckSize } from "./deck";
@@ -141,6 +146,21 @@ export function useFeature(state: GameState): Transition {
         phase: { kind: "pending-gain", card: feature.card },
       });
     }
+    case "consumable": {
+      // The window opens even when the player holds three, so they can see the
+      // offer and use a consumable to make room.
+      const opened = takeSkipBonus(site);
+      const rolled = rollConsumableOptions(2, opened.rng, opened.ids);
+      return still({
+        ...opened,
+        rng: rolled.rng,
+        phase: {
+          kind: "pending-consumable",
+          options: rolled.options,
+          position: opened.map.player,
+        },
+      });
+    }
     case "random":
       throw new Error("unresolved random feature");
   }
@@ -254,7 +274,8 @@ export type FeatureAction =
   | { kind: "leave" }
   | { kind: "upgrade"; cardId: string }
   | { kind: "remove"; cardId: string }
-  | { kind: "take-gift" };
+  | { kind: "take-gift" }
+  | { kind: "take-consumable"; consumable: Consumable };
 
 export function applyFeatureAction(
   state: GameState,
@@ -273,6 +294,8 @@ export function applyFeatureAction(
       return chooseRemoveCard(state, action.cardId);
     case "take-gift":
       return takeGift(state);
+    case "take-consumable":
+      return takeConsumable(state, action.consumable);
   }
 }
 
@@ -286,6 +309,7 @@ export function leaveFeature(state: GameState): Transition {
     case "smith":
     case "pending-remove":
     case "pending-gain":
+    case "pending-consumable":
       return finishFeature(state);
     case "playing":
     case "pending-card":
@@ -360,4 +384,23 @@ export function takeGift(state: GameState): Transition {
     ),
   };
   return finishFeature(clearGainCard(withCard, withCard.map.player));
+}
+
+/** Keep one offered consumable, if there is room, and consume the pickup space. */
+export function takeConsumable(
+  state: GameState,
+  consumable: Consumable,
+): Transition {
+  if (state.phase.kind !== "pending-consumable") {
+    return still(state);
+  }
+  if (state.consumables.length >= CONSUMABLE_CAPACITY) {
+    return still(state);
+  }
+  const position = state.phase.position;
+  const withItem: GameState = {
+    ...state,
+    consumables: [...state.consumables, consumable],
+  };
+  return finishFeature(consumeFeatureAt(withItem, position));
 }

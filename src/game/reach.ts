@@ -78,6 +78,8 @@ export function cardReach(state: GameState, card: Card): CardReach {
             mode.distance,
             mode.terrain,
             movementTileAt(state),
+            state.walls,
+            state.anyTerrainTurns > 0,
           ).filter((coord) => !equalsHex(coord, state.map.player)),
         });
         break;
@@ -91,6 +93,7 @@ export function cardReach(state: GameState, card: Card): CardReach {
             visibleEnemies(state),
             state.map.player,
             mode.range,
+            state.walls,
           ),
         });
         break;
@@ -281,7 +284,7 @@ export function hoverPaths(state: GameState, to: HexCoord): HoverPath[] {
     const found = findPathByCost(
       enemy.position,
       to,
-      terrainCostAt(visible, enemy.position),
+      terrainCostAt(visible, enemy.position, state.walls),
     );
     if (
       found === null ||
@@ -313,7 +316,12 @@ function playerPathTo(state: GameState, to: HexCoord): HexCoord[] | null {
   const found = findPathByCost(
     state.map.player,
     to,
-    cardCostAt(mode.terrain, movementTileAt(state)),
+    cardCostAt(
+      mode.terrain,
+      movementTileAt(state),
+      state.walls,
+      state.anyTerrainTurns > 0,
+    ),
   );
   return found === null ? null : found.path;
 }

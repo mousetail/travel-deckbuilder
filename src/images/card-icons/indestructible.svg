@@ -4,7 +4,45 @@
    height="16"
    viewBox="0 0 16 16"
    version="1.1"
-   xmlns="http://www.w3.org/2000/svg">
-  <!-- Blank placeholder: "cannot be destroyed or put to sleep" badge.
-       An artist will fill this in. -->
+   id="svg1"
+   sodipodi:docname="indestructible.svg"
+   inkscape:version="1.4.4 (dcaf3e7d9e, 2026-05-05)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs1">
+    <inkscape:path-effect
+       effect="spiro"
+       id="path-effect6"
+       is_visible="true"
+       lpeversion="1" />
+  </defs>
+  <sodipodi:namedview
+     id="namedview1"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="51.3125"
+     inkscape:cx="7.1425091"
+     inkscape:cy="6.6163216"
+     inkscape:window-width="1920"
+     inkscape:window-height="1008"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg1" />
+  <!-- Blank placeholder: temporary-upgrade sigil. An artist will fill this in. -->
+  <path
+     style="fill:#8d00eb;fill-opacity:1;stroke:#000000;stroke-width:1.141;stroke-miterlimit:10;stroke-dasharray:none;stroke-opacity:1"
+     d="M 1.5980512,2.182704 C 2.2113281,1.4000138 3.1238686,0.84986883 4.108016,0.70785979 5.0921633,0.56585074 6.1364277,0.84288643 6.8989038,1.4811205 7.6077517,2.0744648 8.0497827,2.9442774 8.2454787,3.8477296 8.4411747,4.7511818 8.4061978,5.6904758 8.2825822,6.6065773 8.1229201,7.7898151 7.8175709,8.9524637 7.7155146,10.142055 c -0.1020562,1.189592 0.017754,2.444955 0.6450213,3.460868 0.4023285,0.651605 1.0049757,1.178114 1.7058891,1.486623 0.700914,0.308509 1.497156,0.397245 2.248222,0.247722 0.751066,-0.149523 1.45335,-0.537048 1.978151,-1.094759 0.524801,-0.557711 0.869193,-1.283173 0.966642,-2.042752 C 15.410927,11.018963 14.950839,9.7928409 14.116764,8.9434045 13.282689,8.0939682 12.10272,7.6165088 10.91352,7.5615104 9.6093348,7.5011942 8.3379241,7.9183239 7.0709122,8.2333124 6.4374062,8.3908066 5.7947671,8.5240521 5.1429468,8.5596121 4.4911265,8.5951722 3.8271293,8.530445 3.2155907,8.3020707 2.0656084,7.8726188 1.162286,6.8483992 0.85634328,5.6595816 0.55040052,4.4707639 0.84093579,3.1489672 1.5980512,2.182704 Z"
+     id="path6"
+     inkscape:path-effect="#path-effect6"
+     inkscape:original-d="M 1.5980512,2.182704 C 0.88347544,0.67559886 5.1254568,1.8059277 6.8989038,1.4811205 8.6723508,1.1563134 7.4770604,5.00203 8.2825822,6.6065773 9.0881038,8.2111246 6.1549072,11.875316 8.3605359,13.602923 10.566165,15.330531 15.270521,9.7466503 15.25944,12.199757 15.248359,14.652863 8.4404091,6.2970865 10.91352,7.5615104 13.38663,8.8259343 5.638652,8.1461633 3.2155907,8.3020707 0.79252942,8.4579781 2.3126269,3.6898092 1.5980512,2.182704 Z"
+     sodipodi:nodetypes="ssszzzss" />
 </svg>

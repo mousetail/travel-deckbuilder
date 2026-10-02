@@ -105,12 +105,16 @@ function cardBadges(card: Card): HTMLElement | null {
   return container;
 }
 
+const TRAIT_CLASS: Record<CardTrait, string> = {
+  "must-play-first": "card-plays-first",
+  indestructible: "card-indestructible",
+  shy: "card-shy",
+};
+
 /** The badge for a rule-bending trait, with a title spelling the rule out. */
 function traitBadge(trait: CardTrait): HTMLElement {
   const badge = document.createElement("div");
-  badge.classList.add(
-    trait === "must-play-first" ? "card-plays-first" : "card-indestructible",
-  );
+  badge.classList.add("card-badge", TRAIT_CLASS[trait]);
   badge.title = describeTrait(trait);
   badge.append(...traitSymbolNodes(trait));
   return badge;
@@ -119,7 +123,7 @@ function traitBadge(trait: CardTrait): HTMLElement {
 /** How many reshuffles a sleeping card still has to sit out. */
 function sleepBadge(reshuffles: number): HTMLElement {
   const badge = document.createElement("div");
-  badge.classList.add("card-sleeping");
+  badge.classList.add("card-badge", "card-sleeping");
   badge.append(...sleepNodes(reshuffles));
   return badge;
 }
@@ -127,7 +131,7 @@ function sleepBadge(reshuffles: number): HTMLElement {
 /** The sigil marking an upgrade that only lasts while the card stays in hand. */
 function temporaryBadge(): HTMLElement {
   const badge = document.createElement("div");
-  badge.classList.add("card-temporary");
+  badge.classList.add("card-badge", "card-temporary");
   const icon = document.createElement("img");
   icon.classList.add("card-symbol-icon");
   icon.src = TEMPORARY_ICON;

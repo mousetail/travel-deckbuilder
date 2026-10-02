@@ -4,7 +4,7 @@ import { hexSide } from "./hexagon";
 import { advanceMap, armSection, buildMapIndex } from "./map";
 import type { SectionRecord } from "./map";
 import type { Enemy } from "./enemies";
-import type { GameState, MapIndex } from "./state";
+import type { GameState, MapIndex, Mimic } from "./state";
 import { visitSections } from "./stats";
 import type { Tile } from "./terrain";
 
@@ -323,12 +323,26 @@ export function onPlayerMoved(state: GameState): GameState {
   const enteredIds = state.map.index.sections
     .slice(state.playerSectionOrder + 1, order + 1)
     .map((section) => section.id);
+  // A wall or a mimic only exists while the tiles it sits on are still on the
+  // map; streaming a section away destroys both.
+  const walls = state.walls.filter(
+    (edge) =>
+      streamed.tiles.has(hexKey(edge.from)) &&
+      streamed.tiles.has(hexKey(edge.to)),
+  );
+  const mimic: Mimic =
+    state.mimic.kind === "placed" &&
+    !streamed.tiles.has(hexKey(state.mimic.position))
+      ? { kind: "none" }
+      : state.mimic;
   const advanced: GameState = {
     ...state,
     playerSectionOrder: order,
     stats: visitSections(state.stats, enteredIds),
     map: { ...state.map, tiles: streamed.tiles, index: streamed.index },
     enemies: streamed.enemies,
+    walls,
+    mimic,
   };
   return ensureAhead(advanced);
 }

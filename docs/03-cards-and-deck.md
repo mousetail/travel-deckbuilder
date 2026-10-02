@@ -30,12 +30,12 @@ export type CardMode =
   | { kind: "draw"; count: number }
   | { kind: "recover"; count: number }
   | { kind: "currency"; amount: number }
-  | { kind: "escalate"; thisTurn: number; permanent: number };
+  | { kind: "escalate"; thisTurn: number; permanentReciprocal: number };
 
 export type Rarity = "starting" | "common" | "uncommon" | "rare";
 
 /** A rule-bending property, shown as a badge and enforced by the game. */
-export type CardTrait = "must-play-first" | "indestructible";
+export type CardTrait = "must-play-first" | "indestructible" | "shy";
 
 export type Card = {
   id: string;
@@ -59,7 +59,7 @@ Each mode's meaning:
 | `draw` | Draw `count` cards. |
 | `recover` | Take `count` card(s) from the discard pile into your hand. |
 | `currency` | Gain `amount` currency. |
-| `escalate` | Raise every enemy's movement speed by `thisTurn` this turn and `permanent` permanently. |
+| `escalate` | Raise every enemy's movement speed by `thisTurn` this turn and `1/permanentReciprocal` permanently. |
 
 ## 2. Card specs vs. card instances
 
@@ -110,8 +110,8 @@ const move = (terrain: Terrain, distance: number): CardMode => ({ kind: "move", 
 
 export const STARTING_DECK: readonly CardSpec[] = [
   withTraits(
-    spec("Escalation", "starting", 0, [{ kind: "escalate", thisTurn: 1, permanent: 0.2 }]),
-    ["must-play-first", "indestructible"],
+    spec("Escalation", "starting", 0, [{ kind: "escalate", thisTurn: 1, permanentReciprocal: 5 }]),
+    ["must-play-first", "indestructible", "shy"],
   ),
   spec("Tredge", "starting", 0, [move("grass", 1)]),
   spec("Tredge", "starting", 0, [move("grass", 1)]),
@@ -185,7 +185,7 @@ when `image` is empty.
 ### Card traits
 
 A **trait** is a rule the engine enforces, independent of the card's modes, and it
-is rendered as a badge in the card's top-right corner (chapter 09). Two exist:
+is rendered as a badge in the card's top-right corner (chapter 09). Three exist:
 
 - **`must-play-first`** — while this card is in hand, no other card may be played,
   and it can never be discarded. Backed by `mustPlayFirst(card)` and
@@ -194,8 +194,14 @@ is rendered as a badge in the card's top-right corner (chapter 09). Two exist:
 - **`indestructible`** — the card can never be destroyed (removed from the deck) or
   put to sleep. Backed by `isIndestructible(card)`, and checked by `chooseRemoveCard`
   and the sleep targeting.
+- **`shy`** — whenever the deck is shuffled, this card sinks to the bottom, so it
+  is the last card drawn. This covers the opening deal as well as every reshuffle:
+  the starting hand never contains a shy card while at least a full hand of
+  non-shy cards is available. Backed by `isShy(card)`, and applied by `sinkShy` in
+  `buildDeck`, `recycle`, and `shuffleAll`.
 
-Any card may carry any trait, and traits survive upgrades. `Escalation` carries both.
+Any card may carry any trait, and traits survive upgrades. `Escalation` carries all
+three.
 
 ## 4. Deck zones
 
@@ -217,7 +223,9 @@ export type Deck = {
 
 export function buildDeck(specs: readonly CardSpec[], ids: IdFactory, rng: Rng): Deck {
   const cards = specs.map((s) => instantiate(s, ids()));
-  return { draw: shuffle(cards, rng), hand: [], discard: [] };
+  // Shy cards start at the bottom too, so the opening hand never contains one
+  // while at least a full hand of non-shy cards is available.
+  return { draw: sinkShy(shuffle(cards, rng)), hand: [], discard: [] };
 }
 
 export function shuffle(cards: readonly Card[], rng: Rng): Card[] {

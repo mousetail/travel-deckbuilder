@@ -8,6 +8,7 @@ import { loadSharePreference } from "./ui/share-store";
 import { buildDeck } from "./game/deck";
 import { allCards } from "./game/deck";
 import { counterIds, STARTING_DECK } from "./game/cards";
+import { rollConsumableOptions } from "./game/consumables";
 import { buildMapIndex, generateMap } from "./game/map";
 import { ensureAhead } from "./game/fog";
 import { startingStats } from "./game/stats";
@@ -21,6 +22,7 @@ function startGame(): void {
   const seed = (Math.random() * 1000) | 0;
   const generated = generateMap(seed, 3, 1, ids);
   const deck = buildDeck(STARTING_DECK, ids, generated.cursor.rng);
+  const rolled = rollConsumableOptions(1, generated.cursor.rng, ids);
   const startSection = generated.records[0];
   const startingCurrency = 3;
 
@@ -38,7 +40,7 @@ function startGame(): void {
     playerSectionOrder: 0,
     enemies: generated.enemies,
     phase: { kind: "playing" },
-    rng: generated.cursor.rng,
+    rng: rolled.rng,
     ids,
     turnState: {
       cardsPlayedThisTurn: 0,
@@ -52,6 +54,11 @@ function startGame(): void {
     terrainTrivialTurns: 0,
     enemySpeedBonus: 0,
     enemySpeedThisTurn: 0,
+    consumables: rolled.options,
+    mimic: { kind: "none" },
+    frozenEnemyIds: [],
+    anyTerrainTurns: 0,
+    walls: [],
     anomalies: [],
   };
 

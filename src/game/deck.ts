@@ -2,12 +2,13 @@ import type { Card, IdFactory } from "./cards";
 import {
   applyPlayCostScaling,
   instantiate,
+  isShy,
   revertTemporary,
   sleepOnPlay,
 } from "./cards";
 import type { CardSpec } from "./cards";
 import type { Rng } from "./rng";
-import { nextRng } from "./rng";
+import { nextRng, shuffle as shuffleWithRng } from "./rng";
 
 export type Deck = {
   draw: Card[];
@@ -21,7 +22,9 @@ export function buildDeck(
   rng: Rng,
 ): Deck {
   const cards = specs.map((s) => instantiate(s, ids()));
-  return { draw: shuffle(cards, rng), hand: [], discard: [] };
+  // Shy cards start at the bottom too, so the opening hand never contains one
+  // while at least a full hand of non-shy cards is available.
+  return { draw: sinkShy(shuffle(cards, rng)), hand: [], discard: [] };
 }
 
 export function shuffle(cards: readonly Card[], rng: Rng): Card[] {
@@ -36,6 +39,18 @@ export function shuffle(cards: readonly Card[], rng: Rng): Card[] {
     result[j] = tmp;
   }
   return result;
+}
+
+/**
+ * Move every shy card to the bottom of the draw pile. Cards are drawn from the
+ * end of the array, so the bottom is the front: a shy card is drawn last.
+ */
+function sinkShy(cards: readonly Card[]): Card[] {
+  const shy = cards.filter(isShy);
+  if (shy.length === 0) {
+    return [...cards];
+  }
+  return [...shy, ...cards.filter((card) => !isShy(card))];
 }
 
 export type DeckMutation = { deck: Deck; rng: Rng; drawn: readonly Card[] };
@@ -87,7 +102,7 @@ function recycle(
       stillAsleep.push({ ...card, sleeping: card.sleeping - 1 });
     }
   }
-  return { draw: shuffle(awake, rng), discard: stillAsleep };
+  return { draw: sinkShy(shuffle(awake, rng)), discard: stillAsleep };
 }
 
 export function toDiscard(deck: Deck, cards: readonly Card[]): Deck {
@@ -151,6 +166,23 @@ export function addPurchase(deck: Deck, card: Card): Deck {
 export function drawUpTo(deck: Deck, handSize: number, rng: Rng): DeckMutation {
   const missing = Math.max(0, handSize - deck.hand.length);
   return drawCards(deck, missing, rng);
+}
+
+/**
+ * Reshuffle: merge the draw, hand and discard piles, wake every sleeping card,
+ * shuffle, then draw 4. Used by the Reshuffle consumable.
+ */
+export function shuffleAll(deck: Deck, rng: Rng): DeckMutation {
+  const merged = [...deck.draw, ...deck.hand, ...deck.discard].map((card) => ({
+    ...card,
+    sleeping: 0,
+  }));
+  const shuffled = shuffleWithRng(merged, rng);
+  return drawCards(
+    { draw: sinkShy(shuffled.items), hand: [], discard: [] },
+    4,
+    shuffled.rng,
+  );
 }
 
 /** Every card in the deck, in draw → hand → discard order. */

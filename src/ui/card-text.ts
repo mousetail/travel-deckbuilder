@@ -4,10 +4,13 @@ import { ATTACK_ICON, SLEEP_ICON, TERRAIN_ICON } from "../game/terrain";
 import { setChildren } from "./dom";
 import {
   COIN_ICON,
+  ESCALATE_ICON,
+  ESCALATE_TEMP_ICON,
   INDESTRUCTIBLE_ICON,
   PLAYS_FIRST_ICON,
   SCOUT_ICON,
   SEARCH_ICON,
+  SHY_ICON,
   TELEPORT_ICON,
   UPGRADE_ICON,
   coinIcon,
@@ -26,15 +29,19 @@ export function symbolNodes(card: Card): Node[] {
 }
 
 /**
- * Every tooltip line for a card: one per mode, then one per play/discard
- * effect. Each line draws the same symbol the card shows, then spells it out.
+ * Every tooltip line for a card: one per mode, then one per play/discard effect,
+ * then — after a separator — one per trait. Each line draws the same symbol the
+ * card shows, then spells it out.
  */
 export function cardTooltipRows(card: Card): HTMLElement[] {
-  const rows = card.traits.map((trait) =>
-    tooltipRow(traitSymbolNodes(trait), [text(describeTrait(trait))]),
-  );
+  const rows: HTMLElement[] = [];
   for (const mode of card.modes) {
-    rows.push(tooltipRow(modeSymbolNodes(mode), describeMode(mode)));
+    // Escalation has two separate ramps, so each gets its own icon and line.
+    if (mode.kind === "escalate") {
+      rows.push(...escalateRows(mode));
+    } else {
+      rows.push(tooltipRow(modeSymbolNodes(mode), describeMode(mode)));
+    }
   }
   for (const effect of card.onPlay) {
     rows.push(tooltipRow(effectNodes(effect), [text(describeEffect(effect))]));
@@ -46,7 +53,25 @@ export function cardTooltipRows(card: Card): HTMLElement[] {
       ]),
     );
   }
+  // The card's own icons come first; a rule sets the trait explanations apart.
+  if (card.traits.length > 0) {
+    if (rows.length > 0) {
+      rows.push(tooltipSeparator());
+    }
+    for (const trait of card.traits) {
+      rows.push(
+        tooltipRow(traitSymbolNodes(trait), [text(describeTrait(trait))]),
+      );
+    }
+  }
   return rows;
+}
+
+/** A rule dividing a card's own icons from its trait explanations. */
+function tooltipSeparator(): HTMLElement {
+  const separator = document.createElement("div");
+  separator.classList.add("card-tooltip-separator");
+  return separator;
 }
 
 function tooltipRow(symbolContent: Node[], description: Node[]): HTMLElement {
@@ -94,21 +119,49 @@ function modeSymbolNodes(mode: CardMode): Node[] {
     case "teleport":
       return symbolIcon(TELEPORT_ICON, `${mode.range}`);
     case "escalate":
-      return [text(`+${mode.thisTurn}/${mode.permanent}`)];
+      return [
+        ...symbolIcon(ESCALATE_TEMP_ICON, `${mode.thisTurn}`),
+        ...symbolFractionIcon(ESCALATE_ICON, 1, mode.permanentReciprocal),
+      ];
   }
 }
 
+/** The two tooltip lines for Escalation: the one-turn ramp, then the permanent one. */
+function escalateRows(mode: {
+  thisTurn: number;
+  permanentReciprocal: number;
+}): HTMLElement[] {
+  return [
+    tooltipRow(symbolIcon(ESCALATE_TEMP_ICON, `${mode.thisTurn}`), [
+      text(`Enemies gain +${mode.thisTurn} speed this turn`),
+    ]),
+    tooltipRow(
+      symbolFractionIcon(ESCALATE_ICON, 1, mode.permanentReciprocal),
+      [text(`Enemies gain +1/${mode.permanentReciprocal} speed permanently`)],
+    ),
+  ];
+}
+
+const TRAIT_ICON: Record<CardTrait, string> = {
+  "must-play-first": PLAYS_FIRST_ICON,
+  indestructible: INDESTRUCTIBLE_ICON,
+  shy: SHY_ICON,
+};
+
+const TRAIT_DESCRIPTION: Record<CardTrait, string> = {
+  "must-play-first": "Must be played first",
+  indestructible: "Cannot be destroyed",
+  shy: "Sinks to the bottom of the draw pile",
+};
+
 /** The badge symbol for a card trait, matching the badge on the card face. */
 export function traitSymbolNodes(trait: CardTrait): Node[] {
-  const url = trait === "must-play-first" ? PLAYS_FIRST_ICON : INDESTRUCTIBLE_ICON;
-  return symbolIcon(url, "");
+  return symbolIcon(TRAIT_ICON[trait], "");
 }
 
 /** What a card trait means, spelled out for the hover tooltip. */
 export function describeTrait(trait: CardTrait): string {
-  return trait === "must-play-first"
-    ? "Must be played before any other card; cannot be discarded"
-    : "Cannot be destroyed or put to sleep";
+  return TRAIT_DESCRIPTION[trait];
 }
 
 /** The visual for a card effect, without its trigger. */
@@ -194,7 +247,7 @@ export function describeMode(mode: CardMode): Node[] {
     case "escalate":
       return [
         text(
-          `Enemies gain +${mode.thisTurn} speed this turn and +${mode.permanent} permanently. Must be played before any other card and cannot be discarded.`,
+          `Enemies gain +${mode.thisTurn} speed this turn and +1/${mode.permanentReciprocal} permanently. Must be played before any other card and cannot be discarded.`,
         ),
       ];
   }
@@ -229,6 +282,33 @@ function symbolIcon(url: string, label: string): Node[] {
   icon.src = url;
   icon.alt = "";
   return [icon, text(label)];
+}
+
+/** An icon followed by a stacked fraction, drawn as one inline unit. */
+function symbolFractionIcon(
+  url: string,
+  numerator: number,
+  denominator: number,
+): Node[] {
+  const icon = document.createElement("img");
+  icon.classList.add("card-symbol-icon");
+  icon.src = url;
+  icon.alt = "";
+  return [icon, fractionNode(numerator, denominator)];
+}
+
+/** A stacked fraction (numerator over denominator), narrower than `1/7`. */
+function fractionNode(numerator: number, denominator: number): HTMLElement {
+  const fraction = document.createElement("span");
+  fraction.classList.add("card-fraction");
+  const num = document.createElement("span");
+  num.classList.add("card-fraction-numerator");
+  num.textContent = `${numerator}`;
+  const den = document.createElement("span");
+  den.classList.add("card-fraction-denominator");
+  den.textContent = `${denominator}`;
+  setChildren(fraction, [num, den]);
+  return fraction;
 }
 
 function text(content: string): Text {
