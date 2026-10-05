@@ -1,3 +1,4 @@
+import { hexKey } from "./hex";
 import type { HexCoord } from "./hex";
 
 export function hexesInHexagon(radius: number): HexCoord[] {
@@ -56,6 +57,29 @@ export function hexSide(
 /** The middle hex of `hexSide(side, radius)`. */
 export function hexSideCentre(side: number, radius: number): HexCoord {
   return hexSide(side, radius)[Math.floor(radius / 2)];
+}
+
+/**
+ * The hex edges making up one side of the hexagon's outline. Each side is a
+ * staircase: the outward edges of every side hex, plus the connecting edges of
+ * all but the hex shared with the next side (that edge belongs to the next
+ * side). `dir` is the direction from `hex` to its outward neighbour.
+ */
+export function hexSideEdges(
+  side: number,
+  radius: number,
+): { hex: HexCoord; dir: number }[] {
+  const outward = (1 - side + 6) % 6;
+  const next = (outward + 5) % 6;
+  const nextHexes = new Set(hexSide((side + 1) % 6, radius).map(hexKey));
+  const edges: { hex: HexCoord; dir: number }[] = [];
+  for (const hex of hexSide(side, radius)) {
+    edges.push({ hex, dir: outward });
+    if (!nextHexes.has(hexKey(hex))) {
+      edges.push({ hex, dir: next });
+    }
+  }
+  return edges;
 }
 
 export function rotateTimes(coord: HexCoord, steps: number): HexCoord {

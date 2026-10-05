@@ -8,7 +8,7 @@ import {
   traitSymbolNodes,
 } from "./card-text";
 import { attachCardTooltip } from "./card-tooltip";
-import { TEMPORARY_ICON } from "./card-icons";
+import { EPHEMERAL_ICON, TEMPORARY_ICON } from "./card-icons";
 import { setChildren } from "./dom";
 
 export type CardFace = {
@@ -96,6 +96,9 @@ function cardBadges(card: Card): HTMLElement | null {
   if (card.temporaryUpgrade) {
     badges.push(temporaryBadge());
   }
+  if (card.temporary) {
+    badges.push(ephemeralBadge());
+  }
   if (badges.length === 0) {
     return null;
   }
@@ -136,6 +139,19 @@ function temporaryBadge(): HTMLElement {
   icon.classList.add("card-symbol-icon");
   icon.src = TEMPORARY_ICON;
   icon.alt = "temporary upgrade";
+  badge.append(icon);
+  return badge;
+}
+
+/** The sigil marking a card conjured by Invention, removed when it leaves the hand. */
+function ephemeralBadge(): HTMLElement {
+  const badge = document.createElement("div");
+  badge.classList.add("card-badge", "card-ephemeral");
+  badge.title = "Temporary: removed when played or discarded";
+  const icon = document.createElement("img");
+  icon.classList.add("card-symbol-icon");
+  icon.src = EPHEMERAL_ICON;
+  icon.alt = "temporary card";
   badge.append(icon);
   return badge;
 }

@@ -5,7 +5,9 @@ import {
   isIndestructible,
   mustPlayFirst,
   playCost,
+  temporaryCopy,
   temporaryUpgradeCard,
+  transformStorage,
 } from "./cards";
 import { gainCurrency, spendCurrency } from "./currency";
 import type { Deck, DeckMutation } from "./deck";
@@ -31,10 +33,13 @@ import { onPlayerMoved, visibleEnemies, visibleReach } from "./fog";
 import { reachableHexes, resolveMove } from "./movement";
 import {
   cardReach,
+  hopTargets,
   moveModeTo,
+  moveTerrain,
   movementTileAt,
   teleportTargets,
 } from "./reach";
+import { rollTemporaryCards } from "./shop";
 import type { Rng } from "./rng";
 import type { GameState, TurnState } from "./state";
 import {
@@ -49,6 +54,7 @@ import {
 import { playerOnFinish } from "./terrain";
 import { moving, still } from "./transition";
 import type { Transition } from "./transition";
+import { hexagonSideWallEdges } from "./walls";
 
 export const HAND_SIZE = 4;
 
@@ -116,11 +122,17 @@ export function applyHandMode(
     case "move":
     case "attack":
     case "teleport":
+    case "move-current-terrain":
+    case "hop":
     case "currency":
     case "sleep-card":
     case "search":
     case "trivial-terrain":
     case "upgrade-hand":
+    case "store":
+    case "unstore":
+    case "wall":
+    case "invention":
     case "escalate":
       throw new Error(`not a hand mode: ${mode.kind}`);
   }
@@ -207,6 +219,19 @@ export function modeIsAvailable(
       );
       return reachable.some((coord) => !equalsHex(coord, state.map.player));
     }
+    case "move-current-terrain": {
+      const reachable = reachableHexes(
+        state.map.player,
+        mode.distance,
+        moveTerrain(state, mode),
+        movementTileAt(state),
+        state.walls,
+        state.anyTerrainTurns > 0,
+      );
+      return reachable.some((coord) => !equalsHex(coord, state.map.player));
+    }
+    case "hop":
+      return hopTargets(state, mode.maxCost).length > 0;
     case "teleport":
       return teleportTargets(state, mode.range).length > 0;
     case "search":
@@ -214,6 +239,11 @@ export function modeIsAvailable(
     case "trivial-terrain":
       return true;
     case "escalate":
+      return true;
+    case "store":
+    case "unstore":
+    case "wall":
+    case "invention":
       return true;
     case "upgrade-hand":
       return state.deck.hand.some(
@@ -386,9 +416,73 @@ function playInstant(state: GameState, card: Card, mode: CardMode): Transition {
         enemySpeedThisTurn: played.enemySpeedThisTurn + mode.thisTurn,
       });
     }
+    case "store": {
+      // The card is not discarded yet: it is transformed when the choice is made.
+      const played = spent(state, state.deck, state.rng, card, []);
+      return still({
+        ...played,
+        phase: { kind: "pending-store", card, selected: [] },
+      });
+    }
+    case "unstore": {
+      const released = card.stored;
+      // The basic bin releases the cards temporarily upgraded; the upgraded bin
+      // releases them plus a temporary copy of each.
+      const returned = mode.copies
+        ? [...released, ...released.map((c) => temporaryCopy(c, state.ids()))]
+        : released.map(temporaryUpgradeCard);
+      const emptied = transformStorage(card, []);
+      const deck = {
+        ...state.deck,
+        hand: [...state.deck.hand, ...returned],
+      };
+      const played = spent(
+        state,
+        discardPlayed(deck, emptied),
+        state.rng,
+        card,
+        [],
+      );
+      return still(played);
+    }
+    case "wall": {
+      const played = spent(
+        state,
+        discardPlayed(state.deck, card),
+        state.rng,
+        card,
+        [],
+      );
+      return still({
+        ...played,
+        phase: { kind: "pending-wall", radius: mode.radius },
+      });
+    }
+    case "invention": {
+      const rolled = rollTemporaryCards(
+        mode.count,
+        mode.pool,
+        state.rng,
+        state.ids,
+      );
+      const deck = {
+        ...state.deck,
+        hand: [...state.deck.hand, ...rolled.cards],
+      };
+      const played = spent(
+        state,
+        discardPlayed(deck, card),
+        rolled.rng,
+        card,
+        [],
+      );
+      return still(played);
+    }
     case "move":
     case "attack":
     case "teleport":
+    case "move-current-terrain":
+    case "hop":
       throw new Error(`not an instant mode: ${mode.kind}`);
   }
 }
@@ -522,6 +616,58 @@ export function searchForChoice(state: GameState, card: Card): Transition {
   });
 }
 
+/** Toggle a hand card into or out of the storage bin's selection. */
+export function toggleStoreChoice(state: GameState, card: Card): Transition {
+  const phase = state.phase;
+  if (phase.kind !== "pending-store") {
+    return still(state);
+  }
+  if (card.id === phase.card.id || mustPlayFirst(card)) {
+    return still(state);
+  }
+  if (!state.deck.hand.some((c) => c.id === card.id)) {
+    return still(state);
+  }
+  const selected = phase.selected.includes(card.id)
+    ? phase.selected.filter((id) => id !== card.id)
+    : [...phase.selected, card.id];
+  return still({ ...state, phase: { ...phase, selected } });
+}
+
+/** Resolve a storage choice: move the selection into the bin and discard it full. */
+export function confirmStore(state: GameState): Transition {
+  const phase = state.phase;
+  if (phase.kind !== "pending-store") {
+    return still(state);
+  }
+  const chosen = new Set(phase.selected);
+  const stored = state.deck.hand.filter((c) => chosen.has(c.id));
+  const without = {
+    ...state.deck,
+    hand: state.deck.hand.filter((c) => !chosen.has(c.id)),
+  };
+  const full = transformStorage(phase.card, stored);
+  return still({
+    ...state,
+    deck: discardPlayed(without, full),
+    phase: { kind: "playing" },
+  });
+}
+
+/** Place the chosen side of the wall and end the wall-choice phase. */
+export function chooseWall(state: GameState, side: number): Transition {
+  const phase = state.phase;
+  if (phase.kind !== "pending-wall" || side < 0 || side > 5) {
+    return still(state);
+  }
+  const edges = hexagonSideWallEdges(state.map.player, side, phase.radius);
+  return still({
+    ...state,
+    walls: [...state.walls, ...edges],
+    phase: { kind: "playing" },
+  });
+}
+
 /** Kill one enemy in range and pay its bounty. */
 export function resolveAttack(state: GameState, enemyId: string): Transition {
   const phase = state.phase;
@@ -574,23 +720,20 @@ export function resolveMoveTo(state: GameState, to: HexCoord): Transition {
     return still(state);
   }
 
-  const path =
-    mode.kind === "teleport"
-      ? [state.map.player, to]
-      : resolveMove(
-          state.map.player,
-          to,
-          mode.terrain,
-          movementTileAt(state),
-          mode.distance,
-          state.walls,
-          state.anyTerrainTurns > 0,
-        );
+  const jump = mode.kind === "teleport" || mode.kind === "hop";
+  const path = jump
+    ? [state.map.player, to]
+    : resolveMove(
+        state.map.player,
+        to,
+        moveTerrain(state, mode),
+        movementTileAt(state),
+        mode.distance,
+        state.walls,
+        state.anyTerrainTurns > 0,
+      );
   const destination = path[path.length - 1];
-  const distance =
-    mode.kind === "teleport"
-      ? hexDistance(state.map.player, to)
-      : path.length - 1;
+  const distance = jump ? hexDistance(state.map.player, to) : path.length - 1;
   const paid = payForPlay(state, phase.card);
   const playedThisTurn = paid.turnState.cardsPlayedThisTurn + 1;
   const distanceThisTurn = paid.turnState.distanceThisTurn + distance;
@@ -614,8 +757,8 @@ export function resolveMoveTo(state: GameState, to: HexCoord): Transition {
   };
   // Crossing into a new section streams the map, but never ends the turn.
   const next = onPlayerMoved(moved);
-  // A teleport jumps instantly; a walk is shown hex by hex.
-  if (mode.kind === "teleport") {
+  // A teleport or a hop jumps instantly; a walk is shown hex by hex.
+  if (jump) {
     return still(next);
   }
   return moving(next, [{ mover: { kind: "player" }, path }]);
@@ -629,6 +772,8 @@ export function cancelPending(state: GameState): Transition {
     case "pending-discard":
     case "pending-sleep":
     case "pending-search":
+    case "pending-store":
+    case "pending-wall":
     case "pending-remove":
     case "pending-gain":
     case "pending-consumable":

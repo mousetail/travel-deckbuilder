@@ -57,6 +57,8 @@ export type MapViewState = {
   killable: ReadonlySet<string>;
   /** Directed hex edges blocked by a wall. */
   walls: readonly WallEdge[];
+  /** Candidate walls offered by the Wall card, one per side; empty otherwise. */
+  wallChoices: readonly (readonly WallEdge[])[];
   /** The mimic's tile, or null while none is placed. */
   mimic: HexCoord | null;
 };
@@ -315,7 +317,10 @@ function wallSegment(edge: WallEdge): { a: Point; b: Point } | null {
 }
 
 /** Every wall drawn as a thick line on the hex edge it blocks. */
-function wallsSvg(walls: readonly WallEdge[]): SVGSVGElement | null {
+function wallsSvg(
+  walls: readonly WallEdge[],
+  className: string,
+): SVGSVGElement | null {
   const segments: { a: Point; b: Point }[] = [];
   for (const edge of walls) {
     const segment = wallSegment(edge);
@@ -342,7 +347,7 @@ function wallsSvg(walls: readonly WallEdge[]): SVGSVGElement | null {
   maxY += OUTLINE_PAD;
   const svg = positionedSvg(minX, minY, maxX - minX, maxY - minY, [
     "map-outline",
-    "outline-wall",
+    className,
   ]);
   for (const segment of segments) {
     const line = document.createElementNS(SVG_NS, "line");
@@ -353,6 +358,19 @@ function wallsSvg(walls: readonly WallEdge[]): SVGSVGElement | null {
     svg.append(line);
   }
   return svg;
+}
+
+/** The candidate walls of a Wall play, drawn as faint dashed previews. */
+function wallChoicesSvg(
+  choices: readonly (readonly WallEdge[])[],
+  tiles: ReadonlyMap<string, Tile>,
+): SVGSVGElement | null {
+  const visible = choices.flatMap((choice) =>
+    choice.filter(
+      (edge) => tiles.has(hexKey(edge.from)) && tiles.has(hexKey(edge.to)),
+    ),
+  );
+  return wallsSvg(visible, "outline-wall-choice");
 }
 
 function outlineSvg(
@@ -649,9 +667,14 @@ export class MapView {
       (edge) =>
         view.tiles.has(hexKey(edge.from)) && view.tiles.has(hexKey(edge.to)),
     );
-    const walls = wallsSvg(visibleWalls);
+    const walls = wallsSvg(visibleWalls, "outline-wall");
     if (walls !== null) {
       nodes.push(walls);
+    }
+
+    const wallChoices = wallChoicesSvg(view.wallChoices, view.tiles);
+    if (wallChoices !== null) {
+      nodes.push(wallChoices);
     }
 
     this.dangerOutline = outlineSvg(

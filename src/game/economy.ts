@@ -225,6 +225,9 @@ export function upgradeCard(card: Card): Card {
     ...instantiate(card.upgradedForm, card.id),
     traits: card.traits,
     sleeping: card.sleeping,
+    temporary: card.temporary,
+    // Easter egg: upgrading a full storage bin upgrades everything inside it too.
+    stored: card.stored.map((stored) => upgradeCard(stored)),
   };
 }
 
@@ -313,6 +316,8 @@ export function leaveFeature(state: GameState): Transition {
     case "pending-discard":
     case "pending-sleep":
     case "pending-search":
+    case "pending-store":
+    case "pending-wall":
     case "game-over":
       return still(state);
   }

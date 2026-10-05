@@ -2,12 +2,21 @@ import type { AttackMode, Card, MoveMode } from "./cards";
 import { blockedByPriority, moveModeValue, playCost } from "./cards";
 import { enemiesInRange, enemySpeedBonusFor, terrainCostAt } from "./enemies";
 import type { Enemy } from "./enemies";
-import { equalsHex, findPathByCost, hexDistance, hexKey } from "./hex";
+import {
+  AXIAL_DIRECTIONS,
+  addHex,
+  equalsHex,
+  findPathByCost,
+  hexDistance,
+  hexKey,
+} from "./hex";
 import type { HexCoord } from "./hex";
 import { visibleEnemies, visibleMap } from "./fog";
 import { cardCostAt, reachableHexes } from "./movement";
 import type { TileLookup } from "./movement";
 import type { GameState } from "./state";
+import type { Terrain } from "./terrain";
+import { wallBlocks } from "./walls";
 
 /** The tile at a world coord, or undefined outside the visible window. */
 export function tileAt(state: GameState): TileLookup {
@@ -30,6 +39,62 @@ export function movementTileAt(state: GameState): TileLookup {
     const tile = base(coord);
     return tile === undefined ? undefined : { ...tile, cost: 1 };
   };
+}
+
+/**
+ * The terrain a move mode travels over. `move-current-terrain` reads the tile
+ * under the player, so its reach always matches where the player is standing.
+ */
+export function moveTerrain(state: GameState, mode: MoveMode): Terrain {
+  switch (mode.kind) {
+    case "move":
+      return mode.terrain;
+    case "move-current-terrain": {
+      const tile = tileAt(state)(state.map.player);
+      return tile === undefined ? "grass" : tile.terrain;
+    }
+    case "hop":
+    case "teleport":
+      throw new Error(`no terrain for ${mode.kind}`);
+  }
+}
+
+/**
+ * The tiles a hop can land on: two steps away in a straight line, over a middle
+ * tile that is anything but impassible, onto a grass tile of cost at most
+ * `maxCost`. Walls block both crossed edges, and an enemy-occupied tile is
+ * never a move.
+ */
+export function hopTargets(state: GameState, maxCost: number): HexCoord[] {
+  const lookup = tileAt(state);
+  const results: HexCoord[] = [];
+  for (const dir of AXIAL_DIRECTIONS) {
+    const middle = addHex(state.map.player, dir);
+    const landing = addHex(state.map.player, addHex(dir, dir));
+    const middleTile = lookup(middle);
+    if (middleTile === undefined || middleTile.terrain === "impassible") {
+      continue;
+    }
+    const landingTile = lookup(landing);
+    if (
+      landingTile === undefined ||
+      landingTile.terrain !== "grass" ||
+      landingTile.cost > maxCost
+    ) {
+      continue;
+    }
+    if (state.enemies.some((enemy) => equalsHex(enemy.position, landing))) {
+      continue;
+    }
+    if (wallBlocks(state.walls, state.map.player, middle)) {
+      continue;
+    }
+    if (wallBlocks(state.walls, middle, landing)) {
+      continue;
+    }
+    results.push(landing);
+  }
+  return results;
 }
 
 /**
@@ -82,6 +147,22 @@ export function cardReach(state: GameState, card: Card): CardReach {
             state.anyTerrainTurns > 0,
           ).filter((coord) => !equalsHex(coord, state.map.player)),
         });
+        break;
+      case "move-current-terrain":
+        moves.push({
+          mode,
+          reachable: reachableHexes(
+            state.map.player,
+            mode.distance,
+            moveTerrain(state, mode),
+            movementTileAt(state),
+            state.walls,
+            state.anyTerrainTurns > 0,
+          ).filter((coord) => !equalsHex(coord, state.map.player)),
+        });
+        break;
+      case "hop":
+        moves.push({ mode, reachable: hopTargets(state, mode.maxCost) });
         break;
       case "teleport":
         moves.push({ mode, reachable: teleportTargets(state, mode.range) });
@@ -304,9 +385,9 @@ function playerPathTo(state: GameState, to: HexCoord): HexCoord[] | null {
   if (mode === null) {
     return null;
   }
-  // A teleport jumps straight to the enemy, so it previews as a direct line and
-  // is allowed to land on an enemy hex.
-  if (mode.kind === "teleport") {
+  // A teleport jumps straight to the enemy, and a hop jumps over a tile, so
+  // both preview as a direct line and may land on an enemy hex.
+  if (mode.kind === "teleport" || mode.kind === "hop") {
     return [state.map.player, to];
   }
   // Standing on an enemy is never a move: clicking it attacks instead.
@@ -317,7 +398,7 @@ function playerPathTo(state: GameState, to: HexCoord): HexCoord[] | null {
     state.map.player,
     to,
     cardCostAt(
-      mode.terrain,
+      moveTerrain(state, mode),
       movementTileAt(state),
       state.walls,
       state.anyTerrainTurns > 0,

@@ -5,7 +5,11 @@ import { setChildren } from "./dom";
 
 /** What clicking a hand card does right now. */
 export type HandMode =
-  { kind: "play" } | { kind: "discard" } | { kind: "sleep" } | { kind: "none" };
+  | { kind: "play" }
+  | { kind: "discard" }
+  | { kind: "sleep" }
+  | { kind: "store"; selected: ReadonlySet<string>; binId: string }
+  | { kind: "none" };
 
 /** The fanned hand: one card per held card; the card itself is the button. */
 export class HandView {
@@ -13,6 +17,7 @@ export class HandView {
   private readonly onPlay: (card: Card) => void;
   private readonly onDiscard: (card: Card) => void;
   private readonly onSleep: (card: Card) => void;
+  private readonly onStore: (card: Card) => void;
   private readonly playable: (card: Card) => boolean;
   private readonly onHover: (card: Card | null) => void;
 
@@ -21,6 +26,7 @@ export class HandView {
     onPlay: (card: Card) => void,
     onDiscard: (card: Card) => void,
     onSleep: (card: Card) => void,
+    onStore: (card: Card) => void,
     playable: (card: Card) => boolean,
     onHover: (card: Card | null) => void,
   ) {
@@ -28,6 +34,7 @@ export class HandView {
     this.onPlay = onPlay;
     this.onDiscard = onDiscard;
     this.onSleep = onSleep;
+    this.onStore = onStore;
     this.playable = playable;
     this.onHover = onHover;
   }
@@ -60,6 +67,19 @@ export class HandView {
       return element;
     }
 
+    // Storing: the bin itself is inert, every other card toggles in and out.
+    if (mode.kind === "store") {
+      if (card.id === mode.binId || mustPlayFirst(card)) {
+        element.classList.add("card-inert");
+        return element;
+      }
+      if (mode.selected.has(card.id)) {
+        element.classList.add("selected");
+      }
+      element.addEventListener("click", () => this.onStore(card));
+      return element;
+    }
+
     // A must-play-first card can never be discarded...
     if (mode.kind === "discard" && mustPlayFirst(card)) {
       element.classList.add("card-unplayable");
@@ -75,6 +95,10 @@ export class HandView {
     if (mode.kind === "discard") {
       element.classList.add("discarding");
       element.addEventListener("click", () => this.onDiscard(card));
+      element.addEventListener("contextmenu", (event) => {
+        event.preventDefault();
+        this.onDiscard(card);
+      });
       return element;
     }
     if (mode.kind === "sleep") {

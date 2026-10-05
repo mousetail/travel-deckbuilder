@@ -109,7 +109,12 @@ export function toDiscard(deck: Deck, cards: readonly Card[]): Deck {
   return {
     draw: deck.draw,
     hand: deck.hand,
-    discard: [...deck.discard, ...cards.map(revertTemporary)],
+    // A temporary card (conjured by Invention) is removed from the deck rather
+    // than kept in the discard pile.
+    discard: [
+      ...deck.discard,
+      ...cards.filter((card) => !card.temporary).map(revertTemporary),
+    ],
   };
 }
 

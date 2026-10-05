@@ -163,6 +163,10 @@ function hintFor(state: GameState): string {
       return "Pick a card to put to sleep";
     case "pending-search":
       return "Pick a card from your draw pile";
+    case "pending-store":
+      return "Pick cards to store, then confirm";
+    case "pending-wall":
+      return "Click a direction to raise the wall";
     case "playing":
       return "Click a card or reachable tile · right-click to discard";
     case "pending-remove":

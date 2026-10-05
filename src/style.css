@@ -542,6 +542,10 @@ button {
   & .card-temporary {
     background: #a0f;
   }
+
+  & .card-ephemeral {
+    background: #0aa;
+  }
 }
 
 /* The symbol legend shown above a card on hover. A fixed layer on the body, so
@@ -672,6 +676,10 @@ button {
 
 .overlay-title {
   font-weight: bold;
+}
+
+.overlay-hint {
+  opacity: 0.75;
 }
 
 /* A confirmation (smith upgrade, card removal) is stacked over the selection it
@@ -1079,6 +1087,18 @@ button {
   & line {
     stroke: #ffd700;
     stroke-width: 5;
+  }
+}
+
+/* The candidate walls offered by the Wall card, before one is chosen. */
+.outline-wall-choice {
+  z-index: 2;
+
+  & line {
+    stroke: #ffd700;
+    stroke-width: 4;
+    stroke-dasharray: 4 3;
+    opacity: 0.6;
   }
 }
 

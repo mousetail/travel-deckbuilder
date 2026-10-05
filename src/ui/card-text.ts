@@ -6,13 +6,18 @@ import {
   COIN_ICON,
   ESCALATE_ICON,
   ESCALATE_TEMP_ICON,
+  HOP_ICON,
   INDESTRUCTIBLE_ICON,
+  INVENTION_ICON,
+  MONOTONY_ICON,
   PLAYS_FIRST_ICON,
   SCOUT_ICON,
   SEARCH_ICON,
   SHY_ICON,
+  STORAGE_ICON,
   TELEPORT_ICON,
   UPGRADE_ICON,
+  WALL_ICON,
   coinIcon,
 } from "./card-icons";
 
@@ -96,6 +101,10 @@ function modeSymbolNodes(mode: CardMode): Node[] {
       }
       return symbolIcon(url, `${mode.distance}`);
     }
+    case "move-current-terrain":
+      return symbolIcon(MONOTONY_ICON, `${mode.distance}`);
+    case "hop":
+      return symbolIcon(HOP_ICON, `${mode.maxCost}`);
     case "attack":
       return symbolIcon(ATTACK_ICON, `${mode.range}`);
     case "draw":
@@ -116,6 +125,13 @@ function modeSymbolNodes(mode: CardMode): Node[] {
       return symbolIcon(SCOUT_ICON, `${mode.turns}`);
     case "upgrade-hand":
       return symbolIcon(UPGRADE_ICON, "");
+    case "store":
+    case "unstore":
+      return symbolIcon(STORAGE_ICON, "");
+    case "wall":
+      return symbolIcon(WALL_ICON, `${mode.radius}`);
+    case "invention":
+      return symbolIcon(INVENTION_ICON, `${mode.count}`);
     case "teleport":
       return symbolIcon(TELEPORT_ICON, `${mode.range}`);
     case "escalate":
@@ -203,6 +219,18 @@ export function describeMode(mode: CardMode): Node[] {
       return [
         text(`Travel ${mode.distance} over ${TERRAIN_NAME[mode.terrain]}`),
       ];
+    case "move-current-terrain":
+      return [
+        text(
+          `Travel ${mode.distance} over the terrain you are standing on`,
+        ),
+      ];
+    case "hop":
+      return [
+        text(
+          `Hop over one tile and land on a grass tile of cost ${mode.maxCost} or less`,
+        ),
+      ];
     case "attack":
       return [
         text(
@@ -241,6 +269,30 @@ export function describeMode(mode: CardMode): Node[] {
       ];
     case "upgrade-hand":
       return [text("Upgrades all other cards in your hand")];
+    case "store":
+      return [text("Store any number of cards from your hand in this bin")];
+    case "unstore":
+      return [
+        text(
+          mode.copies
+            ? "Return every stored card to your hand, plus a temporary copy of each"
+            : "Return every stored card to your hand, temporarily upgraded",
+        ),
+      ];
+    case "wall":
+      return [
+        text(
+          `Raise a one-way wall on one side of a ${mode.radius}-tile hexagon`,
+        ),
+      ];
+    case "invention":
+      return [
+        text(
+          `Gain ${counted(mode.count, "random temporary card")}${
+            mode.pool === "uncommon-plus" ? " (uncommon or better)" : ""
+          }`,
+        ),
+      ];
     case "teleport":
       return [text(`Teleport to an enemy within ${mode.range} tiles`)];
     case "escalate":

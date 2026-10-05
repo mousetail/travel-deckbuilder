@@ -3,6 +3,8 @@ import type { Terrain } from "./terrain";
 
 export type MoveMode =
   | { kind: "move"; terrain: Terrain; distance: number }
+  | { kind: "move-current-terrain"; distance: number }
+  | { kind: "hop"; maxCost: number }
   | { kind: "teleport"; range: number };
 export type AttackMode = { kind: "attack"; range: number };
 
@@ -24,7 +26,26 @@ export type CardMode =
   | { kind: "search"; count: number }
   | { kind: "trivial-terrain"; turns: number }
   | { kind: "upgrade-hand" }
+  | { kind: "store" }
+  | { kind: "unstore"; copies: boolean }
+  | { kind: "wall"; radius: number }
+  | { kind: "invention"; count: number; pool: InventionPool }
   | { kind: "escalate"; thisTurn: number; permanentReciprocal: number };
+
+/** Which cards Invention may conjure. */
+export type InventionPool = "all" | "uncommon-plus";
+
+/**
+ * Which form of the storage bin a spec is, and whether it is the upgraded form.
+ * The two forms transform into each other, so the form is what `transformStorage`
+ * reads to pick the target spec.
+ */
+export type StorageForm =
+  | "none"
+  | "empty"
+  | "empty-upgraded"
+  | "full"
+  | "full-upgraded";
 
 /**
  * A side effect that fires as part of a card's action. Sleeping is an effect of
@@ -39,7 +60,7 @@ export type CardEffect =
   | { kind: "halve-cost" }
   | { kind: "draw"; count: number };
 
-export type Rarity = "starting" | "common" | "uncommon" | "rare";
+export type Rarity = "starting" | "common" | "uncommon" | "rare" | "none";
 
 /**
  * A rule-bending property a card carries. Traits are shown as badges on the
@@ -64,6 +85,7 @@ export const RARITY_WEIGHT: Record<Rarity, number> = {
   common: 6,
   uncommon: 3,
   rare: 1,
+  none: 0,
 };
 
 export type Card = {
@@ -83,6 +105,12 @@ export type Card = {
   baseSpec: CardSpec;
   /** True while an Upgrader upgrade is applied. */
   temporaryUpgrade: boolean;
+  /** Cards held inside a storage bin; empty for every other card. */
+  stored: readonly Card[];
+  /** True for a card conjured by Invention: it is removed when it leaves the hand. */
+  temporary: boolean;
+  /** Which storage-bin form this is, or `none` for every other card. */
+  storage: StorageForm;
   /**
    * Reshuffles left before this card returns to the draw pile. A sleeping card
    * sits in the discard pile and is skipped by every reshuffle until the count
@@ -101,6 +129,8 @@ export type CardSpec = {
   onPlay: readonly CardEffect[];
   onDiscard: readonly CardEffect[];
   upgradedForm: CardSpec | null;
+  /** Which storage-bin form this is, or `none` for every other card. */
+  storage: StorageForm;
 };
 
 export type IdFactory = () => string;
@@ -127,8 +157,21 @@ export function instantiate(spec: CardSpec, id: string): Card {
     upgradedForm: spec.upgradedForm,
     baseSpec: spec,
     temporaryUpgrade: false,
+    stored: [],
+    temporary: false,
+    storage: spec.storage,
     sleeping: 0,
   };
+}
+
+/** A card conjured by Invention, removed from the deck when it leaves the hand. */
+export function instantiateTemporary(spec: CardSpec, id: string): Card {
+  return { ...instantiate(spec, id), temporary: true };
+}
+
+/** A temporary duplicate of `card` under a fresh id, removed when it leaves the hand. */
+export function temporaryCopy(card: Card, id: string): Card {
+  return { ...card, id, temporary: true };
 }
 
 /** The coin cost of playing `card`, from the `pay` effects in its play line. */
@@ -144,7 +187,15 @@ export function playCost(card: Card): number {
 
 /** The movement value of a move mode: distance for a walk, range for a jump. */
 export function moveModeValue(mode: MoveMode): number {
-  return mode.kind === "move" ? mode.distance : mode.range;
+  switch (mode.kind) {
+    case "move":
+    case "move-current-terrain":
+      return mode.distance;
+    case "hop":
+      return 2;
+    case "teleport":
+      return mode.range;
+  }
 }
 
 /** Whether `card` carries `trait`. */
@@ -283,6 +334,79 @@ const upgradeHand: CardMode = { kind: "upgrade-hand" };
 
 const teleport = (range: number): CardMode => ({ kind: "teleport", range });
 
+const store: CardMode = { kind: "store" };
+
+const unstore = (copies: boolean): CardMode => ({ kind: "unstore", copies });
+
+const wall = (radius: number): CardMode => ({ kind: "wall", radius });
+
+const invention = (count: number, pool: InventionPool): CardMode => ({
+  kind: "invention",
+  count,
+  pool,
+});
+
+/**
+ * The four forms of the storage bin. Empty and full transform into each other,
+ * and the upgraded pair stays upgraded across the swap. Only the empty form is
+ * sold; the full forms are never offered.
+ */
+const STORAGE_EMPTY_UPGRADED_SPEC: CardSpec = {
+  ...spec("Storage Bin (Empty)+", "rare", 4, [store], [], [], null),
+  storage: "empty-upgraded",
+};
+
+export const STORAGE_EMPTY_SPEC: CardSpec = {
+  ...spec(
+    "Storage Bin (Empty)",
+    "rare",
+    4,
+    [store],
+    [],
+    [],
+    STORAGE_EMPTY_UPGRADED_SPEC,
+  ),
+  storage: "empty",
+};
+
+const STORAGE_FULL_UPGRADED_SPEC: CardSpec = {
+  ...spec("Storage Bin (Full)+", "none", 0, [unstore(true)], [], [], null),
+  storage: "full-upgraded",
+};
+
+export const STORAGE_FULL_SPEC: CardSpec = {
+  ...spec(
+    "Storage Bin (Full)",
+    "none",
+    0,
+    [unstore(false)],
+    [],
+    [],
+    STORAGE_FULL_UPGRADED_SPEC,
+  ),
+  storage: "full",
+};
+
+const STORAGE_TRANSFORM: Record<StorageForm, CardSpec | null> = {
+  none: null,
+  empty: STORAGE_FULL_SPEC,
+  "empty-upgraded": STORAGE_FULL_UPGRADED_SPEC,
+  full: STORAGE_EMPTY_SPEC,
+  "full-upgraded": STORAGE_EMPTY_UPGRADED_SPEC,
+};
+
+/** Swap a storage bin to its other form, keeping its id and setting `stored`. */
+export function transformStorage(
+  card: Card,
+  stored: readonly Card[],
+): Card {
+  const target = STORAGE_TRANSFORM[card.storage];
+  if (target === null) {
+    return card;
+  }
+  return { ...instantiate(target, card.id), stored };
+}
+
 // Escalation replaces the old turn-number enemy-speed ramp: it cannot be
 // discarded or removed, and while it is in hand no other card may be played, so
 // each time it is drawn the player must pay the enemy-speed tax first.
@@ -368,15 +492,6 @@ export const SHOP_CATALOGUE: readonly CardSpec[] = [
     [],
     [],
     spec("Stride+", "common", 2, [move("grass", 5)], [], [], null),
-  ),
-  spec(
-    "Marathon",
-    "uncommon",
-    3,
-    [move("grass", 6)],
-    [],
-    [],
-    spec("Marathon+", "uncommon", 3, [move("grass", 7)], [], [], null),
   ),
   spec(
     "Sprint",
@@ -471,14 +586,14 @@ export const SHOP_CATALOGUE: readonly CardSpec[] = [
     "Trail",
     "uncommon",
     3,
-    [move("grass", 3), move("forest", 1)],
+    [move("grass", 3), move("forest", 2)],
     [],
     [],
     spec(
       "Trail+",
       "uncommon",
       3,
-      [move("grass", 4), move("forest", 2)],
+      [move("grass", 4), move("forest", 3)],
       [],
       [],
       null,
@@ -488,14 +603,14 @@ export const SHOP_CATALOGUE: readonly CardSpec[] = [
     "Ravine",
     "uncommon",
     4,
-    [move("forest", 1), move("water", 1), move("mountain", 1)],
+    [move("forest", 1), move("water", 1), move("mountain", 2)],
     [],
     [],
     spec(
       "Ravine+",
       "uncommon",
       4,
-      [move("forest", 2), move("water", 2), move("mountain", 2)],
+      [move("forest", 2), move("water", 2), move("mountain", 3)],
       [],
       [],
       null,
@@ -637,6 +752,63 @@ export const SHOP_CATALOGUE: readonly CardSpec[] = [
   ),
   spec("Upgrader", "uncommon", 3, [upgradeHand], [], [drawEffect(1)], null),
 
+  // storage & conjuring
+  STORAGE_EMPTY_SPEC,
+  spec(
+    "Invention",
+    "rare",
+    4,
+    [invention(3, "all")],
+    [],
+    [],
+    spec(
+      "Invention+",
+      "rare",
+      4,
+      [invention(2, "uncommon-plus")],
+      [],
+      [],
+      null,
+    ),
+  ),
+
+  // special movement
+  spec(
+    "Monotony",
+    "uncommon",
+    3,
+    [{ kind: "move-current-terrain", distance: 3 }],
+    [],
+    [],
+    spec(
+      "Monotony+",
+      "uncommon",
+      3,
+      [{ kind: "move-current-terrain", distance: 4 }],
+      [],
+      [],
+      null,
+    ),
+  ),
+  spec(
+    "Hop",
+    "uncommon",
+    3,
+    [{ kind: "hop", maxCost: 1 }],
+    [],
+    [],
+    spec("Hop+", "uncommon", 3, [{ kind: "hop", maxCost: 2 }], [], [], null),
+  ),
+  spec(
+    "Wall",
+    "rare",
+    5,
+    [wall(3)],
+    [pay(3), sleep(1)],
+    [],
+    spec("Wall+", "rare", 5, [wall(3)], [pay(1), sleep(1)], [], null),
+  ),
+
   // combat
   spec(
     "Ambush",
@@ -677,9 +849,9 @@ export const SHOP_CATALOGUE: readonly CardSpec[] = [
     "Charge",
     "uncommon",
     4,
-    [move("grass", 5), { kind: "attack", range: 3 }],
+    [{ kind: "attack", range: 3 }],
     [sleep(1)],
-    [],
+    [drawEffect(1)],
     spec(
       "Charge+",
       "uncommon",
@@ -739,6 +911,7 @@ function spec(
     onPlay,
     onDiscard,
     upgradedForm,
+    storage: "none",
   };
 }
 

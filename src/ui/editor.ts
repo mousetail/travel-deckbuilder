@@ -9,7 +9,7 @@ import {
   parseHexKey,
 } from "../game/hex";
 import type { HexCoord } from "../game/hex";
-import { hexSide, hexSideCentre } from "../game/hexagon";
+import { hexSideCentre, hexSideEdges } from "../game/hexagon";
 import { TERRAIN_TEXTURE, tileIcons } from "../game/terrain";
 import type { EnemyKind } from "../game/terrain";
 import { WATCHTOWER_RADIUS } from "../game/enemies";
@@ -354,7 +354,7 @@ export class Editor {
         continue;
       }
       const kind = isEntry && isExit ? "both" : isEntry ? "entry" : "exit";
-      for (const edge of sideEdges(side, template.radius)) {
+      for (const edge of hexSideEdges(side, template.radius)) {
         const centre = hexToPixel(edge.hex);
         const mid = SIDE_MIDPOINT[(1 - edge.dir + 6) % 6];
         const angle = 90 - 60 * edge.dir;
@@ -792,28 +792,6 @@ export class Editor {
       void navigator.clipboard.writeText(json);
     }
   }
-}
-
-/**
- * The hex edges making up one side of the hexagon's outline. Each side is a
- * staircase: the outward edges of every side hex, plus the connecting edges of
- * all but the hex shared with the next side (that edge belongs to the next side).
- */
-function sideEdges(
-  side: number,
-  radius: number,
-): { hex: HexCoord; dir: number }[] {
-  const outward = (1 - side + 6) % 6;
-  const next = (outward + 5) % 6;
-  const nextHexes = new Set(hexSide((side + 1) % 6, radius).map(hexKey));
-  const edges: { hex: HexCoord; dir: number }[] = [];
-  for (const hex of hexSide(side, radius)) {
-    edges.push({ hex, dir: outward });
-    if (!nextHexes.has(hexKey(hex))) {
-      edges.push({ hex, dir: next });
-    }
-  }
-  return edges;
 }
 
 type EnemySpawn = { coord: HexCoord; kind: EnemyKind; delay: number };

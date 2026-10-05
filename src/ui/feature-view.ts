@@ -105,6 +105,8 @@ export class FeatureView {
       case "pending-discard":
       case "pending-sleep":
       case "pending-search":
+      case "pending-store":
+      case "pending-wall":
         return [];
     }
   }

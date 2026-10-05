@@ -16,6 +16,7 @@ function spec(name: string, traits: CardSpec["traits"] = []): CardSpec {
     onPlay: [],
     onDiscard: [],
     upgradedForm: null,
+    storage: "none",
   };
 }
 

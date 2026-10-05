@@ -6,7 +6,7 @@ import { Hud } from "./hud";
 import { FeatureView } from "./feature-view";
 import { ConsumablesView } from "./consumables-view";
 import { HelpView } from "./help-view";
-import { pileButton, pileOverlay, searchOverlay } from "./pile-view";
+import { pileButton, pileOverlay, searchOverlay, storeOverlay } from "./pile-view";
 import {
   CardAnimator,
   deckDiff,
@@ -14,7 +14,7 @@ import {
 } from "./card-animations";
 import type { DeckDiff } from "./card-animations";
 import { setChildren } from "./dom";
-import { hexKey, hexToPixel } from "../game/hex";
+import { equalsHex, hexKey, hexToPixel } from "../game/hex";
 import type { HexCoord } from "../game/hex";
 import type { Card } from "../game/cards";
 import type { Deck, GameState, Phase } from "../game/state";
@@ -34,12 +34,15 @@ import {
   beginPlay,
   cancelPending,
   cardIsPlayable,
+  chooseWall,
+  confirmStore,
   discardCard,
   discardForChoice,
   resolveAttack,
   resolveMoveTo,
   searchForChoice,
   sleepForChoice,
+  toggleStoreChoice,
 } from "../game/turn";
 import {
   bestAttackCard,
@@ -48,6 +51,8 @@ import {
   hoverPaths,
 } from "../game/reach";
 import type { HoverPath } from "../game/reach";
+import { hexagonSideWallEdges, sideToward } from "../game/walls";
+import type { WallEdge } from "../game/walls";
 import type { HighlightGroup } from "./map-view";
 
 type Pile = "draw" | "discard";
@@ -156,6 +161,7 @@ export class App {
       (card) => this.handlePlay(card),
       (card) => this.handleDiscard(card),
       (card) => this.handleSleep(card),
+      (card) => this.handleStoreToggle(card),
       (card) => this.cardPlayable(card),
       (card) => this.handleCardHover(card),
     );
@@ -288,6 +294,7 @@ export class App {
       activeHighlight: this.activeHighlightKey(),
       killable: this.killableEnemies(),
       walls: this.state.walls,
+      wallChoices: this.wallChoices(),
       mimic: mimicPosition(this.state),
     });
     this.renderHand();
@@ -377,6 +384,21 @@ export class App {
     }
   }
 
+  /** The six candidate walls while the Wall card is being placed, else none. */
+  private wallChoices(): readonly (readonly WallEdge[])[] {
+    const phase = this.state.phase;
+    if (phase.kind !== "pending-wall") {
+      return [];
+    }
+    const choices: WallEdge[][] = [];
+    for (let side = 0; side < 6; side += 1) {
+      choices.push(
+        hexagonSideWallEdges(this.state.map.player, side, phase.radius),
+      );
+    }
+    return choices;
+  }
+
   private renderHand(): void {
     this.handView.render(
       this.state.deck.hand,
@@ -394,6 +416,14 @@ export class App {
       case "pending-sleep":
         return { kind: "sleep" };
       case "pending-search":
+        return { kind: "none" };
+      case "pending-store":
+        return {
+          kind: "store",
+          selected: new Set(this.state.phase.selected),
+          binId: this.state.phase.card.id,
+        };
+      case "pending-wall":
         return { kind: "none" };
       case "playing":
       case "pending-card":
@@ -420,6 +450,15 @@ export class App {
       setChildren(this.middle, [
         searchOverlay(this.state.deck.draw, (card) =>
           this.handleSearchChoice(card),
+        ),
+      ]);
+      return;
+    }
+    if (this.state.phase.kind === "pending-store") {
+      this.openPile = null;
+      setChildren(this.middle, [
+        storeOverlay(this.state.phase.selected.length, () =>
+          this.handleStoreConfirm(),
         ),
       ]);
       return;
@@ -624,6 +663,20 @@ export class App {
     this.apply(sleepForChoice(this.state, card));
   }
 
+  private handleStoreToggle(card: Card): void {
+    if (this.animating) {
+      return;
+    }
+    this.apply(toggleStoreChoice(this.state, card));
+  }
+
+  private handleStoreConfirm(): void {
+    if (this.animating) {
+      return;
+    }
+    this.apply(confirmStore(this.state));
+  }
+
   private handleSearchChoice(card: Card): void {
     if (this.animating) {
       return;
@@ -636,6 +689,14 @@ export class App {
       return;
     }
     const phase = this.state.phase;
+    if (phase.kind === "pending-wall") {
+      if (!equalsHex(coord, this.state.map.player)) {
+        this.apply(
+          chooseWall(this.state, sideToward(this.state.map.player, coord)),
+        );
+      }
+      return;
+    }
     if (phase.kind === "pending-card") {
       // An enemy on a reachable tile is attacked, not walked onto: standing on an
       // enemy is never useful, and the enemy marker is the more precise target.
@@ -726,6 +787,8 @@ function isModalPhase(phase: Phase): boolean {
     case "pending-discard":
     case "pending-sleep":
     case "pending-search":
+    case "pending-store":
+    case "pending-wall":
       return false;
   }
 }
