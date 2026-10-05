@@ -15,17 +15,20 @@ export class Hud {
   private readonly layer: HTMLElement;
   private readonly onAction: () => void;
   private readonly onCancel: () => void;
+  private readonly onConfirm: () => void;
   private readonly onHelp: () => void;
 
   constructor(
     layer: HTMLElement,
     onAction: () => void,
     onCancel: () => void,
+    onConfirm: () => void,
     onHelp: () => void,
   ) {
     this.layer = layer;
     this.onAction = onAction;
     this.onCancel = onCancel;
+    this.onConfirm = onConfirm;
     this.onHelp = onHelp;
   }
 
@@ -69,6 +72,14 @@ export class Hud {
       button.textContent = "Cancel";
       button.disabled = busy;
       button.addEventListener("click", () => this.onCancel());
+      setChildren(slot, [button]);
+      return;
+    }
+    if (phase.kind === "pending-store") {
+      const count = phase.selected.length;
+      button.textContent = `Store ${count} card${count === 1 ? "" : "s"}`;
+      button.disabled = busy;
+      button.addEventListener("click", () => this.onConfirm());
       setChildren(slot, [button]);
       return;
     }
@@ -158,15 +169,17 @@ function hintFor(state: GameState): string {
     case "pending-card":
       return "Pick a destination or target (right-click to cancel)";
     case "pending-discard":
-      return `Discard ${state.phase.count} card${state.phase.count === 1 ? "" : "s"}`;
+      return `Pick ${state.phase.count} card${
+        state.phase.count === 1 ? "" : "s"
+      } to discard`;
     case "pending-sleep":
       return "Pick a card to put to sleep";
     case "pending-search":
       return "Pick a card from your draw pile";
     case "pending-store":
-      return "Pick cards to store, then confirm";
+      return "Pick any number of cards to store";
     case "pending-wall":
-      return "Click a direction to raise the wall";
+      return "Pick a direction for the wall";
     case "playing":
       return "Click a card or reachable tile · right-click to discard";
     case "pending-remove":

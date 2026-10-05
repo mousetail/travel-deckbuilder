@@ -10,7 +10,6 @@ import {
   pileButton,
   pileOverlay,
   searchOverlay,
-  storeOverlay,
 } from "./pile-view";
 import {
   CardAnimator,
@@ -99,6 +98,8 @@ export class App {
   private animating = false;
   /** The card highlighted by hover (hovering it or a tile), playing only. */
   private hoveredCard: Card | null = null;
+  /** The wall side the hovered hex would place while a Wall is being aimed. */
+  private hoveredWallSide: number | null = null;
   /** Best card per hovered tile, valid until the next state change. */
   private readonly bestCardCache = new Map<string, Card | null>();
   /** Paths per hovered tile, valid until the next state change. */
@@ -174,6 +175,7 @@ export class App {
       topBar,
       () => this.handleAction(),
       () => this.handleCancel(),
+      () => this.handleStoreConfirm(),
       () => this.helpView.toggle(),
     );
     this.featureView = new FeatureView(
@@ -215,6 +217,7 @@ export class App {
   private apply(next: Transition): void {
     this.state = next.state;
     this.hoveredCard = null;
+    this.hoveredWallSide = null;
     this.captureGameOver(next.state);
     if (next.moves.length === 0 || prefersReducedMotion()) {
       this.render();
@@ -299,9 +302,9 @@ export class App {
       activeHighlight: this.activeHighlightKey(),
       killable: this.killableEnemies(),
       walls: this.state.walls,
-      wallChoices: this.wallChoices(),
       mimic: mimicPosition(this.state),
     });
+    this.mapView.setWallPreview(this.wallPreviewEdges());
     this.renderHand();
     this.hud.render(this.state);
     this.consumablesView.render(this.state, this.animating);
@@ -389,19 +392,21 @@ export class App {
     }
   }
 
-  /** The six candidate walls while the Wall card is being placed, else none. */
-  private wallChoices(): readonly (readonly WallEdge[])[] {
+  /** The wall preview to draw: the hovered side's wall while placing, else none. */
+  private wallPreviewEdges(): readonly WallEdge[] {
     const phase = this.state.phase;
-    if (phase.kind !== "pending-wall") {
+    if (phase.kind !== "pending-wall" || this.hoveredWallSide === null) {
       return [];
     }
-    const choices: WallEdge[][] = [];
-    for (let side = 0; side < 6; side += 1) {
-      choices.push(
-        hexagonSideWallEdges(this.state.map.player, side, phase.radius),
-      );
-    }
-    return choices;
+    const tiles = visibleMap(this.state).tiles;
+    return hexagonSideWallEdges(
+      this.state.map.player,
+      this.hoveredWallSide,
+      phase.radius,
+    ).filter(
+      (edge) =>
+        tiles.has(hexKey(edge.from)) && tiles.has(hexKey(edge.to)),
+    );
   }
 
   private renderHand(): void {
@@ -455,15 +460,6 @@ export class App {
       setChildren(this.middle, [
         searchOverlay(this.state.deck.draw, (card) =>
           this.handleSearchChoice(card),
-        ),
-      ]);
-      return;
-    }
-    if (this.state.phase.kind === "pending-store") {
-      this.openPile = null;
-      setChildren(this.middle, [
-        storeOverlay(this.state.phase.selected.length, () =>
-          this.handleStoreConfirm(),
         ),
       ]);
       return;
@@ -576,6 +572,19 @@ export class App {
   private handleHexHover(coord: HexCoord | null): void {
     this.setHoveredCard(this.bestCardFor(coord));
     this.updateHoverPaths(coord);
+    this.updateWallHover(coord);
+  }
+
+  /** Track which wall side the hovered hex would place, and preview it. */
+  private updateWallHover(coord: HexCoord | null): void {
+    const phase = this.state.phase;
+    this.hoveredWallSide =
+      phase.kind === "pending-wall" &&
+      coord !== null &&
+      !equalsHex(coord, this.state.map.player)
+        ? sideToward(this.state.map.player, coord)
+        : null;
+    this.mapView.setWallPreview(this.wallPreviewEdges());
   }
 
   /** Show the paths the hovered tile would be reached by, or none. */

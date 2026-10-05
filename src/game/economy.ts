@@ -1,5 +1,5 @@
 import type { Card, ShopSlot } from "./cards";
-import { SHOP_CATALOGUE, instantiate, isIndestructible } from "./cards";
+import { SHOP_CATALOGUE, instantiate, isIndestructible, upgradeTarget } from "./cards";
 import { CONSUMABLE_CAPACITY, rollConsumableOptions } from "./consumables";
 import type { Consumable } from "./consumables";
 import { gainCurrency, spendCurrency } from "./currency";
@@ -215,11 +215,12 @@ export function rerollShop(state: GameState): GameState {
 
 /** Bump the first movement mode by 1; attack modes are never touched. */
 export function upgradeCard(card: Card): Card {
-  if (card.upgradedForm === null) {
+  const target = upgradeTarget(card);
+  if (target === null) {
     return card;
   }
   return {
-    ...instantiate(card.upgradedForm, card.id),
+    ...instantiate(target, card.id),
     traits: card.traits,
     sleeping: card.sleeping,
     temporary: card.temporary,

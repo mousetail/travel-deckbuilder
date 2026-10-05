@@ -5,7 +5,10 @@ import {
   STORAGE_EMPTY_SPEC,
   counterIds,
   instantiate,
+  revertTemporary,
+  temporaryUpgradeCard,
   transformStorage,
+  upgradeTarget,
 } from "./cards";
 import { hexKey, hexesInRange, parseHexKey } from "./hex";
 import type { HexCoord } from "./hex";
@@ -185,6 +188,28 @@ describe("Storage Bin", () => {
     const upgraded = upgradeCard(full);
     expect(upgraded.name).toBe("Storage Bin (Full)+");
     expect(upgraded.stored[0]?.name).toBe("Trade+");
+  });
+});
+
+describe("Smith upgrades", () => {
+  it("does not upgrade a temporary card", () => {
+    const temporary = { ...cardFrom("Trade", "t"), temporary: true };
+    expect(upgradeTarget(temporary)).toBeNull();
+    expect(upgradeCard(temporary)).toBe(temporary);
+  });
+
+  it("makes a temporary upgrade permanent", () => {
+    const base = cardFrom("Trade", "t");
+    const temporary = temporaryUpgradeCard(base);
+    expect(temporary.name).toBe("Trade+");
+    expect(temporary.temporaryUpgrade).toBe(true);
+    expect(upgradeTarget(temporary)?.name).toBe("Trade+");
+
+    const permanent = upgradeCard(temporary);
+    expect(permanent.name).toBe("Trade+");
+    expect(permanent.temporaryUpgrade).toBe(false);
+    // The permanent form no longer reverts when it leaves the hand.
+    expect(revertTemporary(permanent)).toBe(permanent);
   });
 });
 

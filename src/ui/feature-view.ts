@@ -1,6 +1,6 @@
 import type { Card, CardSpec, ShopSlot } from "../game/cards";
 import { allCards } from "../game/deck";
-import { instantiate, isIndestructible } from "../game/cards";
+import { instantiate, isIndestructible, revertTemporary, upgradeTarget } from "../game/cards";
 import { CONSUMABLE_CAPACITY } from "../game/consumables";
 import type { Consumable } from "../game/consumables";
 import type { FeatureAction } from "../game/economy";
@@ -130,11 +130,12 @@ export class FeatureView {
     const card = allCards(state.deck).find(
       (c) => c.id === this.smithPreviewCardId,
     );
-    if (card === undefined || card.upgradedForm === null) {
+    const upgradedForm = card === undefined ? null : upgradeTarget(card);
+    if (card === undefined || upgradedForm === null) {
       this.smithPreviewCardId = null;
       return null;
     }
-    return { card, upgradedForm: card.upgradedForm };
+    return { card, upgradedForm };
   }
 
   /** The card the removal confirmation is showing. */
@@ -247,11 +248,14 @@ export class FeatureView {
     const nodes: Node[] = [this.title("Smith — upgrade a card")];
     const cardNodes: HTMLElement[] = [];
     for (const card of allCards(state.deck)) {
-      if (card.upgradedForm === null) continue;
+      const target = upgradeTarget(card);
+      if (target === null) continue;
+      // Show the base card, so a temporary upgrade reads as the smith's target.
+      const base = revertTemporary(card);
       cardNodes.push(
         this.cardChoice(
-          card,
-          this.textCaption(`Upgrade — ${card.upgradedForm.name}`),
+          base,
+          this.textCaption(`Upgrade — ${target.name}`),
           false,
           () => {
             this.smithPreviewCardId = card.id;
@@ -275,12 +279,14 @@ export class FeatureView {
     originalCard: Card,
     upgradedForm: CardSpec,
   ): HTMLElement {
+    // Preview from the base form, so the temporary upgrade reads as permanent.
+    const currentCard = revertTemporary(originalCard);
     const upgradedCard = instantiate(upgradedForm, originalCard.id);
     const face = { index: 0, count: 1, viewOnly: false };
     const nodes: Node[] = [
       this.title("Upgrade preview"),
       this.cardsContainer([
-        cardWithCaption(originalCard, face, "Current"),
+        cardWithCaption(currentCard, face, "Current"),
         cardWithCaption(upgradedCard, face, "Upgraded"),
       ]),
       this.button("Confirm upgrade", false, () => {

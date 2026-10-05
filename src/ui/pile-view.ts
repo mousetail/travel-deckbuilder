@@ -120,32 +120,3 @@ export function searchOverlay(
   setChildren(overlay, [heading, list]);
   return overlay;
 }
-
-/**
- * The storage-bin choice: the hand stays visible below, so this only carries the
- * instructions and the confirm button. The selection itself lives in the phase.
- */
-export function storeOverlay(
-  selectedCount: number,
-  onConfirm: () => void,
-): HTMLElement {
-  const overlay = document.createElement("div");
-  overlay.classList.add("overlay");
-
-  const heading = document.createElement("div");
-  heading.classList.add("overlay-title");
-  heading.textContent = "Store cards in the bin";
-
-  const hint = document.createElement("div");
-  hint.classList.add("overlay-hint");
-  hint.textContent =
-    "Click cards in your hand to add or remove them, then confirm.";
-
-  const confirm = document.createElement("button");
-  confirm.classList.add("hud-button", "feature-button");
-  confirm.textContent = `Store ${selectedCount} card${selectedCount === 1 ? "" : "s"}`;
-  confirm.addEventListener("click", onConfirm);
-
-  setChildren(overlay, [heading, hint, confirm]);
-  return overlay;
-}

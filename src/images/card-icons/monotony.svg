@@ -6,9 +6,92 @@
    version="1.1"
    id="svg1"
    sodipodi:docname="monotony.svg"
+   inkscape:version="1.4.4 (dcaf3e7d9e, 2026-05-05)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
    xmlns="http://www.w3.org/2000/svg"
    xmlns:svg="http://www.w3.org/2000/svg">
   <defs
-     id="defs1" />
-  <!-- Blank placeholder: move over the terrain you are standing on. An artist will fill this in. -->
+     id="defs1">
+    <inkscape:path-effect
+       effect="bspline"
+       id="path-effect9"
+       is_visible="true"
+       lpeversion="1.3"
+       weight="33.333333"
+       steps="2"
+       helper_size="0"
+       apply_no_weight="true"
+       apply_with_weight="true"
+       only_selected="false"
+       uniform="false" />
+    <inkscape:path-effect
+       effect="bspline"
+       id="path-effect8"
+       is_visible="true"
+       lpeversion="1.3"
+       weight="33.333333"
+       steps="2"
+       helper_size="0"
+       apply_no_weight="true"
+       apply_with_weight="true"
+       only_selected="false"
+       uniform="false" />
+    <inkscape:path-effect
+       effect="spiro"
+       id="path-effect7"
+       is_visible="true"
+       lpeversion="1" />
+    <inkscape:path-effect
+       effect="spiro"
+       id="path-effect6"
+       is_visible="true"
+       lpeversion="1" />
+    <inkscape:path-effect
+       effect="bspline"
+       id="path-effect8-2"
+       is_visible="true"
+       lpeversion="1.3"
+       weight="33.333333"
+       steps="2"
+       helper_size="0"
+       apply_no_weight="true"
+       apply_with_weight="true"
+       only_selected="false"
+       uniform="false" />
+  </defs>
+  <sodipodi:namedview
+     id="namedview1"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="51.3125"
+     inkscape:cx="6.5383678"
+     inkscape:cy="8.6236297"
+     inkscape:window-width="1920"
+     inkscape:window-height="1008"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg1" />
+  <!-- Blank placeholder: temporary-upgrade sigil. An artist will fill this in. -->
+  <path
+     style="fill:#eb7900;fill-opacity:1;stroke:#000000;stroke-width:1.141;stroke-miterlimit:10;stroke-dasharray:none;stroke-opacity:1"
+     d="M 8.4384896,0.77953714 C 10.90147,0.55686932 12.325836,1.6926853 13.831318,3.6546678 c 1.840748,2.3989092 1.745741,5.5366683 0.233862,8.1553202 -1.084515,1.878434 -1.945244,2.931451 -4.0957165,3.214566 -2.7634204,0.363811 -6.3800961,0.04709 -8.076876,-2.164193 -1.82266484,-2.375343 -1.60138908,-6.4523582 0,-8.9821637 C 3.1837796,1.8384278 6.0342038,0.99689865 8.4384896,0.77953714 Z"
+     id="path9"
+     sodipodi:nodetypes="sssssss" />
+  <path
+     style="fill:#0aeb00;fill-opacity:1;stroke:#000000;stroke-width:1.141;stroke-miterlimit:10;stroke-dasharray:none;stroke-opacity:1"
+     d="M 0.68209501,7.5615104 8.2630938,7.5809988 7.7953715,15.025579 c 0,0 -3.6272449,1.152348 -5.6711328,-2.182705 C 0.08035084,9.507822 0.68209501,7.5615104 0.68209501,7.5615104 Z"
+     id="path11"
+     sodipodi:nodetypes="ccczc" />
+  <path
+     style="fill:#00ebdd;fill-opacity:1;stroke:#000000;stroke-width:1.141;stroke-miterlimit:10;stroke-dasharray:none;stroke-opacity:1"
+     d="M 15.106761,7.764927 7.525762,7.7454386 7.9934843,0.30085844 c 0,0 3.6272447,-1.15234765 5.6711327,2.18270496 2.043888,3.335052 1.442144,5.2813636 1.442144,5.2813636 z"
+     id="path11-0"
+     sodipodi:nodetypes="ccczc" />
 </svg>

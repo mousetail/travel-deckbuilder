@@ -57,8 +57,6 @@ export type MapViewState = {
   killable: ReadonlySet<string>;
   /** Directed hex edges blocked by a wall. */
   walls: readonly WallEdge[];
-  /** Candidate walls offered by the Wall card, one per side; empty otherwise. */
-  wallChoices: readonly (readonly WallEdge[])[];
   /** The mimic's tile, or null while none is placed. */
   mimic: HexCoord | null;
 };
@@ -360,17 +358,11 @@ function wallsSvg(
   return svg;
 }
 
-/** The candidate walls of a Wall play, drawn as faint dashed previews. */
-function wallChoicesSvg(
-  choices: readonly (readonly WallEdge[])[],
-  tiles: ReadonlyMap<string, Tile>,
+/** The candidate wall of a Wall play, drawn as a dashed preview. */
+function wallPreviewSvg(
+  walls: readonly WallEdge[],
 ): SVGSVGElement | null {
-  const visible = choices.flatMap((choice) =>
-    choice.filter(
-      (edge) => tiles.has(hexKey(edge.from)) && tiles.has(hexKey(edge.to)),
-    ),
-  );
-  return wallsSvg(visible, "outline-wall-choice");
+  return wallsSvg(walls, "outline-wall-choice");
 }
 
 function outlineSvg(
@@ -477,6 +469,7 @@ export class MapView {
   private readonly layer: HTMLElement;
   private readonly world: HTMLElement;
   private readonly pathLayer: HTMLElement;
+  private readonly wallPreviewLayer: HTMLElement;
   private readonly tooltip: HTMLElement;
   private readonly onHexClick: (coord: HexCoord) => void;
   private readonly onHexHover: (coord: HexCoord | null) => void;
@@ -500,6 +493,7 @@ export class MapView {
   private readonly highlightGroups = new Map<string, HighlightNodes>();
   private activeHighlight: string | null = null;
   private hoverPaths: readonly HoverPath[] = [];
+  private wallPreview: readonly WallEdge[] = [];
 
   constructor(
     layer: HTMLElement,
@@ -516,6 +510,8 @@ export class MapView {
     this.world.classList.add("world");
     this.pathLayer = document.createElement("div");
     this.pathLayer.classList.add("path-layer");
+    this.wallPreviewLayer = document.createElement("div");
+    this.wallPreviewLayer.classList.add("wall-preview-layer");
     this.tooltip = document.createElement("div");
     this.tooltip.classList.add("enemy-tooltip", "hidden");
     setChildren(layer, [this.world]);
@@ -672,11 +668,6 @@ export class MapView {
       nodes.push(walls);
     }
 
-    const wallChoices = wallChoicesSvg(view.wallChoices, view.tiles);
-    if (wallChoices !== null) {
-      nodes.push(wallChoices);
-    }
-
     this.dangerOutline = outlineSvg(
       this.visibleHexes(view.danger, view.tiles),
       "outline-danger",
@@ -733,6 +724,7 @@ export class MapView {
       }
     }
 
+    nodes.push(this.wallPreviewLayer);
     nodes.push(this.pathLayer);
     nodes.push(this.tooltip);
 
@@ -740,8 +732,20 @@ export class MapView {
     this.applyHighlight();
     this.applyHover();
     this.updatePaths();
+    this.updateWallPreview();
 
     setChildren(this.world, nodes);
+  }
+
+  /** Show the wall that clicking the hovered hex would place, or none. */
+  setWallPreview(walls: readonly WallEdge[]): void {
+    this.wallPreview = walls;
+    this.updateWallPreview();
+  }
+
+  private updateWallPreview(): void {
+    const svg = wallPreviewSvg(this.wallPreview);
+    setChildren(this.wallPreviewLayer, svg === null ? [] : [svg]);
   }
 
   /** Switch the visible highlight without rebuilding the map. */

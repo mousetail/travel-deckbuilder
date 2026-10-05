@@ -258,6 +258,22 @@ export function revertTemporary(card: Card): Card {
   };
 }
 
+/**
+ * The form the smith would turn `card` into, or `null` if it cannot be
+ * upgraded. A card conjured by Invention is never upgradable, even if it has an
+ * upgraded form. A card that is only temporarily upgraded upgrades into that
+ * same form, permanently.
+ */
+export function upgradeTarget(card: Card): CardSpec | null {
+  if (card.temporary) {
+    return null;
+  }
+  if (card.temporaryUpgrade) {
+    return card.baseSpec.upgradedForm;
+  }
+  return card.upgradedForm;
+}
+
 function scalePay(card: Card, scale: (amount: number) => number): Card {
   return {
     ...card,

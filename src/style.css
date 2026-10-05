@@ -678,10 +678,6 @@ button {
   font-weight: bold;
 }
 
-.overlay-hint {
-  opacity: 0.75;
-}
-
 /* A confirmation (smith upgrade, card removal) is stacked over the selection it
    belongs to: both share one grid cell so the confirm sits on top, and the panel
    underneath stops taking clicks. */
@@ -1096,10 +1092,19 @@ button {
 
   & line {
     stroke: #ffd700;
-    stroke-width: 4;
-    stroke-dasharray: 4 3;
-    opacity: 0.6;
+    stroke-width: 5;
+    stroke-dasharray: 5 3;
+    opacity: 0.85;
   }
+}
+
+/* The wall that clicking the hovered hex would place, if any. */
+.wall-preview-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 4;
 }
 
 /* The path a hovered tile would be reached by, one polyline per mover. */
