@@ -1,4 +1,4 @@
-import type { Card } from "./cards";
+import type { Card, ShopSlot } from "./cards";
 import { hexKey } from "./hex";
 import type { GameState } from "./state";
 import grassUrl from "../images/grass.png";
@@ -86,7 +86,7 @@ export function playerOnFinish(state: GameState): boolean {
 
 export type TileFeature =
   | { kind: "none" }
-  | { kind: "shop"; stock: readonly (Card | null)[]; rerollCost: number }
+  | { kind: "shop"; stock: readonly (ShopSlot | null)[]; rerollCost: number }
   | { kind: "smith" }
   | { kind: "remove-card" }
   | { kind: "gain-card"; card: Card | null }

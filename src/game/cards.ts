@@ -41,11 +41,7 @@ export type InventionPool = "all" | "uncommon-plus";
  * reads to pick the target spec.
  */
 export type StorageForm =
-  | "none"
-  | "empty"
-  | "empty-upgraded"
-  | "full"
-  | "full-upgraded";
+  "none" | "empty" | "empty-upgraded" | "full" | "full-upgraded";
 
 /**
  * A side effect that fires as part of a card's action. Sleeping is an effect of
@@ -60,7 +56,19 @@ export type CardEffect =
   | { kind: "halve-cost" }
   | { kind: "draw"; count: number };
 
-export type Rarity = "starting" | "common" | "uncommon" | "rare" | "none";
+/**
+ * How often a shop offers a card. Only cards sold in shops carry a rarity, so
+ * these are the only rarities: starting cards, upgraded forms and the storage
+ * bins are never drawn.
+ */
+export type Rarity = "common" | "uncommon" | "rare";
+
+/** Shop/gift draw weights, kept next to `Rarity`. */
+export const RARITY_WEIGHT: Record<Rarity, number> = {
+  common: 6,
+  uncommon: 3,
+  rare: 1,
+};
 
 /**
  * A rule-bending property a card carries. Traits are shown as badges on the
@@ -76,24 +84,10 @@ export type Rarity = "starting" | "common" | "uncommon" | "rare" | "none";
  */
 export type CardTrait = "must-play-first" | "indestructible" | "shy";
 
-/**
- * Shop/gift draw weights, kept next to `Rarity`. `starting` is 0 so a starting
- * spec can never be drawn even if one leaked into a pool.
- */
-export const RARITY_WEIGHT: Record<Rarity, number> = {
-  starting: 0,
-  common: 6,
-  uncommon: 3,
-  rare: 1,
-  none: 0,
-};
-
 export type Card = {
   id: string;
   name: string;
   image: string;
-  cost: number;
-  rarity: Rarity;
   traits: readonly CardTrait[];
   modes: readonly CardMode[];
   /** Effects that fire when the card is played, alongside its mode. */
@@ -119,11 +113,14 @@ export type Card = {
   sleeping: number;
 };
 
+/**
+ * A card definition. It holds everything needed to instantiate a `Card` except
+ * shop pricing: a spec that is sold in a shop is a `ShopCardSpec`, which adds
+ * the rarity and cost. Build one with `spec(...)`.
+ */
 export type CardSpec = {
   name: string;
   image: string;
-  cost: number;
-  rarity: Rarity;
   traits: readonly CardTrait[];
   modes: readonly CardMode[];
   onPlay: readonly CardEffect[];
@@ -132,6 +129,12 @@ export type CardSpec = {
   /** Which storage-bin form this is, or `none` for every other card. */
   storage: StorageForm;
 };
+
+/** A `CardSpec` sold in shops, so it carries the rarity and price it sells for. */
+export type ShopCardSpec = CardSpec & { rarity: Rarity; cost: number };
+
+/** A card on offer in a shop, paired with the price it is sold for. */
+export type ShopSlot = { card: Card; cost: number };
 
 export type IdFactory = () => string;
 
@@ -148,8 +151,6 @@ export function instantiate(spec: CardSpec, id: string): Card {
     id,
     name: spec.name,
     image: spec.image,
-    cost: spec.cost,
-    rarity: spec.rarity,
     traits: spec.traits,
     modes: spec.modes,
     onPlay: spec.onPlay,
@@ -299,93 +300,231 @@ function sleepTotal(effects: readonly CardEffect[]): number {
   return total;
 }
 
-const move = (terrain: Terrain, distance: number): CardMode => ({
-  kind: "move",
-  terrain,
-  distance,
-});
+/**
+ * Constructors for every playable `CardMode`. Grouped so that all the helpers
+ * for a card's `modes` field sit together.
+ */
+const cardMoves = {
+  move: (terrain: Terrain, distance: number): CardMode => ({
+    kind: "move",
+    terrain,
+    distance,
+  }),
+  moveCurrentTerrain: (distance: number): CardMode => ({
+    kind: "move-current-terrain",
+    distance,
+  }),
+  hop: (maxCost: number): CardMode => ({ kind: "hop", maxCost }),
+  teleport: (range: number): CardMode => ({ kind: "teleport", range }),
+  attack: (range: number): CardMode => ({ kind: "attack", range }),
+  drawDiscard: (draw: number, discard: number): CardMode => ({
+    kind: "draw-discard",
+    draw,
+    discard,
+  }),
+  discardHand: (threshold: number, draw: number): CardMode => ({
+    kind: "discard-hand",
+    threshold,
+    draw,
+  }),
+  draw: (count: number): CardMode => ({ kind: "draw", count }),
+  recover: (count: number): CardMode => ({ kind: "recover", count }),
+  currency: (amount: number): CardMode => ({ kind: "currency", amount }),
+  sleepCard: (reshuffles: number): CardMode => ({
+    kind: "sleep-card",
+    reshuffles,
+  }),
+  search: (count: number): CardMode => ({ kind: "search", count }),
+  trivialTerrain: (turns: number): CardMode => ({
+    kind: "trivial-terrain",
+    turns,
+  }),
+  upgradeHand: { kind: "upgrade-hand" } as const,
+  store: { kind: "store" } as const,
+  unstore: (copies: boolean): CardMode => ({ kind: "unstore", copies }),
+  wall: (radius: number): CardMode => ({ kind: "wall", radius }),
+  invention: (count: number, pool: InventionPool): CardMode => ({
+    kind: "invention",
+    count,
+    pool,
+  }),
+  escalate: (thisTurn: number, permanentReciprocal: number): CardMode => ({
+    kind: "escalate",
+    thisTurn,
+    permanentReciprocal,
+  }),
+};
 
-const sleep = (reshuffles: number): CardEffect => ({
-  kind: "sleep",
-  reshuffles,
-});
+/**
+ * Constructors for every `CardEffect`. Grouped so that all the helpers for a
+ * card's `onPlay` and `onDiscard` fields sit together.
+ */
+const cardEffects = {
+  currency: (amount: number): CardEffect => ({ kind: "currency", amount }),
+  sleep: (reshuffles: number): CardEffect => ({
+    kind: "sleep",
+    reshuffles,
+  }),
+  pay: (amount: number): CardEffect => ({ kind: "pay", amount }),
+  doubleCost: { kind: "double-cost" } as const,
+  halveCost: { kind: "halve-cost" } as const,
+  draw: (count: number): CardEffect => ({ kind: "draw", count }),
+};
 
-const currency = (amount: number): CardEffect => ({
-  kind: "currency",
-  amount,
-});
+/**
+ * The mutable state a spec builder accumulates. Chainable methods edit it in
+ * place and `build` snapshots it into a plain `CardSpec`.
+ */
+type SpecDraft = {
+  name: string;
+  modes: readonly CardMode[];
+  image: string;
+  traits: CardTrait[];
+  onPlay: CardEffect[];
+  onDiscard: CardEffect[];
+  upgradedForm: CardSpec | null;
+  storage: StorageForm;
+};
 
-const pay = (amount: number): CardEffect => ({ kind: "pay", amount });
+function emptyDraft(name: string, modes: readonly CardMode[]): SpecDraft {
+  return {
+    name,
+    modes,
+    image: "",
+    traits: [],
+    onPlay: [],
+    onDiscard: [],
+    upgradedForm: null,
+    storage: "none",
+  };
+}
 
-const drawEffect = (count: number): CardEffect => ({ kind: "draw", count });
+/**
+ * Fluent builder for a `CardSpec`. Only the name and the playable modes are
+ * required; every other property is added by the method that applies to that
+ * card, so each spec reads as just the lines it needs.
+ *
+ * A spec that is sold in a shop additionally calls `shopStatus`, which returns
+ * a `ShopCardSpecBuilder` whose `build` carries the rarity and price.
+ */
+export class CardSpecBuilder {
+  protected readonly draft: SpecDraft;
 
-const doubleCost: CardEffect = { kind: "double-cost" };
+  constructor(draft: SpecDraft) {
+    this.draft = draft;
+  }
 
-const halveCost: CardEffect = { kind: "halve-cost" };
+  /** Set the card art; unset specs render as a blank placeholder. */
+  withImage(image: string): this {
+    this.draft.image = image;
+    return this;
+  }
 
-const search = (count: number): CardMode => ({ kind: "search", count });
+  /** Add effects that fire when the card is played, alongside its mode. */
+  withPlayEffect(...effects: CardEffect[]): this {
+    this.draft.onPlay.push(...effects);
+    return this;
+  }
 
-const trivialTerrain = (turns: number): CardMode => ({
-  kind: "trivial-terrain",
-  turns,
-});
+  /** Add effects that fire when the card is discarded by hand. */
+  withDiscardEffect(...effects: CardEffect[]): this {
+    this.draft.onDiscard.push(...effects);
+    return this;
+  }
 
-const upgradeHand: CardMode = { kind: "upgrade-hand" };
+  /** Add rule-bending traits, shown as badges on the card face. */
+  withTrait(...traits: CardTrait[]): this {
+    this.draft.traits.push(...traits);
+    return this;
+  }
 
-const teleport = (range: number): CardMode => ({ kind: "teleport", range });
+  /** Set the upgraded form the smith can turn this card into. */
+  withUpgradedForm(form: CardSpec): this {
+    this.draft.upgradedForm = form;
+    return this;
+  }
 
-const store: CardMode = { kind: "store" };
+  /** Set which storage-bin form this is, for the two storage bins only. */
+  withStorage(form: StorageForm): this {
+    this.draft.storage = form;
+    return this;
+  }
 
-const unstore = (copies: boolean): CardMode => ({ kind: "unstore", copies });
+  /** Mark the card as sold in shops, with a draw rarity and a price. */
+  shopStatus(rarity: Rarity, cost: number): ShopCardSpecBuilder {
+    return new ShopCardSpecBuilder(this.draft, rarity, cost);
+  }
 
-const wall = (radius: number): CardMode => ({ kind: "wall", radius });
+  /** Snapshot the accumulated properties into a plain spec object. */
+  build(): CardSpec {
+    return {
+      name: this.draft.name,
+      image: this.draft.image,
+      traits: [...this.draft.traits],
+      modes: this.draft.modes,
+      onPlay: [...this.draft.onPlay],
+      onDiscard: [...this.draft.onDiscard],
+      upgradedForm: this.draft.upgradedForm,
+      storage: this.draft.storage,
+    };
+  }
+}
 
-const invention = (count: number, pool: InventionPool): CardMode => ({
-  kind: "invention",
-  count,
-  pool,
-});
+/** A `CardSpecBuilder` whose `build` adds the shop rarity and price. */
+class ShopCardSpecBuilder extends CardSpecBuilder {
+  private readonly rarity: Rarity;
+  private readonly cost: number;
+
+  constructor(draft: SpecDraft, rarity: Rarity, cost: number) {
+    super(draft);
+    this.rarity = rarity;
+    this.cost = cost;
+  }
+
+  override build(): ShopCardSpec {
+    return { ...super.build(), rarity: this.rarity, cost: this.cost };
+  }
+}
+
+/** Start building a card spec from its name and playable modes. */
+export function spec(
+  name: string,
+  modes: readonly CardMode[],
+): CardSpecBuilder {
+  return new CardSpecBuilder(emptyDraft(name, modes));
+}
 
 /**
  * The four forms of the storage bin. Empty and full transform into each other,
  * and the upgraded pair stays upgraded across the swap. Only the empty form is
  * sold; the full forms are never offered.
  */
-const STORAGE_EMPTY_UPGRADED_SPEC: CardSpec = {
-  ...spec("Storage Bin (Empty)+", "rare", 4, [store], [], [], null),
-  storage: "empty-upgraded",
-};
+const STORAGE_EMPTY_UPGRADED_SPEC: CardSpec = spec("Storage Bin (Empty)+", [
+  cardMoves.store,
+])
+  .withStorage("empty-upgraded")
+  .build();
 
-export const STORAGE_EMPTY_SPEC: CardSpec = {
-  ...spec(
-    "Storage Bin (Empty)",
-    "rare",
-    4,
-    [store],
-    [],
-    [],
-    STORAGE_EMPTY_UPGRADED_SPEC,
-  ),
-  storage: "empty",
-};
+export const STORAGE_EMPTY_SPEC: ShopCardSpec = spec("Storage Bin (Empty)", [
+  cardMoves.store,
+])
+  .shopStatus("rare", 4)
+  .withUpgradedForm(STORAGE_EMPTY_UPGRADED_SPEC)
+  .withStorage("empty")
+  .build();
 
-const STORAGE_FULL_UPGRADED_SPEC: CardSpec = {
-  ...spec("Storage Bin (Full)+", "none", 0, [unstore(true)], [], [], null),
-  storage: "full-upgraded",
-};
+const STORAGE_FULL_UPGRADED_SPEC: CardSpec = spec("Storage Bin (Full)+", [
+  cardMoves.unstore(true),
+])
+  .withStorage("full-upgraded")
+  .build();
 
-export const STORAGE_FULL_SPEC: CardSpec = {
-  ...spec(
-    "Storage Bin (Full)",
-    "none",
-    0,
-    [unstore(false)],
-    [],
-    [],
-    STORAGE_FULL_UPGRADED_SPEC,
-  ),
-  storage: "full",
-};
+export const STORAGE_FULL_SPEC: CardSpec = spec("Storage Bin (Full)", [
+  cardMoves.unstore(false),
+])
+  .withUpgradedForm(STORAGE_FULL_UPGRADED_SPEC)
+  .withStorage("full")
+  .build();
 
 const STORAGE_TRANSFORM: Record<StorageForm, CardSpec | null> = {
   none: null,
@@ -396,10 +535,7 @@ const STORAGE_TRANSFORM: Record<StorageForm, CardSpec | null> = {
 };
 
 /** Swap a storage bin to its other form, keeping its id and setting `stored`. */
-export function transformStorage(
-  card: Card,
-  stored: readonly Card[],
-): Card {
+export function transformStorage(card: Card, stored: readonly Card[]): Card {
   const target = STORAGE_TRANSFORM[card.storage];
   if (target === null) {
     return card;
@@ -410,512 +546,271 @@ export function transformStorage(
 // Escalation replaces the old turn-number enemy-speed ramp: it cannot be
 // discarded or removed, and while it is in hand no other card may be played, so
 // each time it is drawn the player must pay the enemy-speed tax first.
-const ESCALATION_SPEC: CardSpec = withTraits(
-  spec(
-    "Escalation",
-    "starting",
-    0,
-    [{ kind: "escalate", thisTurn: 1, permanentReciprocal: 7 }],
-    [],
-    [],
-    null,
-  ),
-  ["must-play-first", "indestructible", "shy"],
-);
+const ESCALATION_SPEC: CardSpec = spec("Escalation", [cardMoves.escalate(1, 7)])
+  .withTrait("must-play-first", "indestructible", "shy")
+  .build();
 
 export const STARTING_DECK: readonly CardSpec[] = [
   // In turn-scaling mode the ramp is the turn number itself, so the card would
   // have nothing to do and is left out of the deck.
   ...(DIFFICULTY_SCALING === "card" ? [ESCALATION_SPEC] : []),
-  spec(
-    "Tredge",
-    "starting",
-    0,
-    [move("grass", 1)],
-    [],
-    [],
-    spec("Tredge+", "starting", 0, [move("grass", 2)], [], [], null),
-  ),
-  spec(
-    "Tredge",
-    "starting",
-    0,
-    [move("grass", 1)],
-    [],
-    [],
-    spec("Tredge+", "starting", 0, [move("grass", 2)], [], [], null),
-  ),
-  spec(
-    "Walk",
-    "starting",
-    0,
-    [move("grass", 3)],
-    [],
-    [],
-    spec("Walk+", "starting", 0, [move("grass", 4)], [], [], null),
-  ),
-  spec(
-    "Blaze",
-    "starting",
-    0,
-    [move("forest", 1)],
-    [],
-    [],
-    spec("Blaze+", "starting", 0, [move("forest", 2)], [], [], null),
-  ),
-  spec(
-    "Stab",
-    "starting",
-    0,
-    [{ kind: "attack", range: 1 }],
-    [{ kind: "sleep", reshuffles: 2 }],
-    [{ kind: "sleep", reshuffles: 2 }],
-    spec(
-      "Stab+",
-      "starting",
-      0,
-      [{ kind: "attack", range: 2 }],
-      [{ kind: "sleep", reshuffles: 2 }],
-      [{ kind: "sleep", reshuffles: 2 }],
-      null,
-    ),
-  ),
+  spec("Tredge", [cardMoves.move("grass", 1)])
+    .withUpgradedForm(spec("Tredge+", [cardMoves.move("grass", 2)]).build())
+    .build(),
+  spec("Tredge", [cardMoves.move("grass", 1)])
+    .withUpgradedForm(spec("Tredge+", [cardMoves.move("grass", 2)]).build())
+    .build(),
+  spec("Walk", [cardMoves.move("grass", 3)])
+    .withUpgradedForm(spec("Walk+", [cardMoves.move("grass", 4)]).build())
+    .build(),
+  spec("Blaze", [cardMoves.move("forest", 1)])
+    .withUpgradedForm(spec("Blaze+", [cardMoves.move("forest", 2)]).build())
+    .build(),
+  spec("Stab", [cardMoves.attack(1)])
+    .withPlayEffect(cardEffects.sleep(2))
+    .withDiscardEffect(cardEffects.sleep(2))
+    .withUpgradedForm(
+      spec("Stab+", [cardMoves.attack(2)])
+        .withPlayEffect(cardEffects.sleep(2))
+        .withDiscardEffect(cardEffects.sleep(2))
+        .build(),
+    )
+    .build(),
 ];
 
-export const SHOP_CATALOGUE: readonly CardSpec[] = [
+export const SHOP_CATALOGUE: readonly ShopCardSpec[] = [
   // basic movement
-  spec(
-    "Stride",
-    "common",
-    2,
-    [move("grass", 4)],
-    [],
-    [],
-    spec("Stride+", "common", 2, [move("grass", 5)], [], [], null),
-  ),
-  spec(
-    "Sprint",
-    "uncommon",
-    4,
-    [move("grass", 8)],
-    [],
-    [],
-    spec("Sprint+", "uncommon", 4, [move("grass", 9)], [], [], null),
-  ),
-  spec(
-    "Wade",
-    "common",
-    2,
-    [move("water", 1)],
-    [],
-    [],
-    spec("Wade+", "common", 2, [move("water", 2)], [], [], null),
-  ),
-  spec(
-    "Swim",
-    "uncommon",
-    3,
-    [move("water", 2)],
-    [],
-    [],
-    spec("Swim+", "uncommon", 3, [move("water", 3)], [], [], null),
-  ),
-  spec(
-    "Climb",
-    "uncommon",
-    3,
-    [move("mountain", 1)],
-    [],
-    [],
-    spec("Climb+", "uncommon", 3, [move("mountain", 2)], [], [], null),
-  ),
+  spec("Stride", [cardMoves.move("grass", 4)])
+    .shopStatus("common", 2)
+    .withUpgradedForm(spec("Stride+", [cardMoves.move("grass", 5)]).build())
+    .build(),
+  spec("Sprint", [cardMoves.move("grass", 8)])
+    .shopStatus("uncommon", 4)
+    .withUpgradedForm(spec("Sprint+", [cardMoves.move("grass", 9)]).build())
+    .build(),
+  spec("Wade", [cardMoves.move("water", 1)])
+    .shopStatus("common", 2)
+    .withUpgradedForm(spec("Wade+", [cardMoves.move("water", 2)]).build())
+    .build(),
+  spec("Swim", [cardMoves.move("water", 2)])
+    .shopStatus("uncommon", 3)
+    .withUpgradedForm(spec("Swim+", [cardMoves.move("water", 3)]).build())
+    .build(),
+  spec("Climb", [cardMoves.move("mountain", 1)])
+    .shopStatus("uncommon", 3)
+    .withUpgradedForm(spec("Climb+", [cardMoves.move("mountain", 2)]).build())
+    .build(),
 
   // combination movement
-  spec(
-    "Thicket",
-    "common",
-    2,
-    [move("grass", 1), move("forest", 1)],
-    [],
-    [],
-    spec(
-      "Thicket+",
-      "common",
-      2,
-      [move("grass", 2), move("forest", 2)],
-      [],
-      [],
-      null,
-    ),
-  ),
-  spec(
-    "Ford",
-    "common",
-    2,
-    [move("grass", 1), move("water", 1)],
-    [],
-    [],
-    spec(
-      "Ford+",
-      "common",
-      2,
-      [move("grass", 2), move("water", 2)],
-      [],
-      [],
-      null,
-    ),
-  ),
-  spec(
-    "Ridge",
-    "uncommon",
-    3,
-    [move("forest", 1), move("mountain", 1)],
-    [],
-    [],
-    spec(
-      "Ridge+",
-      "uncommon",
-      3,
-      [move("forest", 2), move("mountain", 2)],
-      [],
-      [],
-      null,
-    ),
-  ),
-  spec(
-    "Trail",
-    "uncommon",
-    3,
-    [move("grass", 3), move("forest", 2)],
-    [],
-    [],
-    spec(
-      "Trail+",
-      "uncommon",
-      3,
-      [move("grass", 4), move("forest", 3)],
-      [],
-      [],
-      null,
-    ),
-  ),
-  spec(
-    "Ravine",
-    "uncommon",
-    4,
-    [move("forest", 1), move("water", 1), move("mountain", 2)],
-    [],
-    [],
-    spec(
-      "Ravine+",
-      "uncommon",
-      4,
-      [move("forest", 2), move("water", 2), move("mountain", 3)],
-      [],
-      [],
-      null,
-    ),
-  ),
-  spec(
-    "Moor",
-    "uncommon",
-    4,
-    [move("grass", 5), move("forest", 3)],
-    [],
-    [],
-    spec(
-      "Moor+",
-      "uncommon",
-      4,
-      [move("grass", 6), move("forest", 4)],
-      [],
-      [],
-      null,
-    ),
-  ),
-  spec(
-    "Delta",
-    "rare",
-    6,
-    [move("grass", 6), move("water", 2), move("mountain", 1)],
-    [],
-    [],
-    spec(
-      "Delta+",
-      "rare",
-      6,
-      [move("grass", 7), move("water", 3), move("mountain", 2)],
-      [],
-      [],
-      null,
-    ),
-  ),
+  spec("Thicket", [cardMoves.move("grass", 1), cardMoves.move("forest", 1)])
+    .shopStatus("common", 2)
+    .withUpgradedForm(
+      spec("Thicket+", [
+        cardMoves.move("grass", 2),
+        cardMoves.move("forest", 2),
+      ]).build(),
+    )
+    .build(),
+  spec("Ford", [cardMoves.move("grass", 1), cardMoves.move("water", 1)])
+    .shopStatus("common", 2)
+    .withUpgradedForm(
+      spec("Ford+", [
+        cardMoves.move("grass", 2),
+        cardMoves.move("water", 2),
+      ]).build(),
+    )
+    .build(),
+  spec("Ridge", [cardMoves.move("forest", 1), cardMoves.move("mountain", 1)])
+    .shopStatus("uncommon", 3)
+    .withUpgradedForm(
+      spec("Ridge+", [
+        cardMoves.move("forest", 2),
+        cardMoves.move("mountain", 2),
+      ]).build(),
+    )
+    .build(),
+  spec("Trail", [cardMoves.move("grass", 3), cardMoves.move("forest", 2)])
+    .shopStatus("uncommon", 3)
+    .withUpgradedForm(
+      spec("Trail+", [
+        cardMoves.move("grass", 4),
+        cardMoves.move("forest", 3),
+      ]).build(),
+    )
+    .build(),
+  spec("Ravine", [
+    cardMoves.move("forest", 1),
+    cardMoves.move("water", 1),
+    cardMoves.move("mountain", 2),
+  ])
+    .shopStatus("uncommon", 4)
+    .withUpgradedForm(
+      spec("Ravine+", [
+        cardMoves.move("forest", 2),
+        cardMoves.move("water", 2),
+        cardMoves.move("mountain", 3),
+      ]).build(),
+    )
+    .build(),
+  spec("Moor", [cardMoves.move("grass", 5), cardMoves.move("forest", 3)])
+    .shopStatus("uncommon", 4)
+    .withUpgradedForm(
+      spec("Moor+", [
+        cardMoves.move("grass", 6),
+        cardMoves.move("forest", 4),
+      ]).build(),
+    )
+    .build(),
+  spec("Delta", [
+    cardMoves.move("grass", 6),
+    cardMoves.move("water", 2),
+    cardMoves.move("mountain", 1),
+  ])
+    .shopStatus("rare", 6)
+    .withUpgradedForm(
+      spec("Delta+", [
+        cardMoves.move("grass", 7),
+        cardMoves.move("water", 3),
+        cardMoves.move("mountain", 2),
+      ]).build(),
+    )
+    .build(),
 
   // hand management
-  spec(
-    "Forage",
-    "common",
-    2,
-    [{ kind: "draw-discard", draw: 3, discard: 2 }],
-    [sleep(2)],
-    [],
-    null,
-  ),
-  spec(
-    "Gamble",
-    "common",
-    2,
-    [{ kind: "discard-hand", threshold: 3, draw: 4 }],
-    [sleep(2)],
-    [],
-    null,
-  ),
-  spec(
-    "Survey",
-    "uncommon",
-    3,
-    [{ kind: "draw", count: 2 }],
-    [sleep(2)],
-    [],
-    null,
-  ),
-  spec(
-    "Insight",
-    "rare",
-    4,
-    [{ kind: "draw-discard", draw: 3, discard: 1 }],
-    [sleep(2)],
-    [],
-    null,
-  ),
-  spec("Recall", "uncommon", 3, [{ kind: "recover", count: 1 }], [], [], null),
-  spec(
-    "Slumber",
-    "rare",
-    4,
-    [{ kind: "sleep-card", reshuffles: 4 }],
-    [],
-    [sleep(4)],
-    null,
-  ),
-  spec(
-    "Millionaire",
-    "rare",
-    4,
-    [{ kind: "draw", count: 3 }],
-    [pay(1), doubleCost],
-    [halveCost],
-    spec(
-      "Millionaire+",
-      "rare",
-      4,
-      [{ kind: "draw", count: 4 }],
-      [pay(1), doubleCost],
-      [halveCost],
-      null,
-    ),
-  ),
-  spec(
-    "Foresight",
-    "uncommon",
-    3,
-    [search(1)],
-    [sleep(1)],
-    [],
-    spec("Foresight+", "uncommon", 3, [search(1)], [], [], null),
-  ),
-  spec(
-    "Scout",
-    "uncommon",
-    3,
-    [trivialTerrain(1)],
-    [],
-    [drawEffect(1)],
-    spec(
-      "Scout+",
-      "uncommon",
-      3,
-      [trivialTerrain(2)],
-      [sleep(1)],
-      [drawEffect(1)],
-      null,
-    ),
-  ),
-  spec(
-    "Hookshot",
-    "rare",
-    5,
-    [teleport(8)],
-    [sleep(2)],
-    [],
-    spec("Hookshot+", "rare", 5, [teleport(8)], [sleep(1)], [], null),
-  ),
-  spec("Upgrader", "uncommon", 3, [upgradeHand], [], [drawEffect(1)], null),
+  spec("Forage", [cardMoves.drawDiscard(3, 2)])
+    .shopStatus("common", 2)
+    .withPlayEffect(cardEffects.sleep(2))
+    .build(),
+  spec("Gamble", [cardMoves.discardHand(3, 4)])
+    .shopStatus("common", 2)
+    .withPlayEffect(cardEffects.sleep(2))
+    .build(),
+  spec("Survey", [cardMoves.draw(2)])
+    .shopStatus("uncommon", 3)
+    .withPlayEffect(cardEffects.sleep(2))
+    .build(),
+  spec("Insight", [cardMoves.drawDiscard(3, 1)])
+    .shopStatus("rare", 4)
+    .withPlayEffect(cardEffects.sleep(2))
+    .build(),
+  spec("Recall", [cardMoves.recover(1)])
+    .shopStatus("uncommon", 3)
+    .build(),
+  spec("Slumber", [cardMoves.sleepCard(4)])
+    .shopStatus("rare", 4)
+    .withDiscardEffect(cardEffects.sleep(4))
+    .build(),
+  spec("Millionaire", [cardMoves.draw(3)])
+    .shopStatus("rare", 4)
+    .withPlayEffect(cardEffects.pay(1), cardEffects.doubleCost)
+    .withDiscardEffect(cardEffects.halveCost)
+    .withUpgradedForm(
+      spec("Millionaire+", [cardMoves.draw(4)])
+        .withPlayEffect(cardEffects.pay(1), cardEffects.doubleCost)
+        .withDiscardEffect(cardEffects.halveCost)
+        .build(),
+    )
+    .build(),
+  spec("Foresight", [cardMoves.search(1)])
+    .shopStatus("uncommon", 3)
+    .withPlayEffect(cardEffects.sleep(1))
+    .withUpgradedForm(spec("Foresight+", [cardMoves.search(1)]).build())
+    .build(),
+  spec("Scout", [cardMoves.trivialTerrain(1)])
+    .shopStatus("uncommon", 3)
+    .withDiscardEffect(cardEffects.draw(1))
+    .withUpgradedForm(
+      spec("Scout+", [cardMoves.trivialTerrain(2)])
+        .withPlayEffect(cardEffects.sleep(1))
+        .withDiscardEffect(cardEffects.draw(1))
+        .build(),
+    )
+    .build(),
+  spec("Hookshot", [cardMoves.teleport(8)])
+    .shopStatus("rare", 5)
+    .withPlayEffect(cardEffects.sleep(2))
+    .withUpgradedForm(
+      spec("Hookshot+", [cardMoves.teleport(8)])
+        .withPlayEffect(cardEffects.sleep(1))
+        .build(),
+    )
+    .build(),
+  spec("Upgrader", [cardMoves.upgradeHand])
+    .shopStatus("uncommon", 3)
+    .withDiscardEffect(cardEffects.draw(1))
+    .build(),
 
   // storage & conjuring
   STORAGE_EMPTY_SPEC,
-  spec(
-    "Invention",
-    "rare",
-    4,
-    [invention(3, "all")],
-    [],
-    [],
-    spec(
-      "Invention+",
-      "rare",
-      4,
-      [invention(2, "uncommon-plus")],
-      [],
-      [],
-      null,
-    ),
-  ),
+  spec("Invention", [cardMoves.invention(3, "all")])
+    .shopStatus("rare", 4)
+    .withUpgradedForm(
+      spec("Invention+", [cardMoves.invention(2, "uncommon-plus")]).build(),
+    )
+    .build(),
 
   // special movement
-  spec(
-    "Monotony",
-    "uncommon",
-    3,
-    [{ kind: "move-current-terrain", distance: 3 }],
-    [],
-    [],
-    spec(
-      "Monotony+",
-      "uncommon",
-      3,
-      [{ kind: "move-current-terrain", distance: 4 }],
-      [],
-      [],
-      null,
-    ),
-  ),
-  spec(
-    "Hop",
-    "uncommon",
-    3,
-    [{ kind: "hop", maxCost: 1 }],
-    [],
-    [],
-    spec("Hop+", "uncommon", 3, [{ kind: "hop", maxCost: 2 }], [], [], null),
-  ),
-  spec(
-    "Wall",
-    "rare",
-    5,
-    [wall(3)],
-    [pay(3), sleep(1)],
-    [],
-    spec("Wall+", "rare", 5, [wall(3)], [pay(1), sleep(1)], [], null),
-  ),
+  spec("Monotony", [cardMoves.moveCurrentTerrain(3)])
+    .shopStatus("uncommon", 3)
+    .withUpgradedForm(
+      spec("Monotony+", [cardMoves.moveCurrentTerrain(4)]).build(),
+    )
+    .build(),
+  spec("Hop", [cardMoves.hop(1)])
+    .shopStatus("uncommon", 3)
+    .withUpgradedForm(spec("Hop+", [cardMoves.hop(2)]).build())
+    .build(),
+  spec("Wall", [cardMoves.wall(3)])
+    .shopStatus("rare", 5)
+    .withPlayEffect(cardEffects.pay(3), cardEffects.sleep(1))
+    .withUpgradedForm(
+      spec("Wall+", [cardMoves.wall(3)])
+        .withPlayEffect(cardEffects.pay(1), cardEffects.sleep(1))
+        .build(),
+    )
+    .build(),
 
   // combat
-  spec(
-    "Ambush",
-    "common",
-    3,
-    [move("grass", 2), { kind: "attack", range: 0 }],
-    [],
-    [],
-    spec(
-      "Ambush+",
-      "common",
-      3,
-      [move("grass", 3), { kind: "attack", range: 1 }],
-      [],
-      [],
-      null,
-    ),
-  ),
-  spec(
-    "Volley",
-    "common",
-    3,
-    [{ kind: "attack", range: 3 }],
-    [sleep(1)],
-    [],
-    null,
-  ),
-  spec(
-    "Silver",
-    "uncommon",
-    6,
-    [{ kind: "attack", range: 8 }],
-    [pay(7)],
-    [],
-    null,
-  ),
-  spec(
-    "Charge",
-    "uncommon",
-    4,
-    [{ kind: "attack", range: 3 }],
-    [sleep(1)],
-    [drawEffect(1)],
-    spec(
-      "Charge+",
-      "uncommon",
-      4,
-      [move("grass", 6), { kind: "attack", range: 3 }],
-      [sleep(1)],
-      [],
-      null,
-    ),
-  ),
+  spec("Ambush", [cardMoves.move("grass", 2), cardMoves.attack(0)])
+    .shopStatus("common", 3)
+    .withUpgradedForm(
+      spec("Ambush+", [
+        cardMoves.move("grass", 3),
+        cardMoves.attack(1),
+      ]).build(),
+    )
+    .build(),
+  spec("Volley", [cardMoves.attack(3)])
+    .shopStatus("common", 3)
+    .withPlayEffect(cardEffects.sleep(1))
+    .build(),
+  spec("Silver", [cardMoves.attack(8)])
+    .shopStatus("uncommon", 6)
+    .withPlayEffect(cardEffects.pay(7))
+    .build(),
+  spec("Charge", [cardMoves.attack(3)])
+    .shopStatus("uncommon", 4)
+    .withPlayEffect(cardEffects.sleep(1))
+    .withDiscardEffect(cardEffects.draw(1))
+    .withUpgradedForm(
+      spec("Charge+", [cardMoves.move("grass", 6), cardMoves.attack(3)])
+        .withPlayEffect(cardEffects.sleep(1))
+        .build(),
+    )
+    .build(),
 
   // economy
-  spec(
-    "Trade",
-    "common",
-    2,
-    [{ kind: "currency", amount: 2 }],
-    [],
-    [],
-    spec(
-      "Trade+",
-      "common",
-      2,
-      [{ kind: "currency", amount: 3 }],
-      [],
-      [],
-      null,
-    ),
-  ),
-  spec(
-    "Mine",
-    "common",
-    2,
-    [move("mountain", 1)],
-    [],
-    [currency(1)],
-    spec("Mine+", "common", 2, [move("mountain", 2)], [], [currency(2)], null),
-  ),
+  spec("Trade", [cardMoves.currency(2)])
+    .shopStatus("common", 2)
+    .withUpgradedForm(spec("Trade+", [cardMoves.currency(3)]).build())
+    .build(),
+  spec("Mine", [cardMoves.move("mountain", 1)])
+    .shopStatus("common", 2)
+    .withDiscardEffect(cardEffects.currency(1))
+    .withUpgradedForm(
+      spec("Mine+", [cardMoves.move("mountain", 2)])
+        .withDiscardEffect(cardEffects.currency(2))
+        .build(),
+    )
+    .build(),
 ];
-
-function spec(
-  name: string,
-  rarity: Rarity,
-  cost: number,
-  modes: readonly CardMode[],
-  onPlay: readonly CardEffect[],
-  onDiscard: readonly CardEffect[],
-  upgradedForm: CardSpec | null,
-): CardSpec {
-  return {
-    name,
-    image: "",
-    cost,
-    rarity,
-    traits: [],
-    modes,
-    onPlay,
-    onDiscard,
-    upgradedForm,
-    storage: "none",
-  };
-}
-
-/** Attach traits to a spec built by `spec`, which starts with none. */
-function withTraits(spec: CardSpec, traits: readonly CardTrait[]): CardSpec {
-  return { ...spec, traits };
-}

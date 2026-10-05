@@ -1,4 +1,4 @@
-import type { Card } from "./cards";
+import type { Card, ShopSlot } from "./cards";
 import { SHOP_CATALOGUE, instantiate, isIndestructible } from "./cards";
 import { CONSUMABLE_CAPACITY, rollConsumableOptions } from "./consumables";
 import type { Consumable } from "./consumables";
@@ -63,7 +63,7 @@ function consumeFeatureAt(state: GameState, coord: HexCoord): GameState {
 /** Write a shop's stock back to its tile so it survives leaving and returning. */
 function withShopStock(
   state: GameState,
-  stock: readonly (Card | null)[],
+  stock: readonly (ShopSlot | null)[],
 ): GameState {
   const key = hexKey(state.map.player);
   const tile = state.map.tiles.get(key);
@@ -110,7 +110,9 @@ export function useFeature(state: GameState): Transition {
         ...site,
         stats: feature.stock.reduce(
           (stats, slot) =>
-            slot === null ? stats : countCardShown(stats, slot.name, "shop"),
+            slot === null
+              ? stats
+              : countCardShown(stats, slot.card.name, "shop"),
           site.stats,
         ),
       };
@@ -163,25 +165,20 @@ export function useFeature(state: GameState): Transition {
   }
 }
 
-export function buyCard(state: GameState, card: Card): GameState {
+export function buyCard(state: GameState, card: Card, cost: number): GameState {
   if (state.phase.kind !== "shop") {
     return state;
   }
-  const paid = spendCurrency(state, card.cost, "shops");
+  const paid = spendCurrency(state, cost, "shops");
   const stock = state.phase.stock.map((slot) =>
-    slot !== null && slot.id === card.id ? null : slot,
+    slot !== null && slot.card.id === card.id ? null : slot,
   );
   const bought = addPurchase(paid.deck, card);
   const next: GameState = {
     ...paid,
     deck: bought,
     stats: recordDeckSize(
-      acquireCard(
-        paid.stats,
-        card,
-        { kind: "shop", cost: card.cost },
-        paid.turn,
-      ),
+      acquireCard(paid.stats, card, { kind: "shop", cost }, paid.turn),
       deckSize(bought),
     ),
     phase: { kind: "shop", stock, rerollCost: state.phase.rerollCost },
@@ -204,7 +201,7 @@ export function rerollShop(state: GameState): GameState {
     ...paid,
     rng: rolled.rng,
     stats: rolled.stock.reduce(
-      (stats, card) => countCardShown(stats, card.name, "shop"),
+      (stats, slot) => countCardShown(stats, slot.card.name, "shop"),
       paid.stats,
     ),
     phase: {
@@ -269,7 +266,7 @@ export function collectCoin(state: GameState, coord: HexCoord): GameState {
 
 /** A choice forwarded from the feature UI; every transition lives here. */
 export type FeatureAction =
-  | { kind: "buy"; card: Card }
+  | { kind: "buy"; card: Card; cost: number }
   | { kind: "reroll" }
   | { kind: "leave" }
   | { kind: "upgrade"; cardId: string }
@@ -283,7 +280,7 @@ export function applyFeatureAction(
 ): Transition {
   switch (action.kind) {
     case "buy":
-      return still(buyCard(state, action.card));
+      return still(buyCard(state, action.card, action.cost));
     case "reroll":
       return still(rerollShop(state));
     case "leave":

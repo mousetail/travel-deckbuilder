@@ -64,6 +64,8 @@ Basic movement cards move some number of spaces over the given terrain. The basi
 - Water 1 (common)
 - Water 2 (uncommon)
 - Mountains 1 (uncommon)
+- Move 3 over the terrain you are standing on (uncommon)
+- Hop over one tile (anything except impassible) and land on a 1 grass (uncommon)
 
 Starting cards never appear in shops or found on the map.
 
@@ -89,6 +91,8 @@ Each card can only be used as one of the slash seperated options in a turn.
 - Draw 3 cards, discard 1 (rare)
 - Take 1 card from your discard pile (uncommon)
 - Put a card from your hand to sleep for 4 reshuffles (rare)
+- Pick any number of cards from your hand and store them inside this card, transforming it into Storage Bin (Full) (rare). Releasing them temporarily upgrades each; the upgraded bin instead gives a temporary copy of each.
+- Gain three random temporary cards, weighted by rarity; they are removed from your deck when played or discarded. The upgraded version draws two, uncommon or rarer (rare)
 
 ## Combat
 
@@ -102,6 +106,7 @@ X attack means you can kill an enemy within X tiles of you. 0 means you must be 
 
 - Gain 2 currency (common)
 - 1 mountain/1 currency (common)
+- Spend 3 money to raise a one-way wall along one side of a 3-radius hexagon centred on you, then sleep for a reshuffle. The upgraded version costs 1 instead (rare)
 
 # Hand Management
 

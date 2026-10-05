@@ -221,9 +221,7 @@ export function describeMode(mode: CardMode): Node[] {
       ];
     case "move-current-terrain":
       return [
-        text(
-          `Travel ${mode.distance} over the terrain you are standing on`,
-        ),
+        text(`Travel ${mode.distance} over the terrain you are standing on`),
       ];
     case "hop":
       return [

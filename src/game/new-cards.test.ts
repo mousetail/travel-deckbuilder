@@ -143,10 +143,9 @@ describe("Storage Bin", () => {
 
   it("returns stored cards to hand when the full bin is played", () => {
     const stored = cardFrom("Trade", "a");
-    const full = transformStorage(
-      instantiate(STORAGE_EMPTY_SPEC, "bin"),
-      [stored],
-    );
+    const full = transformStorage(instantiate(STORAGE_EMPTY_SPEC, "bin"), [
+      stored,
+    ]);
     expect(full.name).toBe("Storage Bin (Full)");
     const state = makeState({ q: 0, r: 0 }, noOverrides, [full]);
 
@@ -173,17 +172,16 @@ describe("Storage Bin", () => {
 
     const played = beginPlay(state, full);
     expect(played.state.deck.hand.map((card) => card.id)).toContain("a");
-    expect(played.state.deck.hand.filter((card) => card.temporary)).toHaveLength(
-      1,
-    );
+    expect(
+      played.state.deck.hand.filter((card) => card.temporary),
+    ).toHaveLength(1);
   });
 
   it("upgrades the cards stored inside a full bin at the smith", () => {
     const stored = cardFrom("Trade", "a");
-    const full = transformStorage(
-      instantiate(STORAGE_EMPTY_SPEC, "bin"),
-      [stored],
-    );
+    const full = transformStorage(instantiate(STORAGE_EMPTY_SPEC, "bin"), [
+      stored,
+    ]);
     const upgraded = upgradeCard(full);
     expect(upgraded.name).toBe("Storage Bin (Full)+");
     expect(upgraded.stored[0]?.name).toBe("Trade+");

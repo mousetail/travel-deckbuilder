@@ -1,4 +1,4 @@
-import type { Card, CardSpec } from "../game/cards";
+import type { Card, CardSpec, ShopSlot } from "../game/cards";
 import { allCards } from "../game/deck";
 import { instantiate, isIndestructible } from "../game/cards";
 import { CONSUMABLE_CAPACITY } from "../game/consumables";
@@ -207,7 +207,7 @@ export class FeatureView {
 
   private shopPanel(
     state: GameState,
-    stock: readonly (Card | null)[],
+    stock: readonly (ShopSlot | null)[],
     rerollCost: number,
   ): HTMLElement {
     const nodes: Node[] = [this.title("Shop")];
@@ -219,10 +219,11 @@ export class FeatureView {
       }
       cardNodes.push(
         this.cardChoice(
-          slot,
+          slot.card,
           this.costCaption(slot.cost),
           slot.cost > state.currency,
-          () => this.onAction({ kind: "buy", card: slot }),
+          () =>
+            this.onAction({ kind: "buy", card: slot.card, cost: slot.cost }),
         ),
       );
     }

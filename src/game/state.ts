@@ -1,4 +1,4 @@
-import type { Card, IdFactory } from "./cards";
+import type { Card, IdFactory, ShopSlot } from "./cards";
 import type { Consumable } from "./consumables";
 import type { Deck } from "./deck";
 import type { HexCoord } from "./hex";
@@ -46,7 +46,7 @@ export type Phase =
       options: readonly Consumable[];
       position: HexCoord;
     }
-  | { kind: "shop"; stock: readonly (Card | null)[]; rerollCost: number }
+  | { kind: "shop"; stock: readonly (ShopSlot | null)[]; rerollCost: number }
   | { kind: "smith" }
   | { kind: "game-over"; reason: GameOverReason };
 

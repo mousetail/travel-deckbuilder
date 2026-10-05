@@ -9,8 +9,6 @@ function spec(name: string, traits: CardSpec["traits"] = []): CardSpec {
   return {
     name,
     image: "",
-    cost: 0,
-    rarity: "starting",
     traits,
     modes: [],
     onPlay: [],
