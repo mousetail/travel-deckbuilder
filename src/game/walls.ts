@@ -33,7 +33,11 @@ export function lineOfSightBlocked(
   for (let i = 0; i + 1 < line.length; i += 1) {
     const step = line[i];
     const next = line[i + 1];
-    if (step !== undefined && next !== undefined && wallBlocks(walls, step, next)) {
+    if (
+      step !== undefined &&
+      next !== undefined &&
+      wallBlocks(walls, step, next)
+    ) {
       return true;
     }
   }

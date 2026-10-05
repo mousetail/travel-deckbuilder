@@ -104,9 +104,26 @@ button {
   color: #ffd700;
 }
 
-.hud-progress {
+.hud-top-right {
   justify-self: end;
+  display: grid;
+  grid-auto-flow: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.hud-progress {
   text-align: right;
+}
+
+/* The help button, tucked into the top-right corner. */
+.hud-help {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  font-size: 18px;
+  font-weight: bold;
+  line-height: 1;
 }
 
 .hud-middle {
@@ -507,7 +524,9 @@ button {
     color: #fff;
     height: 20px;
     background: #7b7bbb;
-    box-shadow: -3px 3px 0 0 #888, 0 3px #888;
+    box-shadow:
+      -3px 3px 0 0 #888,
+      0 3px #888;
 
     & .card-symbol-icon {
       width: 16px;
@@ -1111,6 +1130,118 @@ button {
 
 .hidden {
   display: none;
+}
+
+/* --- help overlay ------------------------------------------------------- */
+
+/* The help modal sits above the HUD; an empty layer is hidden so it never
+   blocks the map while closed. */
+.help-layer {
+  grid-area: 1 / 1;
+  z-index: 500;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.6);
+
+  &:empty {
+    display: none;
+  }
+}
+
+.help-overlay {
+  box-sizing: border-box;
+  display: grid;
+  gap: 16px;
+  width: min(720px, 92vw);
+  max-height: 88vh;
+  overflow: auto;
+  padding: 20px;
+  background: var(--ui-bg);
+  color: var(--ui-fg);
+  border: var(--ui-border) solid var(--ui-fg);
+}
+
+.help-header {
+  display: grid;
+  grid-auto-flow: column;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.help-title {
+  font-size: 20px;
+  font-weight: bold;
+}
+
+.help-section {
+  display: grid;
+  gap: 8px;
+}
+
+.help-section-title {
+  padding-bottom: 4px;
+  font-weight: bold;
+  border-bottom: 2px solid var(--ui-fg);
+}
+
+.help-text {
+  margin: 0;
+  line-height: 1.4;
+}
+
+.help-icons {
+  display: grid;
+  grid-auto-flow: column;
+  justify-content: start;
+  align-items: center;
+  gap: 12px;
+}
+
+.help-icon {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.help-controls {
+  display: grid;
+  gap: 6px;
+}
+
+.help-upgrades {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.help-upgrade {
+  display: grid;
+  grid-template-columns: 40px 1fr;
+  align-items: start;
+  gap: 10px;
+}
+
+.help-upgrade .help-icon {
+  width: 40px;
+  height: 40px;
+}
+
+.help-upgrade-name {
+  font-weight: bold;
+}
+
+.help-upgrade-text {
+  line-height: 1.3;
+}
+
+.help-links {
+  display: grid;
+  gap: 6px;
+}
+
+.help-link {
+  color: var(--ui-fg);
 }
 
 /* --- main menu ---------------------------------------------------------- */

@@ -135,10 +135,9 @@ function escalateRows(mode: {
     tooltipRow(symbolIcon(ESCALATE_TEMP_ICON, `${mode.thisTurn}`), [
       text(`Enemy speed thist turn`),
     ]),
-    tooltipRow(
-      symbolFractionIcon(ESCALATE_ICON, 1, mode.permanentReciprocal),
-      [text(`Permanent enemy speed increase`)],
-    ),
+    tooltipRow(symbolFractionIcon(ESCALATE_ICON, 1, mode.permanentReciprocal), [
+      text(`Permanent enemy speed increase`),
+    ]),
   ];
 }
 

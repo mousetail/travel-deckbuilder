@@ -172,10 +172,7 @@ export function isShy(card: Card): boolean {
 }
 
 /** Whether a must-play-first card in `hand` blocks playing `card` right now. */
-export function blockedByPriority(
-  hand: readonly Card[],
-  card: Card,
-): boolean {
+export function blockedByPriority(hand: readonly Card[], card: Card): boolean {
   return !mustPlayFirst(card) && hand.some(mustPlayFirst);
 }
 

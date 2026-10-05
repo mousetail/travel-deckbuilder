@@ -236,10 +236,7 @@ describe("assassin danger zone with a mimic", () => {
   it("filters each assassin independently", () => {
     const state = makeState({
       player: { q: 3, r: 0 },
-      enemies: [
-        assassin({ q: 0, r: 0 }, "a"),
-        assassin({ q: 0, r: 2 }, "b"),
-      ],
+      enemies: [assassin({ q: 0, r: 0 }, "a"), assassin({ q: 0, r: 2 }, "b")],
       mimic: { q: 1, r: 0 },
       walls: [],
     });
@@ -302,10 +299,7 @@ describe("freeze silences the danger zone it silences in the enemy phase", () =>
   it("leaves only other enemies' zones when one assassin is frozen", () => {
     const state = makeState({
       player: { q: 3, r: 0 },
-      enemies: [
-        assassin({ q: 0, r: 0 }, "a"),
-        assassin({ q: 0, r: 2 }, "b"),
-      ],
+      enemies: [assassin({ q: 0, r: 0 }, "a"), assassin({ q: 0, r: 2 }, "b")],
       mimic: null,
       walls: [],
       frozenEnemyIds: ["a"],

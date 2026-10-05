@@ -15,11 +15,18 @@ export class Hud {
   private readonly layer: HTMLElement;
   private readonly onAction: () => void;
   private readonly onCancel: () => void;
+  private readonly onHelp: () => void;
 
-  constructor(layer: HTMLElement, onAction: () => void, onCancel: () => void) {
+  constructor(
+    layer: HTMLElement,
+    onAction: () => void,
+    onCancel: () => void,
+    onHelp: () => void,
+  ) {
     this.layer = layer;
     this.onAction = onAction;
     this.onCancel = onCancel;
+    this.onHelp = onHelp;
   }
 
   render(state: GameState): void {
@@ -39,7 +46,17 @@ export class Hud {
       text(` · enemy speed ${formatEnemySpeed(state)}`),
     ]);
 
-    setChildren(this.layer, [currency, hint, progress]);
+    const help = document.createElement("button");
+    help.classList.add("hud-help");
+    help.textContent = "?";
+    help.title = "How to play";
+    help.addEventListener("click", () => this.onHelp());
+
+    const right = document.createElement("div");
+    right.classList.add("hud-top-right");
+    setChildren(right, [progress, help]);
+
+    setChildren(this.layer, [currency, hint, right]);
   }
 
   /** The end-turn / use-feature button, which sits mid-height on the right. */
@@ -93,10 +110,7 @@ function endTurnLabel(action: EndTurnAction): Node[] {
             text(action.feature.card === null ? " & Enter" : " & Take a card"),
           ];
         case "consumable":
-          return [
-            ...endTurnPrefix(action.bonus),
-            text(" & Take a consumable"),
-          ];
+          return [...endTurnPrefix(action.bonus), text(" & Take a consumable")];
         case "coin":
           return [...endTurnPrefix(action.bonus), text(" & Collect coin")];
         case "none":

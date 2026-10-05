@@ -5,6 +5,7 @@ import type { HandMode } from "./hand-view";
 import { Hud } from "./hud";
 import { FeatureView } from "./feature-view";
 import { ConsumablesView } from "./consumables-view";
+import { HelpView } from "./help-view";
 import { pileButton, pileOverlay, searchOverlay } from "./pile-view";
 import {
   CardAnimator,
@@ -72,6 +73,7 @@ export class App {
   private readonly hud: Hud;
   private readonly featureView: FeatureView;
   private readonly consumablesView: ConsumablesView;
+  private readonly helpView: HelpView;
   private readonly middle: HTMLElement;
   private readonly bottomBar: HTMLElement;
   private readonly handLayer: HTMLElement;
@@ -137,8 +139,10 @@ export class App {
 
     this.shell = element("div", "app");
     const animationLayer = element("div", "card-animation-layer");
-    setChildren(this.shell, [mapLayer, hudLayer, animationLayer]);
+    const helpLayer = element("div", "help-layer");
+    setChildren(this.shell, [mapLayer, hudLayer, animationLayer, helpLayer]);
     this.cardAnimator = new CardAnimator(animationLayer);
+    this.helpView = new HelpView(helpLayer);
 
     this.mapView = new MapView(
       mapLayer,
@@ -159,6 +163,7 @@ export class App {
       topBar,
       () => this.handleAction(),
       () => this.handleCancel(),
+      () => this.helpView.toggle(),
     );
     this.featureView = new FeatureView(
       this.middle,

@@ -1,9 +1,6 @@
 import type { Card } from "./cards";
 import { SHOP_CATALOGUE, instantiate, isIndestructible } from "./cards";
-import {
-  CONSUMABLE_CAPACITY,
-  rollConsumableOptions,
-} from "./consumables";
+import { CONSUMABLE_CAPACITY, rollConsumableOptions } from "./consumables";
 import type { Consumable } from "./consumables";
 import { gainCurrency, spendCurrency } from "./currency";
 import type { Deck } from "./deck";

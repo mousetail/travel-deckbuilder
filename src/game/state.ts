@@ -39,7 +39,11 @@ export type Phase =
   | { kind: "pending-search"; count: number }
   | { kind: "pending-remove" }
   | { kind: "pending-gain"; card: Card | null }
-  | { kind: "pending-consumable"; options: readonly Consumable[]; position: HexCoord }
+  | {
+      kind: "pending-consumable";
+      options: readonly Consumable[];
+      position: HexCoord;
+    }
   | { kind: "shop"; stock: readonly (Card | null)[]; rerollCost: number }
   | { kind: "smith" }
   | { kind: "game-over"; reason: GameOverReason };
@@ -93,9 +97,7 @@ export type Anomaly =
     };
 
 /** The decoy a Mimic consumable leaves behind. */
-export type Mimic =
-  | { kind: "none" }
-  | { kind: "placed"; position: HexCoord };
+export type Mimic = { kind: "none" } | { kind: "placed"; position: HexCoord };
 
 /** Per-turn bookkeeping, reset at the start of every turn. */
 export type TurnState = {

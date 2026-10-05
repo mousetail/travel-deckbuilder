@@ -382,8 +382,7 @@ function playInstant(state: GameState, card: Card, mode: CardMode): Transition {
         ...played,
         // The permanent ramp is stored as a reciprocal so balance can try
         // fractions like 1/6 or 1/7 without decimal drift.
-        enemySpeedBonus:
-          played.enemySpeedBonus + 1 / mode.permanentReciprocal,
+        enemySpeedBonus: played.enemySpeedBonus + 1 / mode.permanentReciprocal,
         enemySpeedThisTurn: played.enemySpeedThisTurn + mode.thisTurn,
       });
     }

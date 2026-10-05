@@ -46,7 +46,9 @@ describe("generateMap", () => {
         (tile) => tile.terrain === "finish",
       );
       expect(hasFinish, `seed ${seed} produced no finish tile`).toBe(true);
-      expect(map.cursor.finished, `seed ${seed} cursor not finished`).toBe(true);
+      expect(map.cursor.finished, `seed ${seed} cursor not finished`).toBe(
+        true,
+      );
     }
   });
 

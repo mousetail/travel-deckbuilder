@@ -56,15 +56,13 @@ const ALL_CONSUMABLES: readonly ConsumableSpec[] = [
   {
     kind: "retreat",
     name: "Retreat",
-    description:
-      "Jump backwards to nearest safe space",
+    description: "Jump backwards to nearest safe space",
     icon: retreatUrl,
   },
   {
     kind: "freeze",
     name: "Freeze",
-    description:
-      "Freezes all enemies within 8 tiles",
+    description: "Freezes all enemies within 8 tiles",
     icon: freezeUrl,
   },
   {
@@ -76,22 +74,19 @@ const ALL_CONSUMABLES: readonly ConsumableSpec[] = [
   {
     kind: "mimic",
     name: "Mimic",
-    description:
-      "Place a mimic that can disctract enemies",
+    description: "Place a mimic that can disctract enemies",
     icon: mimicUrl,
   },
   {
     kind: "trailblaze",
     name: "Trailblaze",
-    description:
-      "All cards can cross all terrain this turn.",
+    description: "All cards can cross all terrain this turn.",
     icon: trailblazeUrl,
   },
   {
     kind: "barricade",
     name: "Barricade",
-    description:
-      "Create a one-way wall around your section.",
+    description: "Create a one-way wall around your section.",
     icon: barricadeUrl,
   },
 ];
@@ -133,7 +128,9 @@ export function retreatTarget(state: GameState): HexCoord | null {
     return null;
   }
   const danger = dangerZone(state);
-  const occupied = new Set(state.enemies.map((enemy) => hexKey(enemy.position)));
+  const occupied = new Set(
+    state.enemies.map((enemy) => hexKey(enemy.position)),
+  );
   let best: HexCoord | null = null;
   let bestDistance = Infinity;
   let bestKey = "";
@@ -198,10 +195,7 @@ export function useConsumable(state: GameState, id: string): Transition {
   return applyConsumable(without, consumable.spec.kind);
 }
 
-function applyConsumable(
-  state: GameState,
-  kind: ConsumableKind,
-): Transition {
+function applyConsumable(state: GameState, kind: ConsumableKind): Transition {
   switch (kind) {
     case "reshuffle": {
       const applied = shuffleAll(state.deck, state.rng);
@@ -247,7 +241,10 @@ function applyConsumable(
       }
       return still({
         ...state,
-        walls: [...state.walls, ...sectionWallEdges(state.map.index, sectionId)],
+        walls: [
+          ...state.walls,
+          ...sectionWallEdges(state.map.index, sectionId),
+        ],
       });
     }
   }
