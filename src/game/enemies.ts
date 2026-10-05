@@ -693,6 +693,10 @@ export function terrainCostAt(
  * An assassin's reach is movement, so it is confined to `moveTiles` (the tiles
  * the enemy may actually walk on). A sniper's line of sight is physical, so it
  * uses `sightTiles` and is not limited by the fog.
+ *
+ * `frozen` marks an enemy that will skip its movement on the next enemy phase.
+ * That only silences an assassin, which must move to attack; a sniper still
+ * fires the line it already aimed and a watchtower never moves.
  */
 function enemyDanger(
   enemy: Enemy,
@@ -701,6 +705,7 @@ function enemyDanger(
   speedBonus: number,
   walls: readonly WallEdge[],
   mimic: HexCoord | null,
+  frozen: boolean,
 ): Set<string> {
   const zone = new Set<string>();
   if (enemy.kind === "watchtower") {
@@ -720,7 +725,10 @@ function enemyDanger(
         zone.add(hexKey(coord));
       }
     }
-  } else {
+  } else if (!frozen) {
+    // An assassin attacks by moving onto the player, so a frozen assassin — one
+    // that will skip its movement on the next enemy phase — threatens nothing.
+    // Snipers and watchtowers attack without moving, so freeze leaves them be.
     for (const coord of hexesWithinCost(
       enemy.position,
       enemy.movement + speedBonus,
@@ -754,6 +762,7 @@ export function enemyDangerZones(state: GameState): Map<string, Set<string>> {
   const visible = visibleMap(state);
   const fogOrder = state.playerSectionOrder + 1;
   const mimic = state.mimic.kind === "placed" ? state.mimic.position : null;
+  const frozen = new Set(state.frozenEnemyIds);
   const zones = new Map<string, Set<string>>();
   for (const enemy of state.enemies) {
     const awake = visible.tiles.has(hexKey(enemy.position));
@@ -768,6 +777,7 @@ export function enemyDangerZones(state: GameState): Map<string, Set<string>> {
       enemySpeedBonusFor(state, enemy),
       state.walls,
       mimic,
+      frozen.has(enemy.id),
     );
     if (!awake) {
       const wakes =

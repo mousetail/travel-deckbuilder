@@ -29,6 +29,7 @@ function makeState(opts: {
   enemies: readonly Enemy[];
   mimic: HexCoord | null;
   walls: readonly WallEdge[];
+  frozenEnemyIds?: readonly string[];
 }): GameState {
   const tiles = new Map<string, Tile>();
   for (const coord of hexesInRange({ q: 0, r: 0 }, RADIUS)) {
@@ -88,7 +89,7 @@ function makeState(opts: {
       opts.mimic === null
         ? { kind: "none" }
         : { kind: "placed", position: opts.mimic },
-    frozenEnemyIds: [],
+    frozenEnemyIds: opts.frozenEnemyIds ?? [],
     anyTerrainTurns: 0,
     walls: opts.walls,
     anomalies: [],
@@ -283,6 +284,68 @@ describe("mimic does not affect enemies that do not chase", () => {
     });
     expect(sorted(dangerZone(withMimic))).toEqual(sorted(dangerZone(without)));
     expect(dangerZone(withMimic).has(hexKey({ q: 2, r: 0 }))).toBe(true);
+  });
+});
+
+describe("freeze silences the danger zone it silences in the enemy phase", () => {
+  it("drops a frozen assassin's whole reach", () => {
+    const state = makeState({
+      player: { q: 3, r: 0 },
+      enemies: [assassin({ q: 0, r: 0 }, "a")],
+      mimic: null,
+      walls: [],
+      frozenEnemyIds: ["a"],
+    });
+    expect(sorted(dangerZone(state))).toEqual([]);
+  });
+
+  it("leaves only other enemies' zones when one assassin is frozen", () => {
+    const state = makeState({
+      player: { q: 3, r: 0 },
+      enemies: [
+        assassin({ q: 0, r: 0 }, "a"),
+        assassin({ q: 0, r: 2 }, "b"),
+      ],
+      mimic: null,
+      walls: [],
+      frozenEnemyIds: ["a"],
+    });
+    const zones = enemyDangerZones(state);
+    expect(sorted(zoneOf(zones, "a"))).toEqual([]);
+    expect(zoneOf(zones, "b").has(hexKey({ q: 0, r: 0 }))).toBe(true);
+  });
+
+  it("keeps a frozen sniper's aimed line, since it still fires", () => {
+    const state = makeState({
+      player: { q: 3, r: 0 },
+      enemies: [sniper({ q: 0, r: 0 }, 0, "s")],
+      mimic: null,
+      walls: [],
+      frozenEnemyIds: ["s"],
+    });
+    expect(dangerZone(state).has(hexKey({ q: 4, r: 0 }))).toBe(true);
+  });
+
+  it("keeps a frozen watchtower's radius, since it never moves", () => {
+    const state = makeState({
+      player: { q: 3, r: 0 },
+      enemies: [watchtower({ q: 0, r: 0 }, 2, "w")],
+      mimic: null,
+      walls: [],
+      frozenEnemyIds: ["w"],
+    });
+    expect(dangerZone(state).has(hexKey({ q: 2, r: 0 }))).toBe(true);
+  });
+
+  it("clears the player's danger when the only threat is a frozen assassin", () => {
+    const state = makeState({
+      player: { q: 1, r: 0 },
+      enemies: [assassin({ q: 0, r: 0 }, "a")],
+      mimic: null,
+      walls: [],
+      frozenEnemyIds: ["a"],
+    });
+    expect(playerInDanger(state)).toBe(false);
   });
 });
 
