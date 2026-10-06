@@ -233,9 +233,10 @@ export type GameState = {
 
 ### `economy.ts`
 
-- No new logic. `upgradeCard`/smith already work on the permanent form; a
-  temporarily-upgraded card's `upgradedForm` is `null`, so the smith simply won't
-  offer it (noted as a known edge, §8).
+- `upgradeCard`/smith target a card's permanent form. `upgradeTarget` returns
+  `null` for a temporary card (conjured by Invention), so the smith will not offer
+  it; a card that is only temporarily upgraded still offers its upgrade, and
+  choosing it makes that upgrade permanent.
 
 ---
 

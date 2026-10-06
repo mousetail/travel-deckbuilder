@@ -20,6 +20,8 @@ import type { GameState, MapIndex } from "./state";
 import type { Terrain, Tile } from "./terrain";
 import {
   beginPlay,
+  cancelPending,
+  chooseWall,
   confirmStore,
   discardCard,
   resolveMoveTo,
@@ -316,6 +318,44 @@ describe("Wall", () => {
     // Side s faces neighbour direction (1 - s + 6) % 6.
     expect(sideToward({ q: 0, r: 0 }, { q: 1, r: -1 })).toBe(0);
     expect(sideToward({ q: 0, r: 0 }, { q: 1, r: 0 })).toBe(1);
+  });
+
+  it("opens the direction choice with the card still in hand", () => {
+    const wall = cardFrom("Wall", "w");
+    const state = makeState({ q: 0, r: 0 }, noOverrides, [wall]);
+    const opened = beginPlay(state, wall);
+    expect(opened.state.phase.kind).toBe("pending-wall");
+    expect(opened.state.deck.hand.map((card) => card.id)).toEqual(["w"]);
+    expect(opened.state.currency).toBe(state.currency);
+    expect(opened.state.walls).toHaveLength(0);
+  });
+
+  it("cancels without spending or discarding the card", () => {
+    const wall = cardFrom("Wall", "w");
+    const state = makeState({ q: 0, r: 0 }, noOverrides, [wall]);
+    const opened = beginPlay(state, wall);
+
+    const cancelled = cancelPending(opened.state);
+    expect(cancelled.state.phase.kind).toBe("playing");
+    expect(cancelled.state.deck.hand.map((card) => card.id)).toEqual(["w"]);
+    expect(cancelled.state.currency).toBe(state.currency);
+    expect(cancelled.state.walls).toHaveLength(0);
+  });
+
+  it("commits the play only once a direction is chosen", () => {
+    const wall = cardFrom("Wall", "w");
+    const state = makeState({ q: 0, r: 0 }, noOverrides, [wall]);
+    const opened = beginPlay(state, wall);
+
+    const placed = chooseWall(opened.state, 0);
+    expect(placed.state.phase.kind).toBe("playing");
+    expect(placed.state.walls).toHaveLength(7);
+    expect(placed.state.currency).toBe(state.currency - 3);
+    expect(placed.state.deck.hand).toHaveLength(0);
+    const discarded = placed.state.deck.discard.find(
+      (card) => card.id === "w",
+    );
+    expect(discarded?.sleeping).toBe(1);
   });
 });
 

@@ -68,7 +68,7 @@ export class Hud {
     button.classList.add("hud-button");
 
     const phase = state.phase;
-    if (phase.kind === "pending-card") {
+    if (phase.kind === "pending-card" || phase.kind === "pending-wall") {
       button.textContent = "Cancel";
       button.disabled = busy;
       button.addEventListener("click", () => this.onCancel());
@@ -179,7 +179,7 @@ function hintFor(state: GameState): string {
     case "pending-store":
       return "Pick any number of cards to store";
     case "pending-wall":
-      return "Pick a direction for the wall";
+      return "Pick a direction for the wall (right-click to cancel)";
     case "playing":
       return "Click a card or reachable tile · right-click to discard";
     case "pending-remove":

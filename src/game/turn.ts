@@ -446,16 +446,11 @@ function playInstant(state: GameState, card: Card, mode: CardMode): Transition {
       return still(played);
     }
     case "wall": {
-      const played = spent(
-        state,
-        discardPlayed(state.deck, card),
-        state.rng,
-        card,
-        [],
-      );
+      // The card stays in hand until a direction is chosen, so right-clicking
+      // can cancel the placement without spending or discarding it.
       return still({
-        ...played,
-        phase: { kind: "pending-wall", radius: mode.radius },
+        ...state,
+        phase: { kind: "pending-wall", card, radius: mode.radius },
       });
     }
     case "invention": {
@@ -661,9 +656,17 @@ export function chooseWall(state: GameState, side: number): Transition {
     return still(state);
   }
   const edges = hexagonSideWallEdges(state.map.player, side, phase.radius);
+  // The play is only committed now, so a cancelled placement costs nothing.
+  const played = spent(
+    state,
+    discardPlayed(state.deck, phase.card),
+    state.rng,
+    phase.card,
+    [],
+  );
   return still({
-    ...state,
-    walls: [...state.walls, ...edges],
+    ...played,
+    walls: [...played.walls, ...edges],
     phase: { kind: "playing" },
   });
 }
@@ -767,13 +770,13 @@ export function resolveMoveTo(state: GameState, to: HexCoord): Transition {
 export function cancelPending(state: GameState): Transition {
   switch (state.phase.kind) {
     case "pending-card":
+    case "pending-wall":
       return still({ ...state, phase: { kind: "playing" } });
     case "playing":
     case "pending-discard":
     case "pending-sleep":
     case "pending-search":
     case "pending-store":
-    case "pending-wall":
     case "pending-remove":
     case "pending-gain":
     case "pending-consumable":

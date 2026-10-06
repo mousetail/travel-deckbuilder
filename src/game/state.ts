@@ -38,7 +38,7 @@ export type Phase =
   | { kind: "pending-sleep"; reshuffles: number }
   | { kind: "pending-search"; count: number }
   | { kind: "pending-store"; card: Card; selected: readonly string[] }
-  | { kind: "pending-wall"; radius: number }
+  | { kind: "pending-wall"; card: Card; radius: number }
   | { kind: "pending-remove" }
   | { kind: "pending-gain"; card: Card | null }
   | {

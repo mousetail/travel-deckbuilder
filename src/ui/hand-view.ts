@@ -64,6 +64,10 @@ export class HandView {
     // A phase that owns the choice (a draw-pile search) leaves the hand inert.
     if (mode.kind === "none") {
       element.classList.add("card-inert");
+      // A wall placement still highlights the card being placed.
+      if (card.id === selectedId) {
+        element.classList.add("selected");
+      }
       return element;
     }
 

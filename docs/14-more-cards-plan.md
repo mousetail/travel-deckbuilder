@@ -60,7 +60,9 @@ they enter the deck through the discard pile as usual.
 - Modes: `[{ kind: "store" }]`.
 - Playing it opens a new **`pending-store`** phase. The hand stays visible and
   inert except that clicking a card toggles it into the selection; the bin
-  itself is not selectable. A confirm button resolves the choice.
+  itself is not selectable. The top hint explains the choice ("Pick any number
+  of cards to store") and the action button confirms ("Store N cards"), matching
+  the other selection modes rather than opening a popup.
 - On confirm, the selected cards leave the hand and are held inside the bin; the
   bin becomes `Storage Bin (Full)` (same `id`) and is discarded.
 - Zero cards is a legal choice, producing an empty full bin.
@@ -123,10 +125,11 @@ they enter the deck through the discard pile as usual.
 - Modes: `[{ kind: "wall"; radius: 3 }]`; the upgraded form keeps `radius: 3`
   and drops the play cost to 1 (`onPlay: [pay(1), sleep(1)]`).
 - `onPlay: [pay(3), sleep(1)]`.
-- Playing it discards the card (asleep for 1 reshuffle) and opens a new
-  **`pending-wall`** phase. The map shows all six candidate walls as faint
-  dashed previews; clicking a hex picks the side whose direction is nearest the
-  click. The phase is not cancellable.
+- Playing it opens a new **`pending-wall`** phase with the card still in hand.
+  The map previews **only the wall that the hovered hex would place** (a single
+  side, following the mouse); clicking places it. Right-clicking cancels: the
+  card returns to hand unspent and un-discarded. The card is only paid for and
+  discarded (asleep for 1 reshuffle) once a direction is actually chosen.
 - The wall is the directed edges of one side of the radius-`radius` hexagon
   centred on the player, each directed **inward** (outside → inside blocked), so
   the player can cross outward but enemies cannot cross inward.
@@ -209,7 +212,7 @@ New helpers in `cards.ts`:
 export type Phase =
   | /* existing */
   | { kind: "pending-store"; card: Card; selected: readonly string[] }  // new
-  | { kind: "pending-wall"; radius: number };                           // new
+  | { kind: "pending-wall"; card: Card; radius: number }            // new
 ```
 
 No new `GameState` fields: `stored`/`temporary` live on the cards.
@@ -244,14 +247,17 @@ No new `GameState` fields: `stored`/`temporary` live on the cards.
 - `playInstant`:
   - `store`: `spent`, open `pending-store` (the card is not discarded yet).
   - `unstore`: move `stored` to hand, discard the emptied bin.
-  - `wall`: `spent` + `discardPlayed` (applies the sleep), open `pending-wall`.
+  - `wall`: open `pending-wall` with the card still in hand (nothing is spent or
+    discarded until a direction is chosen, so the phase can be cancelled).
   - `invention`: roll temporary cards into the hand, discard the played card.
 - New actions:
   - `toggleStoreChoice(state, card)` — toggle a hand card in `selected`.
   - `confirmStore(state)` — move the selection into the bin, transform to full,
     discard it, end the phase.
-  - `chooseWall(state, side)` — append the side's wall edges, end the phase.
-- `cancelPending` — `pending-store`/`pending-wall` are not cancellable.
+  - `chooseWall(state, side)` — `spent` + `discardPlayed` (applies the sleep),
+    append the side's wall edges, end the phase.
+- `cancelPending` — `pending-wall` returns the card to hand (still unspent);
+  `pending-store` is not cancellable.
 - `resolveMoveTo` — branch on the new move kinds: `hop` jumps directly
   (`[from, to]`, distance 2); `move-current-terrain` resolves its terrain from
   the player's tile.
@@ -283,19 +289,24 @@ No new `GameState` fields: `stored`/`temporary` live on the cards.
 - **`hand-view.ts`** — a `HandMode` variant
   `{ kind: "store"; selected: ReadonlySet<string>; binId: string }`: clicking a
   non-bin card toggles it; selected cards get a `selected` class.
-- **`pile-view.ts`** — a `storeOverlay(selectedCount, onConfirm)` with the
-  confirm button.
-- **`map-view.ts`** — `MapViewState.wallChoices: readonly (readonly WallEdge[])[]`;
-  render them as faint dashed previews (`wallsSvg` gains a class-name argument).
+- **`pile-view.ts`** — no storage popup; the selection is confirmed from the
+  action slot.
+- **`map-view.ts`** — `setWallPreview(walls)` updates a dedicated
+  `wallPreviewLayer` (drawn by `wallsSvg` with the `outline-wall-choice`
+  class), so a hover can swap the single previewed side without a full
+  re-render.
 - **`app.ts`**
   - `handMode`: `pending-store → store`, `pending-wall → none`.
-  - `renderMiddle`: `pending-store` shows the store overlay.
-  - `render`: pass `wallChoices` (the six candidates while `pending-wall`).
-  - `handleHexClick`: `pending-wall` chooses the nearest side.
-  - `handleStoreToggle` / `handleStoreConfirm`.
+  - `render`: set the wall preview from the hovered side.
+  - `handleHexHover`: track the hovered side and preview it.
+  - `handleHexClick`: `pending-wall` places the hovered side.
+  - `handleStoreToggle` / `handleStoreConfirm` (the latter wired to the HUD
+    confirm button).
   - `isModalPhase`: both new phases are false.
 - **`feature-view.ts`** — add both phases to the no-op `panel` cases.
-- **`hud.ts`** — `hintFor` text for both phases.
+- **`hud.ts`** — `hintFor` text for both phases (the wall hint mentions
+  right-click to cancel), a `pending-store` confirm button, and a `pending-wall`
+  Cancel button in `renderAction` (both mirroring `pending-card`'s Cancel).
 - **`economy.ts`** — `leaveFeature` treats both phases as non-modal.
 
 ---

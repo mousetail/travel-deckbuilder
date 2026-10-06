@@ -552,10 +552,11 @@ export class App {
   }
 
   private selectedCardId(): string | null {
-    if (this.state.phase.kind !== "pending-card") {
+    const phase = this.state.phase;
+    if (phase.kind !== "pending-card" && phase.kind !== "pending-wall") {
       return null;
     }
-    return this.state.phase.card.id;
+    return phase.card.id;
   }
 
   private cardPlayable(card: Card): boolean {
