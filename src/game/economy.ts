@@ -310,6 +310,7 @@ export function leaveFeature(state: GameState): Transition {
     case "pending-consumable":
       return finishFeature(state);
     case "playing":
+    case "enemy-phase":
     case "pending-card":
     case "pending-discard":
     case "pending-sleep":

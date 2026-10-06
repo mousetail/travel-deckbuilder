@@ -4,6 +4,7 @@ import { ATTACK_ICON, SLEEP_ICON, TERRAIN_ICON } from "../game/terrain";
 import { setChildren } from "./dom";
 import {
   COIN_ICON,
+  EPHEMERAL_ICON,
   ESCALATE_ICON,
   ESCALATE_TEMP_ICON,
   HOP_ICON,
@@ -16,6 +17,7 @@ import {
   SHY_ICON,
   STORAGE_ICON,
   TELEPORT_ICON,
+  TEMPORARY_ICON,
   UPGRADE_ICON,
   WALL_ICON,
   coinIcon,
@@ -35,8 +37,8 @@ export function symbolNodes(card: Card): Node[] {
 
 /**
  * Every tooltip line for a card: one per mode, then one per play/discard effect,
- * then — after a separator — one per trait. Each line draws the same symbol the
- * card shows, then spells it out.
+ * then — after a separator — one per badge (traits, then the temporary sigils).
+ * Each line draws the same symbol the card shows, then spells it out.
  */
 export function cardTooltipRows(card: Card): HTMLElement[] {
   const rows: HTMLElement[] = [];
@@ -58,21 +60,33 @@ export function cardTooltipRows(card: Card): HTMLElement[] {
       ]),
     );
   }
-  // The card's own icons come first; a rule sets the trait explanations apart.
-  if (card.traits.length > 0) {
+  // The badge sigils come last, after a rule: one per trait, then the two
+  // temporary sigils, so every badge on the face is explained by a row.
+  const badgeRows: HTMLElement[] = card.traits.map((trait) =>
+    tooltipRow(traitSymbolNodes(trait), [text(describeTrait(trait))]),
+  );
+  if (card.temporaryUpgrade) {
+    badgeRows.push(
+      tooltipRow(symbolIcon(TEMPORARY_ICON, ""), [
+        text(TEMPORARY_UPGRADE_DESCRIPTION),
+      ]),
+    );
+  }
+  if (card.temporary) {
+    badgeRows.push(
+      tooltipRow(symbolIcon(EPHEMERAL_ICON, ""), [text(EPHEMERAL_DESCRIPTION)]),
+    );
+  }
+  if (badgeRows.length > 0) {
     if (rows.length > 0) {
       rows.push(tooltipSeparator());
     }
-    for (const trait of card.traits) {
-      rows.push(
-        tooltipRow(traitSymbolNodes(trait), [text(describeTrait(trait))]),
-      );
-    }
+    rows.push(...badgeRows);
   }
   return rows;
 }
 
-/** A rule dividing a card's own icons from its trait explanations. */
+/** A rule dividing a card's own icons from its badge explanations. */
 function tooltipSeparator(): HTMLElement {
   const separator = document.createElement("div");
   separator.classList.add("card-tooltip-separator");
@@ -168,6 +182,14 @@ const TRAIT_DESCRIPTION: Record<CardTrait, string> = {
   indestructible: "Cannot be destroyed",
   shy: "Sinks to the bottom of the draw pile",
 };
+
+/** What the temporary-upgrade sigil means, for the tooltip and the badge title. */
+export const TEMPORARY_UPGRADE_DESCRIPTION =
+  "Temporary upgrade: reverts when the card leaves your hand";
+
+/** What the ephemeral sigil means, for the tooltip and the badge title. */
+export const EPHEMERAL_DESCRIPTION =
+  "Temporary: removed from your deck when played or discarded";
 
 /** The badge symbol for a card trait, matching the badge on the card face. */
 export function traitSymbolNodes(trait: CardTrait): Node[] {

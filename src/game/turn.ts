@@ -773,6 +773,7 @@ export function cancelPending(state: GameState): Transition {
     case "pending-wall":
       return still({ ...state, phase: { kind: "playing" } });
     case "playing":
+    case "enemy-phase":
     case "pending-discard":
     case "pending-sleep":
     case "pending-search":
@@ -843,9 +844,13 @@ export function endTurn(state: GameState): Transition {
   // marked dangerous can be reported.
   const savedDangerZone = dangerZone(paid);
   const resolved = resolveEnemyPhase(paid, visibleReach(paid), savedDangerZone);
+  // Hold the player's turn back until the enemies have visibly moved: while the
+  // enemy phase plays, the map keeps the danger zone and hand the player
+  // committed to, and the next turn's cards are drawn only once it ends.
+  const during: GameState = { ...paid, phase: { kind: "enemy-phase" } };
   if (resolved.state.phase.kind === "game-over") {
-    return resolved;
+    return { state: during, moves: resolved.moves, afterMoves: resolved.state };
   }
   const next = startTurn({ ...resolved.state, turn: resolved.state.turn + 1 });
-  return moving(next, resolved.moves);
+  return { state: during, moves: resolved.moves, afterMoves: next };
 }

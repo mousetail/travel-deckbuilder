@@ -778,10 +778,10 @@ export const SHOP_CATALOGUE: readonly ShopCardSpec[] = [
     .build(),
   spec("Wall", [cardMoves.wall(2)])
     .shopStatus("rare", 5)
-    .withPlayEffect(cardEffects.pay(3), cardEffects.sleep(1))
+    .withPlayEffect(cardEffects.pay(4), cardEffects.sleep(1))
     .withUpgradedForm(
       spec("Wall+", [cardMoves.wall(2)])
-        .withPlayEffect(cardEffects.pay(1), cardEffects.sleep(1))
+        .withPlayEffect(cardEffects.pay(2), cardEffects.sleep(1))
         .build(),
     )
     .build(),

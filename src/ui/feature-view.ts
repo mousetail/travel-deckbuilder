@@ -101,6 +101,7 @@ export class FeatureView {
         return [main, panel];
       }
       case "playing":
+      case "enemy-phase":
       case "pending-card":
       case "pending-discard":
       case "pending-sleep":

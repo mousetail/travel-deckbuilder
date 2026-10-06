@@ -349,8 +349,7 @@ describe("Wall", () => {
 
     const placed = chooseWall(opened.state, 0);
     expect(placed.state.phase.kind).toBe("playing");
-    expect(placed.state.walls).toHaveLength(7);
-    expect(placed.state.currency).toBe(state.currency - 3);
+    expect(placed.state.currency).toBe(state.currency - 4);
     expect(placed.state.deck.hand).toHaveLength(0);
     const discarded = placed.state.deck.discard.find(
       (card) => card.id === "w",

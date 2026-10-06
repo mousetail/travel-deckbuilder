@@ -435,6 +435,13 @@ export function resolveEnemyPhase(state: GameState, maxDistance: number): Transi
 }
 ```
 
+The UI plays this phase before the next turn begins. `endTurn` returns a transition
+whose `state` is the enemy phase — the hand and danger zone the player committed
+to, with the enemies still where they started — and whose `afterMoves` is the
+`startTurn` state. The map therefore keeps showing the old danger zone while the
+enemies walk, and only redraws it (and draws the next hand, and the reachable
+outline) once the moves finish.
+
 A sleeping enemy's danger zone is still drawn, but only over the fog sliver of the
 section it stands in — the hexes the player could end a turn on to wake it
 (chapter 06). The player's own interactions follow the same rule: attack targets

@@ -17,6 +17,12 @@ export type MovePath = {
 export type Transition = {
   state: GameState;
   moves: readonly MovePath[];
+  /**
+   * The state to adopt once `moves` finish animating. The enemy phase uses this
+   * to hold the player's turn back until the enemies have visibly moved; when
+   * absent, `state` is adopted at once.
+   */
+  afterMoves?: GameState;
 };
 
 const NO_MOVES: readonly MovePath[] = [];

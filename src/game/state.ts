@@ -26,6 +26,12 @@ export type MapState = {
 
 export type Phase =
   | { kind: "playing" }
+  /**
+   * The enemy phase, shown while the enemies' moves animate. The map keeps the
+   * danger zone and hand the player committed to, and the next turn's cards are
+   * drawn only once it ends.
+   */
+  | { kind: "enemy-phase" }
   | {
       kind: "pending-card";
       card: Card;

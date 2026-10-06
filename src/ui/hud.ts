@@ -182,6 +182,7 @@ function hintFor(state: GameState): string {
       return "Pick a direction for the wall (right-click to cancel)";
     case "playing":
       return "Click a card or reachable tile · right-click to discard";
+    case "enemy-phase":
     case "pending-remove":
     case "pending-gain":
     case "pending-consumable":

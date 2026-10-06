@@ -1,5 +1,7 @@
 import type { Card, CardEffect, CardTrait } from "../game/cards";
 import {
+  EPHEMERAL_DESCRIPTION,
+  TEMPORARY_UPGRADE_DESCRIPTION,
   describeEffect,
   describeTrait,
   effectNodes,
@@ -86,7 +88,8 @@ function effectLines(
 
 /**
  * The badges pinned to a card's top-right corner, stacked so they never overlap:
- * one per trait, then the sleep counter and the temporary-upgrade sigil.
+ * one per trait, then the sleep counter, the temporary-upgrade sigil and the
+ * ephemeral sigil for a card conjured by Invention.
  */
 function cardBadges(card: Card): HTMLElement | null {
   const badges: HTMLElement[] = card.traits.map((trait) => traitBadge(trait));
@@ -135,6 +138,7 @@ function sleepBadge(reshuffles: number): HTMLElement {
 function temporaryBadge(): HTMLElement {
   const badge = document.createElement("div");
   badge.classList.add("card-badge", "card-temporary");
+  badge.title = TEMPORARY_UPGRADE_DESCRIPTION;
   const icon = document.createElement("img");
   icon.classList.add("card-symbol-icon");
   icon.src = TEMPORARY_ICON;
@@ -147,7 +151,7 @@ function temporaryBadge(): HTMLElement {
 function ephemeralBadge(): HTMLElement {
   const badge = document.createElement("div");
   badge.classList.add("card-badge", "card-ephemeral");
-  badge.title = "Temporary: removed when played or discarded";
+  badge.title = EPHEMERAL_DESCRIPTION;
   const icon = document.createElement("img");
   icon.classList.add("card-symbol-icon");
   icon.src = EPHEMERAL_ICON;

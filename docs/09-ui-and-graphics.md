@@ -173,8 +173,9 @@ created once per render with `replaceChildren`, never mutated piecemeal.
 ### Card badges
 
 A card stacks small badges in its top-right corner: one per trait (chapter 03), then
-the sleep counter and the temporary-upgrade sigil. They go in a single absolutely
-positioned column so several can share a card without overlapping:
+the sleep counter, the temporary-upgrade sigil, and the ephemeral sigil for a card
+conjured by Invention. They go in a single absolutely positioned column so several
+can share a card without overlapping:
 
 ```ts
 function cardBadges(card: Card): HTMLElement | null {
@@ -218,7 +219,9 @@ horizontal space. The hover tooltip gives each ramp its own row, so the two are
 explained separately.
 
 The tooltip lists a card's own icons first (its modes, then its play/discard
-effects), then a horizontal rule, then one row per trait explaining the badges.
+effects), then a horizontal rule, then one row per badge: one per trait, then the
+temporary-upgrade and ephemeral sigils. Every badge on the card face is therefore
+explained by a matching row, so the sigils are never left unlabelled.
 
 ## 5. Draw and discard piles
 

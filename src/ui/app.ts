@@ -211,19 +211,26 @@ export class App {
 
   /**
    * Adopt a transition: store its state, then show the movements it reported.
-   * The state is always the destination, so input is locked while the marker
-   * catches up to it.
+   * The state is the destination, so input is locked while the marker catches up
+   * to it; a transition may instead name an `afterMoves` state to adopt once the
+   * moves finish, which is how the enemy phase holds the next turn back.
    */
   private apply(next: Transition): void {
     this.state = next.state;
     this.hoveredCard = null;
     this.hoveredWallSide = null;
     this.captureGameOver(next.state);
+    if (next.afterMoves !== undefined) {
+      this.captureGameOver(next.afterMoves);
+    }
     if (next.moves.length === 0 || prefersReducedMotion()) {
+      if (next.afterMoves !== undefined) {
+        this.state = next.afterMoves;
+      }
       this.render();
       return;
     }
-    void this.animate(next.moves);
+    void this.animate(next.moves, next.afterMoves);
   }
 
   /** Fold a finished run into the saved history, once, before it is shown. */
@@ -255,7 +262,10 @@ export class App {
     }
   }
 
-  private async animate(moves: readonly MovePath[]): Promise<void> {
+  private async animate(
+    moves: readonly MovePath[],
+    afterMoves?: GameState,
+  ): Promise<void> {
     this.animating = true;
     this.render();
     this.animator.prepare(moves);
@@ -278,6 +288,9 @@ export class App {
       await this.animator.focusOn(hexToPixel(this.state.map.player));
     } finally {
       this.animating = false;
+      if (afterMoves !== undefined) {
+        this.state = afterMoves;
+      }
       this.render();
     }
   }
@@ -434,6 +447,8 @@ export class App {
           binId: this.state.phase.card.id,
         };
       case "pending-wall":
+        return { kind: "none" };
+      case "enemy-phase":
         return { kind: "none" };
       case "playing":
       case "pending-card":
@@ -798,6 +813,7 @@ function isModalPhase(phase: Phase): boolean {
     case "game-over":
       return true;
     case "playing":
+    case "enemy-phase":
     case "pending-card":
     case "pending-discard":
     case "pending-sleep":
